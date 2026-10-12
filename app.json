@@ -1,17 +1,31 @@
 {
   "expo": {
-    "name": "shadelab",
+    "name": "ShadeLab",
     "slug": "shadelab",
-    "version": "1.0.0",
+    "version": "0.1.0",
+    "scheme": "shadelab",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0E1A2B"
+    },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.shadelab.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "O ShadeLab usa a câmera para fotografar o dente e a escala de cor.",
+        "NSPhotoLibraryUsageDescription": "O ShadeLab acessa suas fotos para analisar imagens já capturadas."
+      }
     },
     "android": {
+      "package": "com.shadelab.app",
+      "permissions": ["CAMERA", "READ_MEDIA_IMAGES"],
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#0E1A2B",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -19,7 +33,24 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
-    }
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "O ShadeLab usa a câmera para fotografar o dente e a escala de cor."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "O ShadeLab acessa suas fotos para analisar imagens já capturadas."
+        }
+      ]
+    ]
   }
 }
