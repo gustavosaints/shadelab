@@ -26,6 +26,16 @@ describe('averagePixels', () => {
     const s = averagePixels(rgba, n);
     expect(s.rgb).toEqual({ r: 200, g: 180, b: 150 });
     expect(s.spread).toBeCloseTo(0, 5);
+    expect(s.cv).toBeCloseTo(0, 5);
+  });
+
+  it('mede variação relativa em região com gradiente', () => {
+    const n = 100;
+    const rgba = new Uint8Array(n * 4);
+    for (let i = 0; i < n; i++) rgba.set([150 + i, 140 + i, 120 + i, 255], i * 4);
+    const s = averagePixels(rgba, n);
+    expect(s.cv).toBeGreaterThan(0.1);
+    expect(s.cv).toBeLessThan(0.5);
   });
 });
 

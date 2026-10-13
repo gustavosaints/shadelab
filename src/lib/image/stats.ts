@@ -13,8 +13,10 @@ export type Sample = {
   lab: Lab;
   /** Nº de pixels usados após remover extremos (brilho especular / sombra). */
   pixels: number;
-  /** Desvio padrão da luminância linear: alto = região heterogênea. */
+  /** Desvio padrão da luminância linear (absoluto). */
   spread: number;
+  /** Variação relativa (desvio / média da luminância): > 0,2 indica região heterogênea. */
+  cv: number;
 };
 
 
@@ -68,6 +70,7 @@ export function averagePixels(rgba: Uint8Array, count: number): Sample {
     g: linearChannelToSrgb(sg / n),
     b: linearChannelToSrgb(sb / n),
   };
-  return { rgb, lab: rgbToLab(rgb), pixels: n, spread };
+  const cv = meanL > 1e-4 ? spread / meanL : 0;
+  return { rgb, lab: rgbToLab(rgb), pixels: n, spread, cv };
 }
 

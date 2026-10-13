@@ -30,6 +30,8 @@ type Params = { uri: string; w: string; h: string; mode?: 'shade' | 'calibrate';
 type Pt = { x: number; y: number };
 
 const MARKER_SCREEN = 40; // tamanho do quadrado na tela, em px
+/** Variação relativa de luminância acima da qual a região é considerada heterogênea. */
+const HETEROGENEOUS_CV = 0.2;
 
 export default function Analyze() {
   const { uri, w, h, mode = 'shade', shade: calibShade } = useLocalSearchParams<Params>();
@@ -45,6 +47,7 @@ export default function Analyze() {
   const [refMode, setRefMode] = useState<ReferenceMode>('gray18');
   const [refTab, setRefTab] = useState('A2');
   const [busy, setBusy] = useState(false);
+  const [warning, setWarning] = useState<string | null>(null);
   const [result, setResult] = useState<{
     match: MatchResult;
     toothSample: Sample;
@@ -97,6 +100,7 @@ export default function Analyze() {
     if (!settings || !system) return;
     setBusy(true);
     setResult(null);
+    setWarning(null);
     try {
       const toothSample = await sampleRegion(uri, rectFor(tooth), imgW, imgH);
       let refSample: Sample | undefined;
@@ -123,10 +127,13 @@ export default function Analyze() {
         gingivaLab = correctedLab(g.rgb, refSpec);
       }
       setResult({ match, toothSample, refSample, gingivaLab });
-      if (toothSample.spread > 0.03) {
-        Alert.alert(
-          'Região heterogênea',
-          'A área do dente tem muita variação (reflexo, borda ou mancha). Mova o quadrado para o terço médio do dente e repita.',
+      if (toothSample.cv > HETEROGENEOUS_CV) {
+        setWarning(
+          `Variação de ${Math.round(toothSample.cv * 100)}% dentro do quadrado do dente. Se houver reflexo, borda ou mancha na área, mova o quadrado para uma região lisa do terço médio e repita.`,
+        );
+      } else if (refSample && refSample.cv > HETEROGENEOUS_CV) {
+        setWarning(
+          `Variação de ${Math.round(refSample.cv * 100)}% dentro do quadrado da referência. Centralize o quadrado na referência, longe das bordas.`,
         );
       }
       await saveSettings({ referenceMode: refMode, referenceTab: refTab });
@@ -263,6 +270,12 @@ export default function Analyze() {
                 </View>
               </View>
 
+              {warning && (
+                <View style={styles.warnBox}>
+                  <Text style={styles.warnText}>{warning}</Text>
+                </View>
+              )}
+
               {mode === 'calibrate' ? (
                 <>
                   <Muted>
@@ -347,6 +360,15 @@ const styles = StyleSheet.create({
   switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
   switchLabel: { color: colors.text, fontWeight: '600' },
   measuredRow: { flexDirection: 'row', gap: 12, alignItems: 'center', marginBottom: 10 },
+  warnBox: {
+    backgroundColor: '#FFF7E0',
+    borderColor: '#F0D48A',
+    borderWidth: 1,
+    borderRadius: radius.sm,
+    padding: 10,
+    marginBottom: 10,
+  },
+  warnText: { color: '#7A5A00', fontSize: 13, lineHeight: 18 },
   bigSwatch: { width: 64, height: 64, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   measuredTitle: { fontWeight: '700', color: colors.text, fontSize: 15 },
   labText: { color: colors.text, fontVariant: ['tabular-nums'], marginVertical: 2 },
