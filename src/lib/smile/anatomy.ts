@@ -73,7 +73,8 @@ export function layoutAnatomy(p: SmileParams, def: AnatomyDef, width: number, he
     { kind: 'lateral', k: 1 },
     { kind: 'canine', k: 2 },
   ];
-  const ratios = WIDTH_RATIOS.golden;
+  const forced = p.proportion !== 'natural'; // áurea ou RED: larguras impostas em relação ao central
+  const ratios = WIDTH_RATIOS[p.proportion];
 
   // lado direito do paciente (à esquerda do observador), depois espelhado
   const right: AnatomyPlacement[] = [];
@@ -81,10 +82,10 @@ export function layoutAnatomy(p: SmileParams, def: AnatomyDef, width: number, he
   for (const { kind, k } of kinds) {
     const t = def.teeth[kind];
     const natural = t.wMm * s;
-    const w = p.proportion === 'golden' && kind !== 'central' ? cw * (kind === 'lateral' ? ratios.lateral : ratios.canine) : natural;
+    const w = forced && kind !== 'central' ? cw * (kind === 'lateral' ? ratios.lateral : ratios.canine) : natural;
     const h = t.hMm * s * vs;
     let x: number;
-    if (p.proportion === 'golden' || kind === 'central') {
+    if (forced || kind === 'central') {
       x = edge - w;
       edge = x - gap;
     } else {

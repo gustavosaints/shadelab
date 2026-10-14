@@ -25,6 +25,9 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   proporção natural/áurea), `shading.ts` (gradientes derivados da cor-alvo), `anatomy.ts` (layout com sprites de
   anatomia real: medidas em mm e posição no arco vindas do catálogo) e `anatomyCatalog.ts` (GERADO por
   `scripts/anatomia/render.mjs`, não editar à mão).
+- `src/lib/smile/frame.ts` face-bow digital estilo DSD: marcos faciais em frações da imagem, calibração em mm pela
+  largura dos dois centrais, desvio de linha média, inclinação, relação L/C do central (70–90%), curvas do smile
+  frame (sorriso, gengival, papilas a 40%). UI em `components/FaceFrame.tsx`. Estudo do DSD em `docs/dsd-estudo.md`.
 - `assets/anatomia/<id>/` sprites por anatomia: `{central,lateral,canine}-{fill,shade,gloss}.png` + `thumb.png`.
   `fill` é branco e recebe `tintColor` = cor-alvo; `shade` (preto) e `gloss` (branco) só têm alfa, por isso a cor
   escolhida domina e o sombreamento é preservado. Dentes 21–23 = espelho dos sprites (`scaleX: -1`).
@@ -55,7 +58,10 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
    conferir o `tintColor` do `Image` no Expo Go; os sprites ficam um pouco grandes se a gengiva não cobrir o colo;
    algumas bibliotecas (robtoly, Nondas) mostram uma linha fina onde a margem cervical recortada foi remendada.
    Licença: as anatomias são do exocad/autores — confirmar redistribuição antes de publicar na loja.
-2. "Calibrar meu cartão": fotografar qualquer cartão cinza/branco ao lado de um tab conhecido e guardar o Lab real.
-3. Depois: 3D ao vivo (expo-gl + three.js) para girar/inclinar e ajustar curvatura do arco.
-4. Build iOS via EAS (`eas build --platform ios --profile production` + `eas submit`) — trocar `bundleIdentifier`
+2. Continuação do DSD (ver `docs/dsd-estudo.md`, seção 8): régua digital em mm sobre a foto, camada de gengiva
+   com cor/opacidade e carimbo para esconder os dentes originais, blur para casar com a foto, antes/depois com
+   cortina, PDF do smile frame para o laboratório, marcos faciais automáticos (MediaPipe), vídeo.
+3. "Calibrar meu cartão": fotografar qualquer cartão cinza/branco ao lado de um tab conhecido e guardar o Lab real.
+4. Depois: 3D ao vivo (expo-gl + three.js) para girar/inclinar e ajustar curvatura do arco.
+5. Build iOS via EAS (`eas build --platform ios --profile production` + `eas submit`) — trocar `bundleIdentifier`
    em `app.json` antes do primeiro build.

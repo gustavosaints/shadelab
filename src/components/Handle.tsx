@@ -7,13 +7,15 @@ type Props = {
   y: number;
   glyph: string;
   onMove: (dx: number, dy: number) => void;
+  /** Diâmetro visível (padrão 30). */
+  size?: number;
+  color?: string;
 };
 
 /** Alça circular arrastável sobre a foto (um dedo). */
-export function Handle({ x, y, glyph, onMove }: Props) {
+export function Handle({ x, y, glyph, onMove, size = 30, color }: Props) {
   const last = useRef({ x: 0, y: 0 });
-  const size = 30;
-  const hit = 48;
+  const hit = Math.max(44, size + 18);
   return (
     <View
       onStartShouldSetResponder={() => true}
@@ -30,8 +32,8 @@ export function Handle({ x, y, glyph, onMove }: Props) {
       }}
       style={[styles.hit, { left: x - hit / 2, top: y - hit / 2, width: hit, height: hit }]}
     >
-      <View style={[styles.knob, { width: size, height: size, borderRadius: size / 2 }]}>
-        <Text style={styles.glyph}>{glyph}</Text>
+      <View style={[styles.knob, { width: size, height: size, borderRadius: size / 2 }, color ? { backgroundColor: color } : null]}>
+        <Text style={[styles.glyph, size < 24 && { fontSize: 10 }]}>{glyph}</Text>
       </View>
     </View>
   );

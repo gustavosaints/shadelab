@@ -47,7 +47,8 @@ function SmileDetail({ c }: { c: SmileCase }) {
     ]);
   const anatomyName = c.params.anatomy ? ANATOMY_CATALOG.find((a) => a.id === c.params.anatomy)?.name : undefined;
   const shapeLabel = anatomyName ?? { oval: 'Oval', square: 'Quadrada', triangular: 'Triangular' }[c.params.shape];
-  const propLabel = c.params.proportion === 'golden' ? 'Áurea' : 'Natural';
+  const propLabel = { natural: 'Natural', golden: 'Áurea', red: 'RED (70% / 50%)' }[c.params.proportion];
+  const frame = c.frame;
   return (
     <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: 40 }}>
       {c.renderedUri && <Image source={{ uri: c.renderedUri }} style={styles.photo} resizeMode="cover" />}
@@ -61,6 +62,19 @@ function SmileDetail({ c }: { c: SmileCase }) {
         <Text style={styles.param}>Forma: {shapeLabel}</Text>
         <Text style={styles.param}>Proporção: {propLabel}</Text>
         <Text style={styles.param}>Relação altura/largura: {c.params.heightRatio.toFixed(2)}</Text>
+        {frame && (
+          <>
+            <Text style={styles.param}>
+              Análise facial: linha média {frame.midlineShiftMm.toFixed(1)} mm · bipupilar {frame.bipupillaryDeg.toFixed(1)}° · central{' '}
+              {frame.widthHeightPct.toFixed(0)}% ({frame.centralWidthMm.toFixed(1)} × {frame.centralHeightMm.toFixed(1)} mm)
+            </Text>
+            {frame.notes.map((n, i) => (
+              <Text key={i} style={styles.param}>
+                • {n}
+              </Text>
+            ))}
+          </>
+        )}
       </Card>
       {!!c.notes && (
         <Card>

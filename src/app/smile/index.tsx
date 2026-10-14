@@ -19,12 +19,22 @@ import { captureRef } from 'react-native-view-shot';
 import { Button } from '@/components/Button';
 import { Card, Muted, SectionTitle } from '@/components/Card';
 import { Chip } from '@/components/Chip';
+import { FaceFrame } from '@/components/FaceFrame';
 import { Handle } from '@/components/Handle';
 import { SmileOverlay } from '@/components/SmileOverlay';
 import { labToHex } from '@/lib/color/convert';
 import { getSystem } from '@/lib/color/shades';
 import { layoutAnatomy } from '@/lib/smile/anatomy';
 import { ANATOMY_CATALOG } from '@/lib/smile/anatomyCatalog';
+import {
+  alignMidlineToFace,
+  analyzeFrame,
+  DEFAULT_CENTRALS_WIDTH_MM,
+  defaultFacePoints,
+  LIMITS,
+  setCentralWidthMm,
+  type FacePoints,
+} from '@/lib/smile/frame';
 import { clampParams, DEFAULT_SMILE_PARAMS, layoutTeeth, WIDTH_RATIOS, type SmileParams } from '@/lib/smile/teeth';
 import { newCaseId, persistPhoto, saveCase } from '@/lib/storage/cases';
 import { useSettings } from '@/lib/useSettings';
@@ -52,6 +62,10 @@ export default function Smile() {
   const [busy, setBusy] = useState(false);
   const [patientName, setPatientName] = useState('');
   const [notes, setNotes] = useState('');
+  // ----- Análise facial (face-bow digital, estilo DSD) -----
+  const [face, setFace] = useState<FacePoints | null>(null);
+  const [centralsWidthMm, setCentralsWidthMm] = useState(String(DEFAULT_CENTRALS_WIDTH_MM));
+  const [centralMm, setCentralMm] = useState('8.5');
   const canvasRef = useRef<View>(null);
   const gesture = useRef<GestureStart | null>(null);
 
@@ -136,6 +150,8 @@ export default function Smile() {
   const t23 = teeth.find((t) => t.fdi === '23');
   const cwPx = params.centralWidth * area.width;
   const ratios = WIDTH_RATIOS[params.proportion];
+  const calibMm = parseFloat(centralsWidthMm.replace(',', '.')) || 0;
+  const analysis = face && area.width ? analyzeFrame(face, calibMm, params, area.width, area.height) : null;
   const archFactor = 1 + ratios.lateral + ratios.canine + 2.5 * params.spacing;
 
   const onLengthHandle = (_dx: number, dy: number) => {
@@ -196,6 +212,19 @@ export default function Smile() {
         renderedUri,
         params,
         targetShade,
+        face: face ?? undefined,
+        centralsWidthMm: face ? calibMm : undefined,
+        frame: analysis
+          ? {
+              midlineShiftMm: analysis.midlineShiftMm,
+              bipupillaryDeg: analysis.bipupillaryDeg,
+              commissuralDeg: analysis.commissuralDeg,
+              widthHeightPct: analysis.widthHeightPct,
+              centralWidthMm: analysis.centralWidthMm,
+              centralHeightMm: analysis.centralHeightMm,
+              notes: analysis.notes,
+            }
+          : undefined,
       });
       router.dismissTo({ pathname: '/cases/[id]', params: { id } });
     } catch (e) {
@@ -241,6 +270,17 @@ export default function Smile() {
       >
         <Image source={{ uri: photo.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
         <SmileOverlay params={params} width={area.width} height={area.height} hidden={hidden} anatomy={anatomy} />
+        {face && !hidden && area.width > 0 && (
+          <FaceFrame
+            face={face}
+            width={area.width}
+            height={area.height}
+            teeth={teeth}
+            dentalMidlineX={params.midlineX * area.width}
+            onChange={setFace}
+            readOnly={exporting}
+          />
+        )}
         {showHandles && (
           <>
             <Handle x={params.midlineX * area.width} y={t11.y + t11.h + 14} glyph="↕" onMove={onLengthHandle} />
@@ -319,7 +359,78 @@ export default function Smile() {
               selected={params.proportion === 'golden'}
               onPress={() => set({ proportion: 'golden' })}
             />
+            <Chip label="RED (70% / 50%)" selected={params.proportion === 'red'} onPress={() => set({ proportion: 'red' })} />
           </View>
+        </Card>
+
+        <Card>
+          <SectionTitle>Análise facial (face-bow digital)</SectionTitle>
+          {!face ? (
+            <>
+              <Muted>
+                Marque pupilas, glabela, filtro, comissuras e os distais dos centrais sobre a foto. O app calcula o
+                desvio da linha média em mm, a inclinação da foto e a relação largura/comprimento do central.
+              </Muted>
+              <Button title="Ativar linhas faciais" variant="secondary" onPress={() => setFace(defaultFacePoints())} style={{ marginTop: 8 }} />
+            </>
+          ) : (
+            <>
+              <Muted>Arraste os pontos: ◉ pupilas · G glabela · F filtro · C comissuras · 11/21 distais dos centrais.</Muted>
+              <View style={styles.inlineRow}>
+                <Text style={styles.controlLabel}>Largura real dos dois centrais (mm)</Text>
+                <TextInput
+                  value={centralsWidthMm}
+                  onChangeText={setCentralsWidthMm}
+                  keyboardType="decimal-pad"
+                  style={[styles.input, styles.inputSmall]}
+                  placeholderTextColor={colors.muted}
+                />
+              </View>
+              {analysis && (
+                <View style={styles.metrics}>
+                  <Metric label="Linha média dental × facial" value={analysis.pxPerMm ? `${analysis.midlineShiftMm.toFixed(1)} mm` : '—'} warn={Math.abs(analysis.midlineShiftMm) >= LIMITS.midlineShiftMm} />
+                  <Metric label="Inclinação (bipupilar)" value={`${analysis.bipupillaryDeg.toFixed(1)}°`} warn={Math.abs(analysis.bipupillaryDeg) >= LIMITS.cantDeg} />
+                  <Metric label="Comissuras" value={`${analysis.commissuralDeg.toFixed(1)}°`} />
+                  <Metric
+                    label="Central: largura / comprimento"
+                    value={`${analysis.widthHeightPct.toFixed(0)}%${analysis.pxPerMm ? ` (${analysis.centralWidthMm.toFixed(1)} × ${analysis.centralHeightMm.toFixed(1)} mm)` : ''}`}
+                    warn={analysis.widthHeightPct < LIMITS.widthHeightPct.min || analysis.widthHeightPct > LIMITS.widthHeightPct.max}
+                  />
+                  {analysis.notes.map((n, i) => (
+                    <Text key={i} style={styles.note}>
+                      • {n}
+                    </Text>
+                  ))}
+                </View>
+              )}
+              <View style={styles.inlineRow}>
+                <Text style={styles.controlLabel}>Largura do central (mm)</Text>
+                <TextInput
+                  value={centralMm}
+                  onChangeText={setCentralMm}
+                  keyboardType="decimal-pad"
+                  style={[styles.input, styles.inputSmall]}
+                  placeholderTextColor={colors.muted}
+                />
+                <Button
+                  title="Aplicar"
+                  variant="ghost"
+                  onPress={() => {
+                    const mm = parseFloat(centralMm.replace(',', '.'));
+                    if (face && mm > 0 && area.width) setParams(clampParams(setCentralWidthMm(params, face, calibMm, mm, area.width, area.height)));
+                  }}
+                />
+              </View>
+              <View style={styles.row}>
+                <Button
+                  title="Alinhar linha média à face"
+                  variant="secondary"
+                  onPress={() => face && area.width && setParams(clampParams(alignMidlineToFace(params, face, area.width, area.height)))}
+                />
+                <Button title="Desativar" variant="ghost" onPress={() => setFace(null)} />
+              </View>
+            </>
+          )}
         </Card>
 
         <Button title={fine ? 'Ocultar ajuste fino' : 'Ajuste fino'} variant="ghost" onPress={() => setFine(!fine)} />
@@ -356,6 +467,15 @@ export default function Smile() {
         </Card>
       </View>
     </ScrollView>
+  );
+}
+
+function Metric({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
+  return (
+    <View style={styles.metricRow}>
+      <Text style={styles.metricLabel}>{label}</Text>
+      <Text style={[styles.metricValue, warn && { color: colors.danger }]}>{value}</Text>
+    </View>
   );
 }
 
@@ -424,6 +544,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.navy,
   },
   controlLabel: { color: colors.text, fontWeight: '600', fontSize: 13 },
+  inlineRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' },
+  inputSmall: { width: 80, marginBottom: 0, paddingVertical: 8, textAlign: 'center' },
+  metrics: { marginTop: 10, backgroundColor: '#F4F6FA', borderRadius: radius.sm, padding: 10 },
+  metricRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 },
+  metricLabel: { color: colors.muted, fontSize: 13 },
+  metricValue: { color: colors.text, fontWeight: '700', fontSize: 13 },
+  note: { color: colors.text, fontSize: 12, marginTop: 6, lineHeight: 17 },
   input: {
     borderWidth: 1,
     borderColor: colors.border,

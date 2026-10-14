@@ -3,7 +3,19 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
 import type { Lab } from '@/lib/color/convert';
 import type { ShadeSystemId } from '@/lib/color/shades';
+import type { FacePoints } from '@/lib/smile/frame';
 import type { SmileParams } from '@/lib/smile/teeth';
+
+/** Resumo numérico da análise facial (face-bow digital) no momento de salvar. */
+export type FrameSummary = {
+  midlineShiftMm: number;
+  bipupillaryDeg: number;
+  commissuralDeg: number;
+  widthHeightPct: number;
+  centralWidthMm: number;
+  centralHeightMm: number;
+  notes: string[];
+};
 
 export type StoredMatch = { shadeId: string; deltaE: number; quality: string };
 
@@ -39,6 +51,11 @@ export type SmileCase = {
   /** Simulação renderizada (foto + dentes). */
   renderedUri?: string;
   params: SmileParams;
+  /** Marcos faciais (face-bow digital) e calibração, quando a análise facial foi usada. */
+  face?: FacePoints;
+  centralsWidthMm?: number;
+  /** Resumo numérico da análise facial no momento de salvar. */
+  frame?: FrameSummary;
   targetShade: string;
 };
 

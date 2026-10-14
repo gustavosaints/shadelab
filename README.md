@@ -35,9 +35,13 @@ npm run lint       # ESLint (config Expo)
 - **PDF para o laboratório** com a prescrição de cor, gerado e compartilhado pelo próprio app.
 - **Smile Design**: foto frontal do sorriso, seis anteriores desenhados por cima com anatomia real (sprites
   renderizados de bibliotecas de dentes em STL/EOFF, com luz de estúdio e translucidez incisal) ou contorno
-  simples (oval, quadrada, triangular), proporção (natural ou áurea), largura, comprimento, espaçamento, curva do
-  sorriso e cor-alvo da escala. Arraste para posicionar, segure para comparar com o antes, compartilhe a imagem
-  ou salve no caso.
+  simples (oval, quadrada, triangular), proporção (natural, áurea ou RED), largura, comprimento, espaçamento,
+  curva do sorriso e cor-alvo da escala. Arraste para posicionar, segure para comparar com o antes, compartilhe
+  a imagem ou salve no caso.
+- **Análise facial (face-bow digital, estilo DSD)**: pontos arrastáveis para pupilas, glabela, filtro, comissuras
+  e distais dos centrais; calibração em mm pela largura real dos centrais; desvio da linha média dental em mm,
+  inclinação da foto, relação largura/comprimento do central e curvas do smile frame (sorriso, gengival,
+  papilas). Estudo do método em `docs/dsd-estudo.md`.
 
 ## Precisão: leia antes de usar na clínica
 

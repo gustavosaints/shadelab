@@ -9,7 +9,8 @@
  */
 
 export type ToothShape = 'oval' | 'square' | 'triangular';
-export type Proportion = 'natural' | 'golden';
+/** natural = larguras típicas/da biblioteca; golden = proporção áurea; red = Recurring Esthetic Dental (DSD). */
+export type Proportion = 'natural' | 'golden' | 'red';
 export type ToothKind = 'central' | 'lateral' | 'canine';
 export type Side = 'right' | 'left'; // lado do paciente
 
@@ -66,6 +67,7 @@ export type ToothPlacement = {
 export const WIDTH_RATIOS: Record<Proportion, { lateral: number; canine: number }> = {
   natural: { lateral: 0.78, canine: 0.74 },
   golden: { lateral: 0.618, canine: 0.382 },
+  red: { lateral: 0.7, canine: 0.5 },
 };
 
 const HEIGHT_RATIOS: Record<ToothKind, number> = { central: 1, lateral: 0.85, canine: 1.02 };
