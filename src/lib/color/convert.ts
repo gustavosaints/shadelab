@@ -119,3 +119,11 @@ export function roundLab(lab: Lab, digits = 1): Lab {
     b: Math.round(lab.b * f) / f,
   };
 }
+
+export function hexToRgb(hex: string): RGB {
+  const h = hex.replace('#', '');
+  const v = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  const n = parseInt(v, 16);
+  if (Number.isNaN(n) || v.length !== 6) return { r: 240, g: 232, b: 218 };
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}

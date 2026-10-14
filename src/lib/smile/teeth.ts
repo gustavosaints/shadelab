@@ -1,12 +1,17 @@
 /**
  * Geometria paramétrica dos seis dentes anteriores superiores (13 a 23)
- * para o Smile Design. Tudo em coordenadas normalizadas pela largura da
- * imagem exibida (0..1), para o desenho ser independente do aparelho.
+ * para o Smile Design. Parâmetros em frações da imagem exibida, para o
+ * desenho ser independente do aparelho.
+ *
+ * Cada dente é descrito num quadrado unitário com a face DISTAL em x = 0 e a
+ * face MESIAL em x = 1 (colo em y = 0, incisal em y = 1). Os dentes do lado
+ * esquerdo do paciente (21–23) são espelhados.
  */
 
 export type ToothShape = 'oval' | 'square' | 'triangular';
 export type Proportion = 'natural' | 'golden';
 export type ToothKind = 'central' | 'lateral' | 'canine';
+export type Side = 'right' | 'left'; // lado do paciente
 
 export type SmileParams = {
   /** Centro da linha média, fração da largura da imagem. */
@@ -34,17 +39,18 @@ export const DEFAULT_SMILE_PARAMS: SmileParams = {
   gumY: 0.42,
   centralWidth: 0.085,
   heightRatio: 1.2,
-  spacing: 0.04,
+  spacing: 0.03,
   curve: 0.08,
   shape: 'oval',
   proportion: 'natural',
-  opacity: 0.85,
+  opacity: 0.92,
   tint: '#F2EBDD',
 };
 
 export type ToothPlacement = {
   fdi: string; // "13" .. "23"
   kind: ToothKind;
+  side: Side;
   /** Caixa em pixels (origem no canto superior esquerdo). */
   x: number;
   y: number;
@@ -56,71 +62,99 @@ export type ToothPlacement = {
 
 /** Larguras visíveis de lateral e canino relativas ao central, por proporção. */
 export const WIDTH_RATIOS: Record<Proportion, { lateral: number; canine: number }> = {
-  natural: { lateral: 0.78, canine: 0.84 },
+  natural: { lateral: 0.78, canine: 0.74 },
   golden: { lateral: 0.618, canine: 0.382 },
 };
 
-const HEIGHT_RATIOS: Record<ToothKind, number> = { central: 1, lateral: 0.88, canine: 0.98 };
+const HEIGHT_RATIOS: Record<ToothKind, number> = { central: 1, lateral: 0.85, canine: 1.02 };
 /** Deslocamento do zênite gengival (fração da altura): lateral fica um pouco mais baixo. */
-const ZENITH_OFFSET: Record<ToothKind, number> = { central: 0, lateral: 0.06, canine: -0.02 };
+const ZENITH_OFFSET: Record<ToothKind, number> = { central: 0, lateral: 0.07, canine: -0.03 };
 
-type ShapeSpec = {
-  cervicalWidth: number; // fração da largura no colo
-  cornerRadius: number; // fração da largura nos ângulos incisais
-  sideBulge: number; // quanto as faces proximais são convexas (0 reto .. 1 muito)
-  incisalCurve: number; // convexidade da borda incisal (fração da altura)
+type Pt = [number, number];
+
+/**
+ * Contornos traçados no quadrado unitário (distal x=0, mesial x=1, colo y=0,
+ * incisal y=1), no sentido horário a partir do colo mesial. São suavizados
+ * por spline Catmull-Rom, então poucos pontos bastam.
+ */
+const OUTLINES: Record<ToothKind, Pt[]> = {
+  central: [
+    [0.78, 0.09], [0.9, 0.2], [0.97, 0.36], [1.0, 0.54], [1.0, 0.72], [0.99, 0.87],
+    [0.97, 0.96], [0.86, 1.0], [0.62, 1.0], [0.38, 1.0], [0.18, 0.99], [0.08, 0.95],
+    [0.02, 0.86], [0.0, 0.72], [0.0, 0.54], [0.03, 0.36], [0.1, 0.2], [0.22, 0.09],
+    [0.34, 0.03], [0.47, 0.0], [0.6, 0.01], [0.7, 0.04],
+  ],
+  lateral: [
+    [0.74, 0.11], [0.88, 0.24], [0.96, 0.4], [1.0, 0.58], [0.99, 0.76], [0.96, 0.9],
+    [0.9, 0.97], [0.76, 1.0], [0.55, 1.0], [0.33, 0.99], [0.16, 0.95], [0.06, 0.87],
+    [0.01, 0.74], [0.0, 0.58], [0.03, 0.42], [0.1, 0.26], [0.24, 0.12], [0.36, 0.04],
+    [0.48, 0.0], [0.6, 0.01], [0.68, 0.05],
+  ],
+  canine: [
+    [0.78, 0.1], [0.92, 0.24], [0.99, 0.42], [1.0, 0.6], [0.97, 0.74], [0.88, 0.84],
+    [0.72, 0.93], [0.58, 1.0], [0.46, 0.925], [0.32, 0.837], [0.18, 0.749], [0.07, 0.68],
+    [0.01, 0.54], [0.01, 0.4], [0.06, 0.26], [0.16, 0.13], [0.3, 0.04], [0.46, 0.0],
+    [0.6, 0.01], [0.7, 0.04],
+  ],
 };
 
-const SHAPES: Record<ToothShape, ShapeSpec> = {
-  oval: { cervicalWidth: 0.7, cornerRadius: 0.3, sideBulge: 0.9, incisalCurve: 0.05 },
-  square: { cervicalWidth: 0.82, cornerRadius: 0.12, sideBulge: 0.5, incisalCurve: 0.0 },
-  triangular: { cervicalWidth: 0.52, cornerRadius: 0.2, sideBulge: 0.25, incisalCurve: 0.03 },
-};
+/** Deforma o contorno base conforme a forma escolhida. */
+function shapePoints(kind: ToothKind, shape: ToothShape): Pt[] {
+  const base = OUTLINES[kind];
+  if (shape === 'oval') return base;
+  return base.map(([x, y]) => {
+    if (shape === 'square') {
+      // colo mais largo, faces mais retas e ângulos incisais mais vivos
+      let nx = 0.5 + (x - 0.5) * (0.93 + 0.07 * y);
+      let ny = y;
+      if (y > 0.9 && kind !== 'canine') {
+        nx = 0.5 + (x - 0.5) * 1.08;
+        ny = x > 0.15 && x < 0.85 ? 1.0 : Math.max(y, 0.97);
+      }
+      return [Math.min(1, Math.max(0, nx)), ny];
+    }
+    // triangular: colo bem mais estreito, abrindo até a incisal
+    return [0.5 + (x - 0.5) * (0.68 + 0.32 * y), y];
+  });
+}
+
+/** Converte um polígono fechado em segmentos cúbicos (Catmull-Rom → Bézier). */
+function smoothClosed(pts: Pt[], tension = 0.42): { start: Pt; segments: [Pt, Pt, Pt][] } {
+  const n = pts.length;
+  const segs: [Pt, Pt, Pt][] = [];
+  for (let i = 0; i < n; i++) {
+    const p0 = pts[(i - 1 + n) % n];
+    const p1 = pts[i];
+    const p2 = pts[(i + 1) % n];
+    const p3 = pts[(i + 2) % n];
+    const c1: Pt = [p1[0] + ((p2[0] - p0[0]) * tension) / 3, p1[1] + ((p2[1] - p0[1]) * tension) / 3];
+    const c2: Pt = [p2[0] - ((p3[0] - p1[0]) * tension) / 3, p2[1] - ((p3[1] - p1[1]) * tension) / 3];
+    segs.push([c1, c2, p2]);
+  }
+  return { start: pts[0], segments: segs };
+}
+
+function unitOutline(kind: ToothKind, shape: ToothShape): { start: Pt; segments: [Pt, Pt, Pt][] } {
+  return smoothClosed(shapePoints(kind, shape));
+}
 
 const f = (n: number) => Number(n.toFixed(2));
 
 /**
- * Contorno de um dente numa caixa (x, y, w, h). O colo fica no topo.
- * O canino recebe uma cúspide em vez de borda incisal reta.
+ * Caminho SVG absoluto do dente na caixa (x, y, w, h).
+ * `side === 'right'` (dentes 11–13, à esquerda do observador): mesial fica à direita.
  */
-export function toothPath(x: number, y: number, w: number, h: number, shape: ToothShape, kind: ToothKind): string {
-  const s = SHAPES[shape];
-  const cw = w * s.cervicalWidth;
-  const xl = x + (w - cw) / 2;
-  const xr = xl + cw;
-  const yc = y + h * 0.16; // altura em que o colo encontra as faces
-  const r = w * s.cornerRadius;
-  const bulge = s.sideBulge;
-
-  // Controle das faces proximais: quanto maior o bulge, mais a face sai da reta.
-  const c1x = (side: 1 | -1) => (side > 0 ? xr + (x + w - xr) * (0.6 + 0.6 * bulge) : xl - (xl - x) * (0.6 + 0.6 * bulge));
-  const c2x = (side: 1 | -1) => (side > 0 ? x + w + w * 0.02 * bulge : x - w * 0.02 * bulge);
-
-  const parts: string[] = [];
-  parts.push(`M ${f(xl)} ${f(yc)}`);
-  // colo (arco superior)
-  parts.push(`C ${f(xl + cw * 0.15)} ${f(y - h * 0.01)}, ${f(xr - cw * 0.15)} ${f(y - h * 0.01)}, ${f(xr)} ${f(yc)}`);
-  // face distal/mesial direita até o ângulo incisal
-  parts.push(`C ${f(c1x(1))} ${f(y + h * 0.32)}, ${f(c2x(1))} ${f(y + h * 0.65)}, ${f(x + w)} ${f(y + h - r)}`);
-
-  if (kind === 'canine') {
-    // ângulo direito, vertente até a ponta da cúspide, vertente até o ângulo esquerdo
-    const tipY = y + h;
-    const shoulderY = y + h - h * 0.12;
-    parts.push(`Q ${f(x + w)} ${f(shoulderY)}, ${f(x + w - r * 0.8)} ${f(shoulderY)}`);
-    parts.push(`L ${f(x + w / 2)} ${f(tipY)}`);
-    parts.push(`L ${f(x + r * 0.8)} ${f(shoulderY)}`);
-    parts.push(`Q ${f(x)} ${f(shoulderY)}, ${f(x)} ${f(y + h - r)}`);
-  } else {
-    // ângulo incisal direito
-    parts.push(`Q ${f(x + w)} ${f(y + h)}, ${f(x + w - r)} ${f(y + h)}`);
-    // borda incisal (levemente convexa)
-    parts.push(`Q ${f(x + w / 2)} ${f(y + h + h * s.incisalCurve)}, ${f(x + r)} ${f(y + h)}`);
-    // ângulo incisal esquerdo
-    parts.push(`Q ${f(x)} ${f(y + h)}, ${f(x)} ${f(y + h - r)}`);
+export function toothPath(x: number, y: number, w: number, h: number, shape: ToothShape, kind: ToothKind, side: Side): string {
+  const { start, segments } = unitOutline(kind, shape);
+  const map = ([ux, uy]: Pt): Pt => [x + (side === 'right' ? ux : 1 - ux) * w, y + uy * h];
+  const [sx, sy] = map(start);
+  const parts = [`M ${f(sx)} ${f(sy)}`];
+  for (const [c1, c2, p] of segments) {
+    const [a, b] = map(c1);
+    const [c, d] = map(c2);
+    const [e, g] = map(p);
+    parts.push(`C ${f(a)} ${f(b)}, ${f(c)} ${f(d)}, ${f(e)} ${f(g)}`);
   }
-  // face esquerda de volta ao colo
-  parts.push(`C ${f(c2x(-1))} ${f(y + h * 0.65)}, ${f(c1x(-1))} ${f(y + h * 0.32)}, ${f(xl)} ${f(yc)}`);
   parts.push('Z');
   return parts.join(' ');
 }
@@ -144,19 +178,20 @@ export function layoutTeeth(p: SmileParams, width: number, height: number): Toot
   ];
 
   const out: ToothPlacement[] = [];
-  for (const side of [-1, 1] as const) {
-    let edge = midX + (side * gap) / 2; // borda mesial do próximo dente
+  for (const dir of [-1, 1] as const) {
+    const side: Side = dir < 0 ? 'right' : 'left';
+    let edge = midX + (dir * gap) / 2; // borda mesial do próximo dente
     for (const t of order) {
       const w = cw * t.ratio;
       const h = ch * HEIGHT_RATIOS[t.kind];
-      const x = side > 0 ? edge : edge - w;
+      const x = dir > 0 ? edge : edge - w;
       const y = gumY + ZENITH_OFFSET[t.kind] * ch - p.curve * ch * t.k * t.k * 0.5;
-      const fdi = side < 0 ? `1${t.k + 1}` : `2${t.k + 1}`;
-      out.push({ fdi, kind: t.kind, x, y, w, h, d: toothPath(x, y, w, h, p.shape, t.kind) });
-      edge = side > 0 ? x + w + gap : x - gap;
+      const fdi = dir < 0 ? `1${t.k + 1}` : `2${t.k + 1}`;
+      out.push({ fdi, kind: t.kind, side, x, y, w, h, d: toothPath(x, y, w, h, p.shape, t.kind, side) });
+      edge = dir > 0 ? x + w + gap : x - gap;
     }
   }
-  // ordem anatômica da esquerda para a direita do observador: 13 12 11 21 22 23
+  // ordem da esquerda para a direita do observador: 13 12 11 21 22 23
   return out.sort((a, b) => a.x - b.x);
 }
 

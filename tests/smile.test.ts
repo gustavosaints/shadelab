@@ -42,13 +42,26 @@ describe('layoutTeeth', () => {
 });
 
 describe('toothPath', () => {
+  it('espelha o lado esquerdo em relação ao direito', () => {
+    const r = toothPath(0, 0, 100, 120, 'oval', 'central', 'right');
+    const l = toothPath(0, 0, 100, 120, 'oval', 'central', 'left');
+    const xs = (d: string) => d.match(/-?\d+(\.\d+)? /g)!.map(Number);
+    // mesmo número de pontos, e as coordenadas x somam 100 em pares espelhados
+    const rx = xs(r);
+    const lx = xs(l);
+    expect(rx.length).toBe(lx.length);
+    expect(rx[0] + lx[0]).toBeCloseTo(100, 1);
+  });
+
   it('produz um caminho fechado para cada forma e tipo', () => {
     for (const shape of ['oval', 'square', 'triangular'] as const) {
       for (const kind of ['central', 'lateral', 'canine'] as const) {
-        const d = toothPath(10, 20, 80, 100, shape, kind);
-        expect(d.startsWith('M ')).toBe(true);
-        expect(d.endsWith('Z')).toBe(true);
-        expect(d).not.toMatch(/NaN/);
+        for (const side of ['right', 'left'] as const) {
+          const d = toothPath(10, 20, 80, 100, shape, kind, side);
+          expect(d.startsWith('M ')).toBe(true);
+          expect(d.endsWith('Z')).toBe(true);
+          expect(d).not.toMatch(/NaN/);
+        }
       }
     }
   });
