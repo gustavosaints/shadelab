@@ -2,15 +2,16 @@ import { Defs, G, Image, Mask, Rect } from 'react-native-svg';
 import { layoutAnatomy, Z_ORDER, type AnatomyDef } from '@/lib/smile/anatomy';
 import type { SmileParams } from '@/lib/smile/teeth';
 
-type Props = { params: SmileParams; anatomy: AnatomyDef; width: number; height: number };
+type Props = { params: SmileParams; anatomy: AnatomyDef; width: number; height: number; selected?: string };
 
 /**
  * Seis anteriores com sprites de anatomia real, como fragmento SVG (para serem
  * recortados pelo contorno da boca junto com o resto do overlay). Por dente:
  * silhueta (máscara de luminância do PNG branco) preenchida com a cor-alvo,
  * depois sombra e brilho como imagens. Dentes 21–23 são o espelho dos sprites.
+ * A rotação do ajuste individual gira o dente em torno do centro da caixa.
  */
-export function AnatomyTeeth({ params, anatomy, width, height }: Props) {
+export function AnatomyTeeth({ params, anatomy, width, height, selected }: Props) {
   const teeth = layoutAnatomy(params, anatomy, width, height).sort((a, b) => Z_ORDER[a.kind] - Z_ORDER[b.kind]);
   return (
     <>
@@ -23,9 +24,12 @@ export function AnatomyTeeth({ params, anatomy, width, height }: Props) {
       </Defs>
       <G opacity={params.opacity}>
         {teeth.map((t) => {
-          const mirror = t.side === 'left' ? `translate(${(2 * (t.x + t.w / 2)).toFixed(2)} 0) scale(-1 1)` : undefined;
+          const cx = t.x + t.w / 2;
+          const cy = t.y + t.h / 2;
+          const rotate = t.rot ? `rotate(${t.rot.toFixed(2)} ${cx.toFixed(2)} ${cy.toFixed(2)})` : '';
+          const mirror = t.side === 'left' ? `translate(${(2 * cx).toFixed(2)} 0) scale(-1 1)` : '';
           return (
-            <G key={t.fdi} transform={mirror}>
+            <G key={t.fdi} transform={`${rotate} ${mirror}`.trim() || undefined}>
               <Rect x={t.x} y={t.y} width={t.w} height={t.h} fill={params.tint} mask={`url(#fill-${t.fdi})`} />
               <Image href={t.tooth.shade} x={t.x} y={t.y} width={t.w} height={t.h} preserveAspectRatio="none" />
               <Image href={t.tooth.gloss} x={t.x} y={t.y} width={t.w} height={t.h} preserveAspectRatio="none" />
@@ -33,6 +37,23 @@ export function AnatomyTeeth({ params, anatomy, width, height }: Props) {
           );
         })}
       </G>
+      {selected &&
+        teeth
+          .filter((t) => t.fdi === selected)
+          .map((t) => (
+            <Rect
+              key={`sel-${t.fdi}`}
+              x={t.x}
+              y={t.y}
+              width={t.w}
+              height={t.h}
+              fill="none"
+              stroke="#00E5FF"
+              strokeWidth={1.5}
+              strokeDasharray="4 3"
+              transform={t.rot ? `rotate(${t.rot.toFixed(2)} ${(t.x + t.w / 2).toFixed(2)} ${(t.y + t.h / 2).toFixed(2)})` : undefined}
+            />
+          ))}
     </>
   );
 }

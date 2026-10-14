@@ -143,24 +143,66 @@ const ZENITH = { central: 0, lateral: 0.8, canine: 0 };
 const GUM_FADE_MM = 1.2;
 
 /**
- * Renderiza um dente; devolve camadas já reduzidas (alfa 0..255) e medidas em mm.
- * `gumLineMm` (coordenada vertical do arco, para cima) corta o sprite na linha da gengiva.
+ * Ângulo de vista por dente (graus, girando da vestibular para a mesial). Cada dente é visto quase de
+ * frente — como lado a lado no Smile Design — com um giro leve para o lateral e o canino não parecerem
+ * "chapados". (A rotação real do arco, ~30° e ~50°, sobrepunha os dentes e estreitava demais o canino.)
  */
-function renderTooth(lib, spec, bow, arch, ppm, gumLineMm) {
+const VIEW_ANGLE = { central: 0, lateral: 10, canine: 24 };
+/** Fração da largura do sprite cortada do lado distal (some no corredor bucal numa foto frontal). */
+const DISTAL_CROP = { central: 0, lateral: 0.1, canine: 0.3 };
+/** Esmaecimento longo a partir da borda distal cortada (fração da largura restante), para não ficar uma reta. */
+const DISTAL_FADE = { central: 0, lateral: 0.3, canine: 0.45 };
+
+/**
+ * Níveis verticais de cada dente no arco (mm, eixo oclusal apontando para cima): borda incisal e topo
+ * da malha, projetados na vista frontal do arco. Servem para alinhar os sprites entre si.
+ */
+function archLevels(lib, spec, bow, arch) {
+  const raw = readMesh(meshFile(lib, spec.file));
+  const mesh = placeMesh(raw, toothRotation(bow[spec.fdi]), bow[spec.fdi].position);
+  const up = scale(arch.occlusal, -1);
+  let min = Infinity;
+  let max = -Infinity;
+  for (let i = 0; i < mesh.positions.length; i += 3) {
+    const v = dot([mesh.positions[i], mesh.positions[i + 1], mesh.positions[i + 2]], up);
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  return { incisal: min, top: max };
+}
+
+/**
+ * Renderiza um dente no seu próprio referencial (vista vestibular com giro leve); devolve camadas já
+ * reduzidas (alfa 0..255) e medidas em mm. `keepMm` é a altura mantida a partir da borda incisal
+ * (o resto do colo é cortado, com margem gengival esmaecida).
+ */
+function renderTooth(lib, spec, ppm, keepMm) {
   const file = meshFile(lib, spec.file);
   if (!file) throw new Error(`${lib}: falta ${spec.file}.eoff/.stl`);
-  const raw = readMesh(file);
-  const mesh = placeMesh(raw, toothRotation(bow[spec.fdi]), bow[spec.fdi].position);
-  const toward = scale(arch.anterior, -1); // câmera na frente do arco olhando para trás
-  const up = scale(arch.occlusal, -1); // superiores: incisal para baixo
+  const mesh = readMesh(file);
+  // referencial da malha: x = mesial, y = vestibular, z = incisal
+  const a = (VIEW_ANGLE[spec.kind] * Math.PI) / 180;
+  const cam = [Math.sin(a), Math.cos(a), 0]; // câmera na frente, girada para a mesial
+  const toward = scale(cam, -1);
+  const up = [0, 0, -1]; // superiores: incisal para baixo
   const right = norm(cross(toward, up));
   const r0 = rasterize(mesh, { right, up, toward }, ppm * SS, 2 * SS);
 
   // corte na linha da gengiva: descarta as linhas acima dela e esmaece a margem
-  const cropTopMm = gumLineMm === undefined ? r0.bounds.maxY : Math.min(r0.bounds.maxY, gumLineMm - ZENITH[spec.kind]);
+  const cropTopMm = keepMm === undefined ? r0.bounds.maxY : Math.min(r0.bounds.maxY, r0.bounds.minY + keepMm);
   const skipRows = Math.max(0, Math.floor((r0.bounds.maxY - cropTopMm) * ppm * SS));
-  const r = { ...r0, height: r0.height - skipRows, bounds: { ...r0.bounds, maxY: r0.bounds.maxY - skipRows / (ppm * SS) } };
+  // corte distal: no sorriso, a face distal do lateral e do canino some no corredor bucal; cortamos
+  // essa fatia (lado esquerdo do sprite do dente direito) com esmaecimento, para a largura visível ficar
+  // parecida com a de uma foto (RED ≈ 0,7 e 0,5 do central)
+  const skipCols = Math.floor(r0.width * DISTAL_CROP[spec.kind]);
+  const r = {
+    ...r0,
+    height: r0.height - skipRows,
+    width: r0.width - skipCols,
+    bounds: { ...r0.bounds, maxY: r0.bounds.maxY - skipRows / (ppm * SS), minX: r0.bounds.minX + skipCols / (ppm * SS) },
+  };
   const rowOf = (y) => y + skipRows;
+  const colOf = (x) => x + skipCols;
 
   const W = Math.ceil(r.width / SS);
   const H = Math.ceil(r.height / SS);
@@ -169,9 +211,10 @@ function renderTooth(lib, spec, bow, arch, ppm, gumLineMm) {
   const gls = new Float32Array(W * H);
   const hPx = r.height;
   const fadePx = GUM_FADE_MM * ppm * SS;
+  const distalFadePx = DISTAL_FADE[spec.kind] * r.width;
   for (let y = 0; y < r.height; y++) {
     for (let x = 0; x < r.width; x++) {
-      const i = rowOf(y) * r.width + x;
+      const i = rowOf(y) * r0.width + colOf(x);
       let n;
       if (r.front[i] !== -Infinity) n = norm([r.normals[i * 3], r.normals[i * 3 + 1], r.normals[i * 3 + 2]]);
       else if (r.any[i] !== -Infinity) n = norm([-r.anyNormals[i * 3], -r.anyNormals[i * 3 + 1], -r.anyNormals[i * 3 + 2]]); // parede interna do colo aberto
@@ -185,6 +228,10 @@ function renderTooth(lib, spec, bow, arch, ppm, gumLineMm) {
       const thin = Math.min(1, Math.max(0, 1 - thickness / 2.4));
       let alpha = 1 - 0.55 * inc * Math.pow(thin, 1.6);
       if (y < fadePx) alpha *= y / fadePx; // margem gengival suave (também esconde o corte do colo)
+      if (skipCols > 0 && x < distalFadePx) {
+        const t = x / distalFadePx; // distal esmaecida no corredor bucal (suave, sem reta visível)
+        alpha *= t * t * (3 - 2 * t);
+      }
       const o = Math.floor(y / SS) * W + Math.floor(x / SS);
       fill[o] += alpha;
       shd[o] += alpha * (1 - d);
@@ -280,12 +327,26 @@ function renderLibrary(lib) {
   for (const n of ['11', '12', '13', '21', '22', '16', '26']) if (!bow[n]) throw new Error(`${lib}: XML sem dente ${n}`);
   const arch = archFrame(bow);
   // escala: o central fica com CENTRAL_PX de altura
-  const probe = renderTooth(lib, KINDS[0], bow, arch, 4);
+  // níveis no arco: linha da gengiva comum = incisal do central + altura da coroa; cada dente mantém
+  // a altura entre a sua incisal e essa linha (menos o zênite), e o sprite registra o deslocamento vertical
+  const levels = {};
+  for (const spec of KINDS) levels[spec.kind] = archLevels(lib, spec, bow, arch);
+  const probe = renderTooth(lib, KINDS[0], 4);
   const crown = crownHeight(probe);
   const ppm = CENTRAL_PX / crown;
-  const gumLineMm = probe.topMm - probe.hMm + crown; // linha da gengiva: incisal do central + altura da coroa
+  const gumLine = levels.central.incisal + crown;
   const teeth = {};
-  for (const spec of KINDS) teeth[spec.kind] = renderTooth(lib, spec, bow, arch, ppm, gumLineMm);
+  let leftMm = 0;
+  for (const spec of KINDS) {
+    const lv = levels[spec.kind];
+    const spriteTop = Math.min(lv.top, gumLine - ZENITH[spec.kind]);
+    const t = renderTooth(lib, spec, ppm, spriteTop - lv.incisal);
+    // posição sintética para prévia/catálogo: lado a lado por contato, da direita para a esquerda
+    leftMm -= spec.kind === 'central' ? 0 : t.wMm + 0.15;
+    t.leftMm = leftMm;
+    t.topMm = spriteTop;
+    teeth[spec.kind] = t;
+  }
   return { teeth, ppm };
 }
 

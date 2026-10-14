@@ -40,9 +40,44 @@ export type SmileParams = {
    * comissura direita do paciente. Quando presente, os dentes são recortados por ele.
    */
   mouth?: MouthPoint[];
+  /** Ajustes dente a dente (por FDI "11".."23"), por cima do layout automático. */
+  edits?: Partial<Record<string, ToothEdit>>;
 };
 
 export type MouthPoint = { x: number; y: number };
+
+/** Ajuste individual de um dente: deslocamento (frações da largura/altura do central), escala e rotação (graus, horário). */
+export type ToothEdit = { dx: number; dy: number; sw: number; sh: number; rot: number };
+export const NO_EDIT: ToothEdit = { dx: 0, dy: 0, sw: 1, sh: 1, rot: 0 };
+
+export type ToothBox = { x: number; y: number; w: number; h: number };
+
+/**
+ * Aplica o ajuste individual a uma caixa: desloca, muda largura mantendo o centro e comprimento
+ * mantendo a linha cervical. A rotação é devolvida para o desenho (em torno do centro da caixa).
+ */
+export function applyToothEdit(box: ToothBox, edit: ToothEdit | undefined, cw: number, ch: number): ToothBox & { rot: number } {
+  if (!edit) return { ...box, rot: 0 };
+  const w = box.w * edit.sw;
+  const h = box.h * edit.sh;
+  const cx = box.x + box.w / 2 + edit.dx * cw;
+  return { x: cx - w / 2, y: box.y + edit.dy * ch, w, h, rot: edit.rot };
+}
+
+/** Ajuste espelhado para o dente do outro lado (deslocamento horizontal e rotação invertidos). */
+export function mirrorEdit(e: ToothEdit): ToothEdit {
+  return { ...e, dx: -e.dx, rot: -e.rot };
+}
+
+/** FDI do dente homólogo do outro lado. */
+export function mirrorFdi(fdi: string): string {
+  return (fdi[0] === '1' ? '2' : '1') + fdi[1];
+}
+
+export function clampEdit(e: ToothEdit): ToothEdit {
+  const c = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+  return { dx: c(e.dx, -1, 1), dy: c(e.dy, -1, 1), sw: c(e.sw, 0.5, 1.6), sh: c(e.sh, 0.5, 1.6), rot: c(e.rot, -30, 30) };
+}
 
 export const DEFAULT_SMILE_PARAMS: SmileParams = {
   midlineX: 0.5,
@@ -68,6 +103,8 @@ export type ToothPlacement = {
   h: number;
   /** Caminho SVG em coordenadas absolutas (pixels). */
   d: string;
+  /** Rotação em graus (horário) em torno do centro da caixa, do ajuste individual. */
+  rot: number;
 };
 
 /** Larguras visíveis de lateral e canino relativas ao central, por proporção. */
@@ -101,11 +138,12 @@ const OUTLINES: Record<ToothKind, Pt[]> = {
     [0.01, 0.74], [0.0, 0.58], [0.03, 0.42], [0.1, 0.26], [0.24, 0.12], [0.36, 0.04],
     [0.48, 0.0], [0.6, 0.01], [0.68, 0.05],
   ],
+  // canino com cúspide arredondada (como um canino natural levemente desgastado), não pontudo
   canine: [
-    [0.78, 0.1], [0.92, 0.24], [0.99, 0.42], [1.0, 0.6], [0.97, 0.74], [0.88, 0.84],
-    [0.72, 0.93], [0.58, 1.0], [0.46, 0.925], [0.32, 0.837], [0.18, 0.749], [0.07, 0.68],
-    [0.01, 0.54], [0.01, 0.4], [0.06, 0.26], [0.16, 0.13], [0.3, 0.04], [0.46, 0.0],
-    [0.6, 0.01], [0.7, 0.04],
+    [0.78, 0.1], [0.92, 0.24], [0.99, 0.42], [1.0, 0.6], [0.98, 0.76], [0.92, 0.88],
+    [0.8, 0.96], [0.66, 1.0], [0.54, 0.99], [0.42, 0.955], [0.28, 0.9], [0.14, 0.82],
+    [0.04, 0.7], [0.0, 0.55], [0.02, 0.4], [0.07, 0.26], [0.17, 0.13], [0.31, 0.04],
+    [0.46, 0.0], [0.6, 0.01], [0.7, 0.04],
   ],
 };
 
@@ -195,11 +233,12 @@ export function layoutTeeth(p: SmileParams, width: number, height: number): Toot
     for (const t of order) {
       const w = cw * t.ratio;
       const h = ch * HEIGHT_RATIOS[t.kind];
-      const x = dir > 0 ? edge : edge - w;
-      const y = gumY + ZENITH_OFFSET[t.kind] * ch - p.curve * ch * t.k * t.k * 0.5;
+      const x0 = dir > 0 ? edge : edge - w;
+      const y0 = gumY + ZENITH_OFFSET[t.kind] * ch - p.curve * ch * t.k * t.k * 0.5;
       const fdi = dir < 0 ? `1${t.k + 1}` : `2${t.k + 1}`;
-      out.push({ fdi, kind: t.kind, side, x, y, w, h, d: toothPath(x, y, w, h, p.shape, t.kind, side) });
-      edge = dir > 0 ? x + w + gap : x - gap;
+      const { x, y, w: ew, h: eh, rot } = applyToothEdit({ x: x0, y: y0, w, h }, p.edits?.[fdi], cw, ch);
+      out.push({ fdi, kind: t.kind, side, x, y, w: ew, h: eh, rot, d: toothPath(x, y, ew, eh, p.shape, t.kind, side) });
+      edge = dir > 0 ? x0 + w + gap : x0 - gap;
     }
   }
   // ordem da esquerda para a direita do observador: 13 12 11 21 22 23

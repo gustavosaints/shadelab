@@ -36,6 +36,13 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   luminância de um `Rect` com a cor-alvo; `shade` (preto) e `gloss` (branco) só têm alfa e entram como `Image`.
   Assim a cor escolhida domina, o sombreamento é preservado e o recorte da boca vale para tudo. Dentes 21–23 =
   espelho (`transform` scale(-1 1)). Se `Mask` com `Image` falhar no Expo Go, alternativa: `@react-native-masked-view`.
+  Cada dente é renderizado no seu próprio referencial (vista vestibular com giro leve: lateral 10°, canino 24°) e com
+  a fatia distal esmaecida (lateral 10%, canino 30%), para a largura visível bater com uma foto; o layout põe os
+  dentes lado a lado por contato (`offsetX` do catálogo não é usado). A versão anterior (rotação real do arco)
+  sobrepunha os dentes e foi rejeitada pelo Gustavo.
+- Edição dente a dente: `SmileParams.edits[fdi] = { dx, dy, sw, sh, rot }` aplicado por `applyToothEdit` nos dois
+  layouts; rotação desenhada com `rotate()` em torno do centro da caixa; com um dente selecionado, arrastar na foto
+  move só ele.
 - `scripts/anatomia/` `import.mjs` (copia da biblioteca do exocad só os anteriores superiores), `mesh.mjs` (lê `.eoff`
   = OFF binário do exocad, e `.stl`), `raster.mjs` (rasterizador ortográfico com z-buffer e normais), `png.mjs`,
   `render.mjs` (luz de estúdio, translucidez incisal por espessura, corte na linha da gengiva, catálogo TS) e

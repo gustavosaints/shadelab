@@ -53,14 +53,35 @@ describe('layoutAnatomy', () => {
     }
   });
 
-  it('proporção natural segue as medidas da biblioteca (largura e posição no arco)', () => {
+  it('proporção natural segue as larguras da biblioteca, lado a lado por contato', () => {
     const teeth = layoutAnatomy({ ...DEFAULT_SMILE_PARAMS, spacing: 0 }, DEF, W, H);
     const t11 = teeth.find((t) => t.fdi === '11')!;
     const t12 = teeth.find((t) => t.fdi === '12')!;
+    const t13 = teeth.find((t) => t.fdi === '13')!;
     const s = t11.w / DEF.teeth.central.wMm;
     expect(t12.w).toBeCloseTo(DEF.teeth.lateral.wMm * s, 6);
-    expect(t12.x).toBeCloseTo(t11.x + DEF.teeth.lateral.offsetX * s, 6);
+    expect(t12.x + t12.w).toBeCloseTo(t11.x, 6); // contato, sem sobreposição
+    expect(t13.x + t13.w).toBeCloseTo(t12.x, 6);
     expect(t12.y).toBeGreaterThan(t11.y); // zênite do lateral mais baixo
+  });
+
+  it('ajuste individual desloca, escala e gira só o dente editado', () => {
+    const edits = { '12': { dx: 0.2, dy: 0.1, sw: 1.2, sh: 0.9, rot: 8 } };
+    const base = layoutAnatomy(DEFAULT_SMILE_PARAMS, DEF, W, H);
+    const edited = layoutAnatomy({ ...DEFAULT_SMILE_PARAMS, edits }, DEF, W, H);
+    const b12 = base.find((t) => t.fdi === '12')!;
+    const e12 = edited.find((t) => t.fdi === '12')!;
+    const cw = DEFAULT_SMILE_PARAMS.centralWidth * W;
+    expect(e12.w).toBeCloseTo(b12.w * 1.2, 6);
+    expect(e12.h).toBeCloseTo(b12.h * 0.9, 6);
+    expect(e12.x + e12.w / 2).toBeCloseTo(b12.x + b12.w / 2 + 0.2 * cw, 6);
+    expect(e12.y).toBeGreaterThan(b12.y);
+    expect(e12.rot).toBe(8);
+    // o vizinho não muda
+    const b13 = base.find((t) => t.fdi === '13')!;
+    const e13 = edited.find((t) => t.fdi === '13')!;
+    expect(e13.x).toBeCloseTo(b13.x, 6);
+    expect(e13.rot).toBe(0);
   });
 
   it('proporção áurea força 62% e 38% da largura do central', () => {

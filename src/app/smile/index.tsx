@@ -37,7 +37,18 @@ import {
   setCentralWidthMm,
   type FacePoints,
 } from '@/lib/smile/frame';
-import { clampParams, DEFAULT_SMILE_PARAMS, layoutTeeth, WIDTH_RATIOS, type SmileParams } from '@/lib/smile/teeth';
+import {
+  clampEdit,
+  clampParams,
+  DEFAULT_SMILE_PARAMS,
+  layoutTeeth,
+  mirrorEdit,
+  mirrorFdi,
+  NO_EDIT,
+  WIDTH_RATIOS,
+  type SmileParams,
+  type ToothEdit,
+} from '@/lib/smile/teeth';
 import { newCaseId, persistPhoto, saveCase } from '@/lib/storage/cases';
 import { useSettings } from '@/lib/useSettings';
 import { colors, radius, spacing } from '@/theme';
@@ -70,6 +81,11 @@ export default function Smile() {
   const [centralMm, setCentralMm] = useState('8.5');
   // ----- Contorno da boca (recorte dos dentes pelos lábios) -----
   const [editMouth, setEditMouth] = useState(false);
+  // ----- Edição dente a dente -----
+  const [selectedTooth, setSelectedTooth] = useState<string | null>(null);
+  const editOf = (fdi: string): ToothEdit => params.edits?.[fdi] ?? NO_EDIT;
+  const setEdit = (fdi: string, patch: Partial<ToothEdit>) =>
+    setParams((p) => ({ ...p, edits: { ...p.edits, [fdi]: clampEdit({ ...(p.edits?.[fdi] ?? NO_EDIT), ...patch }) } }));
   const canvasRef = useRef<View>(null);
   const gesture = useRef<GestureStart | null>(null);
 
@@ -129,6 +145,14 @@ export default function Smile() {
     }
     const c0 = centroid(g.touches);
     const c1 = centroid(now);
+    if (selectedTooth && now.length === 1) {
+      // um dedo com dente selecionado: move só esse dente (em frações do central)
+      const cw = g.params.centralWidth * area.width;
+      const ch = cw * g.params.heightRatio;
+      const base = g.params.edits?.[selectedTooth] ?? NO_EDIT;
+      setEdit(selectedTooth, { dx: base.dx + (c1.x - c0.x) / cw, dy: base.dy + (c1.y - c0.y) / ch });
+      return;
+    }
     const patch: Partial<SmileParams> = {
       midlineX: g.params.midlineX + (c1.x - c0.x) / area.width,
       gumY: g.params.gumY + (c1.y - c0.y) / area.height,
@@ -273,7 +297,14 @@ export default function Smile() {
         onResponderTerminate={end}
       >
         <Image source={{ uri: photo.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-        <SmileOverlay params={params} width={area.width} height={area.height} hidden={hidden} anatomy={anatomy} />
+        <SmileOverlay
+          params={params}
+          width={area.width}
+          height={area.height}
+          hidden={hidden}
+          anatomy={anatomy}
+          selected={exporting ? undefined : (selectedTooth ?? undefined)}
+        />
         {face && !hidden && area.width > 0 && (
           <FaceFrame
             face={face}
@@ -490,6 +521,49 @@ export default function Smile() {
                   onPress={() => face && area.width && setParams(clampParams(alignMidlineToFace(params, face, area.width, area.height)))}
                 />
                 <Button title="Desativar" variant="ghost" onPress={() => setFace(null)} />
+              </View>
+            </>
+          )}
+        </Card>
+
+        <Card>
+          <SectionTitle>Dente a dente</SectionTitle>
+          <Muted>
+            {selectedTooth
+              ? `Dente ${selectedTooth} selecionado: arraste na foto para mover, use os controles para tamanho e rotação (curva do sorriso).`
+              : 'Toque num dente para ajustá-lo individualmente.'}
+          </Muted>
+          <View style={styles.chips}>
+            {['13', '12', '11', '21', '22', '23'].map((fdi) => (
+              <Chip
+                key={fdi}
+                label={fdi}
+                selected={selectedTooth === fdi}
+                color={params.edits?.[fdi] && params.edits[fdi] !== NO_EDIT ? colors.navy : undefined}
+                onPress={() => setSelectedTooth(selectedTooth === fdi ? null : fdi)}
+              />
+            ))}
+          </View>
+          {selectedTooth && (
+            <>
+              <Control label="Rotação (°)" value={editOf(selectedTooth).rot} min={-25} max={25} onChange={(v) => setEdit(selectedTooth, { rot: v })} />
+              <Control label="Deslocar ↔" value={editOf(selectedTooth).dx} min={-0.6} max={0.6} onChange={(v) => setEdit(selectedTooth, { dx: v })} />
+              <Control label="Deslocar ↕" value={editOf(selectedTooth).dy} min={-0.6} max={0.6} onChange={(v) => setEdit(selectedTooth, { dy: v })} />
+              <Control label="Largura" value={editOf(selectedTooth).sw} min={0.6} max={1.4} onChange={(v) => setEdit(selectedTooth, { sw: v })} />
+              <Control label="Comprimento" value={editOf(selectedTooth).sh} min={0.6} max={1.4} onChange={(v) => setEdit(selectedTooth, { sh: v })} />
+              <View style={styles.chips}>
+                <Chip
+                  label={`Espelhar no ${mirrorFdi(selectedTooth)}`}
+                  onPress={() => setEdit(mirrorFdi(selectedTooth), mirrorEdit(editOf(selectedTooth)))}
+                />
+                <Chip label="Zerar este" onPress={() => setEdit(selectedTooth, NO_EDIT)} />
+                <Chip
+                  label="Zerar todos"
+                  onPress={() => {
+                    setParams((p) => ({ ...p, edits: undefined }));
+                    setSelectedTooth(null);
+                  }}
+                />
               </View>
             </>
           )}
