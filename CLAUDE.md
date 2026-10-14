@@ -28,9 +28,14 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
 - `src/lib/smile/frame.ts` face-bow digital estilo DSD: marcos faciais em frações da imagem, calibração em mm pela
   largura dos dois centrais, desvio de linha média, inclinação, relação L/C do central (70–90%), curvas do smile
   frame (sorriso, gengival, papilas a 40%). UI em `components/FaceFrame.tsx`. Estudo do DSD em `docs/dsd-estudo.md`.
+- `src/lib/smile/mouth.ts` contorno da boca (8 pontos, frações da imagem, em `SmileParams.mouth`): `ClipPath` no
+  `SmileOverlay` recorta os dentes pela abertura dos lábios; `fitToMouth` encaixa o arco (72% da largura da boca).
+  UI em `components/MouthOutline.tsx`.
 - `assets/anatomia/<id>/` sprites por anatomia: `{central,lateral,canine}-{fill,shade,gloss}.png` + `thumb.png`.
-  `fill` é branco e recebe `tintColor` = cor-alvo; `shade` (preto) e `gloss` (branco) só têm alfa, por isso a cor
-  escolhida domina e o sombreamento é preservado. Dentes 21–23 = espelho dos sprites (`scaleX: -1`).
+  Tudo é desenhado dentro do SVG (`components/AnatomyOverlay.tsx` → `AnatomyTeeth`): `fill` (branco) vira `Mask` de
+  luminância de um `Rect` com a cor-alvo; `shade` (preto) e `gloss` (branco) só têm alfa e entram como `Image`.
+  Assim a cor escolhida domina, o sombreamento é preservado e o recorte da boca vale para tudo. Dentes 21–23 =
+  espelho (`transform` scale(-1 1)). Se `Mask` com `Image` falhar no Expo Go, alternativa: `@react-native-masked-view`.
 - `scripts/anatomia/` `import.mjs` (copia da biblioteca do exocad só os anteriores superiores), `mesh.mjs` (lê `.eoff`
   = OFF binário do exocad, e `.stl`), `raster.mjs` (rasterizador ortográfico com z-buffer e normais), `png.mjs`,
   `render.mjs` (luz de estúdio, translucidez incisal por espessura, corte na linha da gengiva, catálogo TS) e

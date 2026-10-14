@@ -21,11 +21,13 @@ import { Card, Muted, SectionTitle } from '@/components/Card';
 import { Chip } from '@/components/Chip';
 import { FaceFrame } from '@/components/FaceFrame';
 import { Handle } from '@/components/Handle';
+import { MouthOutline } from '@/components/MouthOutline';
 import { SmileOverlay } from '@/components/SmileOverlay';
 import { labToHex } from '@/lib/color/convert';
 import { getSystem } from '@/lib/color/shades';
 import { layoutAnatomy } from '@/lib/smile/anatomy';
 import { ANATOMY_CATALOG } from '@/lib/smile/anatomyCatalog';
+import { defaultMouth, fitToMouth } from '@/lib/smile/mouth';
 import {
   alignMidlineToFace,
   analyzeFrame,
@@ -66,6 +68,8 @@ export default function Smile() {
   const [face, setFace] = useState<FacePoints | null>(null);
   const [centralsWidthMm, setCentralsWidthMm] = useState(String(DEFAULT_CENTRALS_WIDTH_MM));
   const [centralMm, setCentralMm] = useState('8.5');
+  // ----- Contorno da boca (recorte dos dentes pelos lábios) -----
+  const [editMouth, setEditMouth] = useState(false);
   const canvasRef = useRef<View>(null);
   const gesture = useRef<GestureStart | null>(null);
 
@@ -281,7 +285,17 @@ export default function Smile() {
             readOnly={exporting}
           />
         )}
-        {showHandles && (
+        {params.mouth && !hidden && area.width > 0 && (
+          <MouthOutline
+            mouth={params.mouth}
+            width={area.width}
+            height={area.height}
+            onChange={(m) => set({ mouth: m })}
+            readOnly={!editMouth || exporting}
+            hideLine={exporting}
+          />
+        )}
+        {showHandles && !editMouth && (
           <>
             <Handle x={params.midlineX * area.width} y={t11.y + t11.h + 14} glyph="↕" onMove={onLengthHandle} />
             <Handle x={t23.x + t23.w + 14} y={t23.y + t23.h * 0.5} glyph="↔" onMove={onArchHandle} />
@@ -301,6 +315,54 @@ export default function Smile() {
           </Pressable>
           <Button title="Trocar foto" variant="ghost" onPress={() => setPhoto(null)} />
         </View>
+
+        <Card>
+          <SectionTitle>Boca</SectionTitle>
+          {!params.mouth ? (
+            <>
+              <Muted>
+                Delimite a abertura dos lábios: os dentes ficam recortados dentro dela, o lábio superior esconde a
+                cervical e nada vaza pelos cantos.
+              </Muted>
+              <Button
+                title="Delimitar boca"
+                variant="secondary"
+                style={{ marginTop: 8 }}
+                onPress={() => {
+                  if (!area.width || !teeth.length) return;
+                  set({ mouth: defaultMouth(teeth, area.width, area.height) });
+                  setEditMouth(true);
+                }}
+              />
+            </>
+          ) : (
+            <>
+              <Muted>
+                {editMouth
+                  ? 'Arraste os pontos vermelhos: ◆ comissuras, • lábio superior e inferior. Os dentes só aparecem dentro da linha.'
+                  : 'Dentes recortados pelo contorno da boca.'}
+              </Muted>
+              <View style={styles.chips}>
+                <Chip label={editMouth ? 'Concluir contorno' : 'Editar contorno'} selected={editMouth} onPress={() => setEditMouth(!editMouth)} />
+                <Chip
+                  label="Encaixar dentes na boca"
+                  onPress={() => {
+                    if (!params.mouth || !area.width || !t23 || !t11) return;
+                    const half = t23.x + t23.w - params.midlineX * area.width;
+                    set(fitToMouth(params, params.mouth, area.width, area.height, half, t11.h));
+                  }}
+                />
+                <Chip
+                  label="Remover"
+                  onPress={() => {
+                    set({ mouth: undefined });
+                    setEditMouth(false);
+                  }}
+                />
+              </View>
+            </>
+          )}
+        </Card>
 
         <Card>
           <SectionTitle>Cor-alvo</SectionTitle>

@@ -1,6 +1,7 @@
-import Svg, { Defs, Ellipse, LinearGradient, Path, RadialGradient, Stop } from 'react-native-svg';
-import { AnatomyOverlay } from '@/components/AnatomyOverlay';
+import Svg, { ClipPath, Defs, Ellipse, G, LinearGradient, Path, RadialGradient, Stop } from 'react-native-svg';
+import { AnatomyTeeth } from '@/components/AnatomyOverlay';
 import type { AnatomyDef } from '@/lib/smile/anatomy';
+import { mouthPath } from '@/lib/smile/mouth';
 import { toothShading } from '@/lib/smile/shading';
 import { layoutTeeth, type SmileParams } from '@/lib/smile/teeth';
 
@@ -9,13 +10,37 @@ type Props = { params: SmileParams; width: number; height: number; hidden?: bool
 /**
  * Desenha os seis anteriores sobre a foto, na área de `width` x `height` pixels.
  * Com `anatomy`, usa os sprites renderizados dos STLs; sem, os contornos SVG.
+ * Se `params.mouth` existir, tudo é recortado pelo contorno da boca (o lábio
+ * superior esconde a cervical e os cantos não vazam).
  */
 export function SmileOverlay({ params, width, height, hidden, anatomy }: Props) {
   if (hidden || width <= 0 || height <= 0) return null;
-  if (anatomy) return <AnatomyOverlay params={params} anatomy={anatomy} width={width} height={height} />;
-  const teeth = layoutTeeth(params, width, height);
+  const clip = params.mouth && params.mouth.length >= 3 ? mouthPath(params.mouth, width, height) : null;
   return (
     <Svg width={width} height={height} pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0 }}>
+      {clip && (
+        <Defs>
+          <ClipPath id="mouth">
+            <Path d={clip} />
+          </ClipPath>
+        </Defs>
+      )}
+      <G clipPath={clip ? 'url(#mouth)' : undefined}>
+        {anatomy ? (
+          <AnatomyTeeth params={params} anatomy={anatomy} width={width} height={height} />
+        ) : (
+          <ContourTeeth params={params} width={width} height={height} />
+        )}
+      </G>
+    </Svg>
+  );
+}
+
+/** Modo contorno: formas paramétricas com gradientes derivados da cor-alvo. */
+function ContourTeeth({ params, width, height }: { params: SmileParams; width: number; height: number }) {
+  const teeth = layoutTeeth(params, width, height);
+  return (
+    <>
       <Defs>
         {teeth.map((t) => {
           const s = toothShading(params.tint, params.opacity, t);
@@ -59,6 +84,6 @@ export function SmileOverlay({ params, width, height, hidden, anatomy }: Props) 
           />
         );
       })}
-    </Svg>
+    </>
   );
 }
