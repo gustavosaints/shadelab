@@ -32,6 +32,8 @@ export type SmileParams = {
   opacity: number;
   /** Cor de preenchimento (hex), normalmente a cor-alvo da escala. */
   tint: string;
+  /** Id da anatomia (catálogo de sprites). Ausente = contornos SVG com `shape`. */
+  anatomy?: string;
 };
 
 export const DEFAULT_SMILE_PARAMS: SmileParams = {

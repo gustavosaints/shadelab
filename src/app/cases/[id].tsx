@@ -7,6 +7,7 @@ import { Button } from '@/components/Button';
 import { Card, Muted, SectionTitle } from '@/components/Card';
 import { ShadeRow } from '@/components/ShadeRow';
 import { findShade, getSystem } from '@/lib/color/shades';
+import { ANATOMY_CATALOG } from '@/lib/smile/anatomyCatalog';
 import { deleteCase, getCase, isSmileCase, type AnyCase, type ShadeCase, type SmileCase } from '@/lib/storage/cases';
 import { loadSettings } from '@/lib/storage/settings';
 import { colors, qualityLabel, radius, spacing } from '@/theme';
@@ -44,7 +45,8 @@ function SmileDetail({ c }: { c: SmileCase }) {
         },
       },
     ]);
-  const shapeLabel = { oval: 'Oval', square: 'Quadrada', triangular: 'Triangular' }[c.params.shape];
+  const anatomyName = c.params.anatomy ? ANATOMY_CATALOG.find((a) => a.id === c.params.anatomy)?.name : undefined;
+  const shapeLabel = anatomyName ?? { oval: 'Oval', square: 'Quadrada', triangular: 'Triangular' }[c.params.shape];
   const propLabel = c.params.proportion === 'golden' ? 'Áurea' : 'Natural';
   return (
     <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: 40 }}>

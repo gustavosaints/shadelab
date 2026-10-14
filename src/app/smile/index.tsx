@@ -23,6 +23,8 @@ import { Handle } from '@/components/Handle';
 import { SmileOverlay } from '@/components/SmileOverlay';
 import { labToHex } from '@/lib/color/convert';
 import { getSystem } from '@/lib/color/shades';
+import { layoutAnatomy } from '@/lib/smile/anatomy';
+import { ANATOMY_CATALOG } from '@/lib/smile/anatomyCatalog';
 import { clampParams, DEFAULT_SMILE_PARAMS, layoutTeeth, WIDTH_RATIOS, type SmileParams } from '@/lib/smile/teeth';
 import { newCaseId, persistPhoto, saveCase } from '@/lib/storage/cases';
 import { useSettings } from '@/lib/useSettings';
@@ -124,7 +126,12 @@ export default function Smile() {
   };
 
   // ----- Alças: comprimento (incisal dos centrais) e largura/curva (canino) -----
-  const teeth = area.width ? layoutTeeth(params, area.width, area.height) : [];
+  const anatomy = params.anatomy ? ANATOMY_CATALOG.find((a) => a.id === params.anatomy) : undefined;
+  const teeth = !area.width
+    ? []
+    : anatomy
+      ? layoutAnatomy(params, anatomy, area.width, area.height)
+      : layoutTeeth(params, area.width, area.height);
   const t11 = teeth.find((t) => t.fdi === '11');
   const t23 = teeth.find((t) => t.fdi === '23');
   const cwPx = params.centralWidth * area.width;
@@ -139,10 +146,11 @@ export default function Smile() {
     if (!area.width || !cwPx) return;
     const midPx = params.midlineX * area.width;
     const outerX = t23 ? t23.x + t23.w : midPx;
-    const newHalf = outerX + dx - params.midlineX * area.width;
+    const half = outerX - midPx; // meia largura atual do arco (vale para contorno e anatomia)
+    const newHalf = half + dx;
     const ch = cwPx * params.heightRatio;
     set({
-      centralWidth: Math.max(1, newHalf) / archFactor / area.width,
+      centralWidth: half > 1 ? params.centralWidth * (Math.max(1, newHalf) / half) : Math.max(1, newHalf) / archFactor / area.width,
       curve: params.curve - dy / (ch * 2),
     });
   };
@@ -232,7 +240,7 @@ export default function Smile() {
         onResponderTerminate={end}
       >
         <Image source={{ uri: photo.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-        <SmileOverlay params={params} width={area.width} height={area.height} hidden={hidden} />
+        <SmileOverlay params={params} width={area.width} height={area.height} hidden={hidden} anatomy={anatomy} />
         {showHandles && (
           <>
             <Handle x={params.midlineX * area.width} y={t11.y + t11.h + 14} glyph="↕" onMove={onLengthHandle} />
@@ -261,16 +269,44 @@ export default function Smile() {
               <Chip key={s.id} label={s.id} selected={targetShade === s.id} onPress={() => chooseShade(s.id)} />
             ))}
           </ScrollView>
-          <SectionTitle>Forma</SectionTitle>
-          <View style={styles.chips}>
-            <Chip label="Oval" selected={params.shape === 'oval'} onPress={() => set({ shape: 'oval' })} />
-            <Chip label="Quadrada" selected={params.shape === 'square'} onPress={() => set({ shape: 'square' })} />
-            <Chip
-              label="Triangular"
-              selected={params.shape === 'triangular'}
-              onPress={() => set({ shape: 'triangular' })}
-            />
-          </View>
+          <SectionTitle>Anatomia</SectionTitle>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <Pressable
+              onPress={() => set({ anatomy: undefined })}
+              style={[styles.anatomyCard, !anatomy && styles.anatomyCardSelected]}
+            >
+              <View style={styles.anatomyThumbPlaceholder}>
+                <Text style={styles.anatomyGlyph}>◠◠</Text>
+              </View>
+              <Text style={styles.anatomyName}>Contorno</Text>
+            </Pressable>
+            {ANATOMY_CATALOG.map((a) => (
+              <Pressable
+                key={a.id}
+                onPress={() => set({ anatomy: a.id })}
+                style={[styles.anatomyCard, anatomy?.id === a.id && styles.anatomyCardSelected]}
+              >
+                <Image source={a.thumb} style={styles.anatomyThumb} resizeMode="contain" />
+                <Text style={styles.anatomyName} numberOfLines={1}>
+                  {a.name}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+          {!anatomy && (
+            <>
+              <SectionTitle>Forma</SectionTitle>
+              <View style={styles.chips}>
+                <Chip label="Oval" selected={params.shape === 'oval'} onPress={() => set({ shape: 'oval' })} />
+                <Chip label="Quadrada" selected={params.shape === 'square'} onPress={() => set({ shape: 'square' })} />
+                <Chip
+                  label="Triangular"
+                  selected={params.shape === 'triangular'}
+                  onPress={() => set({ shape: 'triangular' })}
+                />
+              </View>
+            </>
+          )}
           <SectionTitle>Proporção</SectionTitle>
           <View style={styles.chips}>
             <Chip
@@ -364,6 +400,29 @@ const styles = StyleSheet.create({
   },
   compareText: { color: '#fff', fontWeight: '700' },
   chips: { flexDirection: 'row', flexWrap: 'wrap' },
+  anatomyCard: {
+    width: 118,
+    marginRight: 8,
+    marginBottom: 8,
+    borderRadius: radius.md,
+    borderWidth: 2,
+    borderColor: colors.border,
+    backgroundColor: '#2A2224',
+    overflow: 'hidden',
+  },
+  anatomyCardSelected: { borderColor: colors.primary },
+  anatomyThumb: { width: 114, height: 44 },
+  anatomyThumbPlaceholder: { width: 114, height: 44, alignItems: 'center', justifyContent: 'center' },
+  anatomyGlyph: { color: '#EEE3CD', fontSize: 22, letterSpacing: 2 },
+  anatomyName: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    backgroundColor: colors.navy,
+  },
   controlLabel: { color: colors.text, fontWeight: '600', fontSize: 13 },
   input: {
     borderWidth: 1,

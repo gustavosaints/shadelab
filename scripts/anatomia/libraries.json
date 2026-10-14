@@ -1,0 +1,14 @@
+[
+  { "lib": "generic", "name": "Genérica", "shape": "mixed" },
+  { "lib": "Jan Hajto F1", "name": "Hajto F1", "shape": "oval" },
+  { "lib": "Jan Hajto M2", "name": "Hajto M2", "shape": "square" },
+  { "lib": "knut miller - oval", "name": "Miller oval", "shape": "oval" },
+  { "lib": "knut miller - rectangular", "name": "Miller retangular", "shape": "square" },
+  { "lib": "Knut Miller - Triangular", "name": "Miller triangular", "shape": "triangular" },
+  { "lib": "robtoly-oval", "name": "Robtoly oval", "shape": "oval" },
+  { "lib": "robtoly-square", "name": "Robtoly quadrada", "shape": "square" },
+  { "lib": "robtoly-triangular", "name": "Robtoly triangular", "shape": "triangular" },
+  { "lib": "Premium O6 Anteriores", "name": "Premium O6", "shape": "oval" },
+  { "lib": "Premium S6 Anteriores", "name": "Premium S6", "shape": "square" },
+  { "lib": "Nondas Vlachopoulos", "name": "Vlachopoulos", "shape": "mixed" }
+]

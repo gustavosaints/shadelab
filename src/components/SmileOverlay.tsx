@@ -1,12 +1,18 @@
 import Svg, { Defs, Ellipse, LinearGradient, Path, RadialGradient, Stop } from 'react-native-svg';
+import { AnatomyOverlay } from '@/components/AnatomyOverlay';
+import type { AnatomyDef } from '@/lib/smile/anatomy';
 import { toothShading } from '@/lib/smile/shading';
 import { layoutTeeth, type SmileParams } from '@/lib/smile/teeth';
 
-type Props = { params: SmileParams; width: number; height: number; hidden?: boolean };
+type Props = { params: SmileParams; width: number; height: number; hidden?: boolean; anatomy?: AnatomyDef };
 
-/** Desenha os seis anteriores sobre a foto, na área de `width` x `height` pixels. */
-export function SmileOverlay({ params, width, height, hidden }: Props) {
+/**
+ * Desenha os seis anteriores sobre a foto, na área de `width` x `height` pixels.
+ * Com `anatomy`, usa os sprites renderizados dos STLs; sem, os contornos SVG.
+ */
+export function SmileOverlay({ params, width, height, hidden, anatomy }: Props) {
   if (hidden || width <= 0 || height <= 0) return null;
+  if (anatomy) return <AnatomyOverlay params={params} anatomy={anatomy} width={width} height={height} />;
   const teeth = layoutTeeth(params, width, height);
   return (
     <Svg width={width} height={height} pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0 }}>
