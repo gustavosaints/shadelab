@@ -33,6 +33,9 @@ npm run lint       # ESLint (config Expo)
   usa a cor real da sua escala no seu aparelho em vez dos valores médios de catálogo.
 - **Casos**: paciente, dente (FDI), observações, foto, cor do dente e da gengiva, salvos no aparelho.
 - **PDF para o laboratório** com a prescrição de cor, gerado e compartilhado pelo próprio app.
+- **Smile Design**: foto frontal do sorriso, seis anteriores desenhados por cima com forma (oval, quadrada,
+  triangular), proporção (natural ou áurea), largura, comprimento, espaçamento, curva do sorriso e cor-alvo
+  da escala. Arraste para posicionar, segure para comparar com o antes, compartilhe a imagem ou salve no caso.
 
 ## Precisão: leia antes de usar na clínica
 
@@ -55,7 +58,8 @@ src/app/                 telas (Expo Router)
   shade/analyze.tsx      marcadores, análise e salvar caso / calibração
   cases/                 lista e detalhe do caso (PDF, excluir)
   settings.tsx           escala, calibração, identificação
-  smile/index.tsx        placeholder do Smile Design
+  smile/index.tsx        Smile Design (foto, ajustes, comparar, salvar)
+src/lib/smile/           geometria paramétrica dos dentes anteriores
 src/lib/color/           conversões sRGB/Lab, CIEDE2000, escalas, correção por referência, matching
 src/lib/image/           leitura de pixels (expo-image-manipulator + jpeg-js) e média robusta
 src/lib/storage/         AsyncStorage: configurações, calibrações e casos
@@ -65,7 +69,7 @@ tests/                   testes unitários do núcleo
 
 ## Próximos módulos
 
-- Smile Design (foto frontal, linhas de referência, biblioteca de formatos, antes/depois).
+- Smile Design: linhas de referência (bipupilar, média facial), textura e translucidez nos dentes simulados.
 - Cor do substrato (stump shade) com escala de dies.
 - Conta, sincronização entre aparelhos e painel web para o laboratório.
 - Build de desenvolvimento com `react-native-vision-camera` para travar exposição e balanço de branco.

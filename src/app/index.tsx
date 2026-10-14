@@ -23,7 +23,6 @@ export default function Home() {
       subtitle: 'Simule o novo sorriso sobre a foto do paciente',
       route: '/smile',
       color: colors.accent,
-      soon: true,
     },
     { title: 'Casos', subtitle: 'Histórico de pacientes e envio ao laboratório', route: '/cases', color: colors.navy },
     {

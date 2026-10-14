@@ -1,13 +1,13 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button } from '@/components/Button';
 import { Muted } from '@/components/Card';
-import { listCases, type ShadeCase } from '@/lib/storage/cases';
+import { isSmileCase, listCases, type AnyCase } from '@/lib/storage/cases';
 import { colors, radius, spacing } from '@/theme';
 
 export default function Cases() {
-  const [cases, setCases] = useState<ShadeCase[]>([]);
+  const [cases, setCases] = useState<AnyCase[]>([]);
   useFocusEffect(
     useCallback(() => {
       listCases().then(setCases);
@@ -34,15 +34,28 @@ export default function Cases() {
           onPress={() => router.push({ pathname: '/cases/[id]', params: { id: item.id } })}
           style={({ pressed }) => [styles.row, { opacity: pressed ? 0.85 : 1 }]}
         >
-          <View style={[styles.swatch, { backgroundColor: item.toothHex }]} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.name}>{item.patientName}</Text>
-            <Muted>
-              {item.tooth ? `Dente ${item.tooth} · ` : ''}
-              {new Date(item.createdAt).toLocaleDateString('pt-BR')}
-            </Muted>
-          </View>
-          <Text style={styles.shade}>{item.matches[0]?.shadeId ?? '—'}</Text>
+          {isSmileCase(item) ? (
+            <>
+              <Image source={{ uri: item.renderedUri ?? item.photoUri }} style={styles.swatch} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.name}>{item.patientName}</Text>
+                <Muted>Smile Design · {new Date(item.createdAt).toLocaleDateString('pt-BR')}</Muted>
+              </View>
+              <Text style={styles.shade}>{item.targetShade}</Text>
+            </>
+          ) : (
+            <>
+              <View style={[styles.swatch, { backgroundColor: item.toothHex }]} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.name}>{item.patientName}</Text>
+                <Muted>
+                  {item.tooth ? `Dente ${item.tooth} · ` : ''}
+                  {new Date(item.createdAt).toLocaleDateString('pt-BR')}
+                </Muted>
+              </View>
+              <Text style={styles.shade}>{item.matches[0]?.shadeId ?? '—'}</Text>
+            </>
+          )}
         </Pressable>
       )}
     />

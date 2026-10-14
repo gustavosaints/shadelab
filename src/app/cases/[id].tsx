@@ -7,19 +7,76 @@ import { Button } from '@/components/Button';
 import { Card, Muted, SectionTitle } from '@/components/Card';
 import { ShadeRow } from '@/components/ShadeRow';
 import { findShade, getSystem } from '@/lib/color/shades';
-import { deleteCase, getCase, type ShadeCase } from '@/lib/storage/cases';
+import { deleteCase, getCase, isSmileCase, type AnyCase, type ShadeCase, type SmileCase } from '@/lib/storage/cases';
 import { loadSettings } from '@/lib/storage/settings';
 import { colors, qualityLabel, radius, spacing } from '@/theme';
 
 export default function CaseDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const [c, setCase] = useState<ShadeCase | null>(null);
+  const [c, setCase] = useState<AnyCase | null>(null);
 
   useEffect(() => {
     getCase(id).then((x) => setCase(x ?? null));
   }, [id]);
 
   if (!c) return <View style={{ flex: 1 }} />;
+  return isSmileCase(c) ? <SmileDetail c={c} /> : <ShadeDetail c={c} />;
+}
+
+function SmileDetail({ c }: { c: SmileCase }) {
+  const shareImage = async () => {
+    const uri = c.renderedUri ?? c.photoUri;
+    if (Platform.OS !== 'web' && (await Sharing.isAvailableAsync())) {
+      await Sharing.shareAsync(uri, { mimeType: 'image/jpeg' });
+    } else {
+      Alert.alert('Imagem', uri);
+    }
+  };
+  const remove = () =>
+    Alert.alert('Excluir simulação', 'Essa ação não pode ser desfeita.', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Excluir',
+        style: 'destructive',
+        onPress: async () => {
+          await deleteCase(c.id);
+          router.back();
+        },
+      },
+    ]);
+  const shapeLabel = { oval: 'Oval', square: 'Quadrada', triangular: 'Triangular' }[c.params.shape];
+  const propLabel = c.params.proportion === 'golden' ? 'Áurea' : 'Natural';
+  return (
+    <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: 40 }}>
+      {c.renderedUri && <Image source={{ uri: c.renderedUri }} style={styles.photo} resizeMode="cover" />}
+      <Card>
+        <Text style={styles.name}>{c.patientName}</Text>
+        <Muted>Smile Design · {new Date(c.createdAt).toLocaleString('pt-BR')}</Muted>
+      </Card>
+      <Card>
+        <SectionTitle>Parâmetros</SectionTitle>
+        <Text style={styles.param}>Cor-alvo: {c.targetShade}</Text>
+        <Text style={styles.param}>Forma: {shapeLabel}</Text>
+        <Text style={styles.param}>Proporção: {propLabel}</Text>
+        <Text style={styles.param}>Relação altura/largura: {c.params.heightRatio.toFixed(2)}</Text>
+      </Card>
+      {!!c.notes && (
+        <Card>
+          <SectionTitle>Observações</SectionTitle>
+          <Text style={{ color: colors.text, lineHeight: 20 }}>{c.notes}</Text>
+        </Card>
+      )}
+      <Card>
+        <SectionTitle>Foto original</SectionTitle>
+        <Image source={{ uri: c.photoUri }} style={styles.photo} resizeMode="cover" />
+      </Card>
+      <Button title="Compartilhar simulação" onPress={shareImage} />
+      <Button title="Excluir" variant="ghost" onPress={remove} style={{ marginTop: 8 }} />
+    </ScrollView>
+  );
+}
+
+function ShadeDetail({ c }: { c: ShadeCase }) {
 
   const system = getSystem(c.shadeSystem);
   const best = c.matches[0];
@@ -156,4 +213,5 @@ const styles = StyleSheet.create({
   swatch: { width: 64, height: 64, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   bestLabel: { color: colors.muted, fontSize: 12, fontWeight: '600' },
   best: { fontSize: 28, fontWeight: '800', color: colors.primary },
+  param: { color: colors.text, lineHeight: 22 },
 });
