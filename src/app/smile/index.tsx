@@ -74,7 +74,7 @@ type CompareMode = 'edit' | 'curtain' | 'side' | 'variants';
 const mouthSignature = (mouth: SmileParams['mouth']) => (mouth ? mouth.map((m) => `${m.x.toFixed(3)},${m.y.toFixed(3)}`).join(';') : null);
 
 /** Marca visível da versão do código em execução (confere se o Expo Go recarregou). */
-const BUILD_TAG = 'v15/10 16:40';
+const BUILD_TAG = 'v15/10 17:05';
 
 const STEPS: { id: Step; label: string }[] = [
   { id: 'foto', label: '1 Foto' },

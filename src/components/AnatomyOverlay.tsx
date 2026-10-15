@@ -32,12 +32,22 @@ export function AnatomyLayer({ params, anatomy, width, height }: Props) {
               transform: transform.length ? transform : undefined,
             }}
           >
-            <Image source={t.tooth.fill} style={[StyleSheet.absoluteFill, { tintColor: params.tint }]} resizeMode="stretch" />
-            <Image source={t.tooth.shade} style={StyleSheet.absoluteFill} resizeMode="stretch" />
-            <Image source={t.tooth.gloss} style={StyleSheet.absoluteFill} resizeMode="stretch" />
+            <Image source={t.tooth.fill} style={[styles.layer, { tintColor: params.tint }]} resizeMode="stretch" />
+            <Image source={t.tooth.shade} style={styles.layer} resizeMode="stretch" />
+            <Image source={t.tooth.gloss} style={styles.layer} resizeMode="stretch" />
           </View>
         );
       })}
     </View>
   );
 }
+
+/**
+ * IMPORTANTE: `StyleSheet.absoluteFill` sozinho NÃO basta aqui. Para assets locais (`require`), o `Image` do
+ * React Native põe a largura/altura ORIGINAL do PNG no estilo antes do nosso, e largura explícita vence
+ * `left/right` no Yoga: cada dente era desenhado com 251 pt de largura (um central cobria a boca inteira,
+ * 2026-10-15). Com `width/height: 100%` a imagem segue a caixa do dente.
+ */
+const styles = StyleSheet.create({
+  layer: { position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' },
+});

@@ -68,6 +68,10 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   `fill`, mais `shade` e `gloss` por cima), porque `Mask` com `Image` do react-native-svg NÃO renderizou no iPhone
   (Gustavo viu a biblioteca sumir). O recorte pela boca da camada nativa é feito com `@react-native-masked-view`
   no `SmileOverlay`; o modo contorno continua em SVG com `ClipPath`. Dentes 21–23 = `scaleX: -1`.
+  ARMADILHA (2026-10-15): `Image` de asset local com só `StyleSheet.absoluteFill` é desenhado no tamanho ORIGINAL
+  do PNG no iOS (o RN injeta width/height do asset e largura explícita vence left/right) → um central cobria a boca
+  inteira. As camadas usam `width/height: '100%'` (`styles.layer`). A linha cinza de diagnóstico sob a foto
+  (`BUILD_TAG`, % do central na boca, área, zoom, anatomia, encaixe ok/pendente) serve para conferir versão e encaixe.
   Cada dente é renderizado no seu próprio referencial (vista vestibular com giro leve: lateral 8°, canino 18°) e com
   a fatia distal levemente esmaecida (lateral 4%, canino 16%); o layout põe os dentes lado a lado por contato
   (`offsetX` do catálogo não é usado). Visual (2026-10-15, referência: renders do SmileFy que o Gustavo mandou):
