@@ -31,6 +31,11 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
 - `src/lib/smile/mouth.ts` contorno da boca (8 pontos, frações da imagem, em `SmileParams.mouth`): `ClipPath` no
   `SmileOverlay` recorta os dentes pela abertura dos lábios; `fitToMouth` encaixa o arco (72% da largura da boca).
   UI em `components/MouthOutline.tsx`.
+- `src/lib/smile/scenarios.ts` cenários de tratamento com um toque (natural, facetas, clareamento, gengivectomia,
+  fechar diastema, alinhar): presets sobre os parâmetros atuais + cor sugerida por escala. Na tela: cartão
+  "Comparar" com cortina arrastável (foto original recortada por cima do canvas), lado a lado e variações
+  (`components/SmilePanes.tsx`, até 3 guardadas em `SmileCase.variants`); "Compartilhar imagem" captura os painéis
+  quando um modo lado a lado/variações está ativo.
 - `src/app/smile/ai.tsx` + `src/lib/ai/` "Sorriso por IA" (separado do Smile Design manual): foto → estilo
   (natural, Hollywood, jovem, discreto, alinhado, clareamento) + cor da escala → `generateSmile` chama o Gemini
   (REST `generateContent`, resposta em imagem; modelo em `Settings.aiModel`, padrão `gemini-2.5-flash-image`) com a

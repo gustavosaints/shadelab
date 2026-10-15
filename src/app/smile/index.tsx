@@ -23,6 +23,9 @@ import { FaceFrame } from '@/components/FaceFrame';
 import { Handle } from '@/components/Handle';
 import { MouthOutline } from '@/components/MouthOutline';
 import { SmileOverlay } from '@/components/SmileOverlay';
+import { SmilePanes, type Pane } from '@/components/SmilePanes';
+import { applyScenario, SCENARIOS } from '@/lib/smile/scenarios';
+import type { SmileVariant } from '@/lib/storage/cases';
 import { labToHex } from '@/lib/color/convert';
 import { getSystem } from '@/lib/color/shades';
 import { layoutAnatomy } from '@/lib/smile/anatomy';
@@ -83,6 +86,35 @@ export default function Smile() {
   const [centralMm, setCentralMm] = useState('8.5');
   // ----- Contorno da boca (recorte dos dentes pelos lábios) -----
   const [editMouth, setEditMouth] = useState(false);
+  // ----- Comparação (cortina, lado a lado, variações) -----
+  type CompareMode = 'edit' | 'curtain' | 'side' | 'variants';
+  const [compareMode, setCompareMode] = useState<CompareMode>('edit');
+  const [curtain, setCurtain] = useState(0.5);
+  const [variants, setVariants] = useState<SmileVariant[]>([]);
+  const panesRef = useRef<View>(null);
+  const anatomyOf = (id?: string) => (id ? ANATOMY_CATALOG.find((a) => a.id === id) : undefined);
+
+  const saveVariant = () => {
+    if (variants.length >= 3) return;
+    setVariants([...variants, { name: ['A', 'B', 'C'][variants.length], params, targetShade }]);
+  };
+  const loadVariant = (v: SmileVariant) => {
+    setParams(v.params);
+    setTargetShade(v.targetShade);
+    setCompareMode('edit');
+  };
+
+  const runScenario = (id: (typeof SCENARIOS)[number]['id']) => {
+    if (!area.width) return;
+    const r = applyScenario(id, params, {
+      system: settings.shadeSystem,
+      defaultAnatomy: anatomy?.id ?? ANATOMY_CATALOG[1]?.id ?? ANATOMY_CATALOG[0]?.id,
+      aspect: area.width / area.height,
+    });
+    setParams(clampParams(r.params));
+    if (r.shade) chooseShade(r.shade);
+  };
+
   // ----- Edição dente a dente -----
   const [selectedTooth, setSelectedTooth] = useState<string | null>(null);
   const editOf = (fdi: string): ToothEdit => params.edits?.[fdi] ?? NO_EDIT;
@@ -206,7 +238,8 @@ export default function Smile() {
     setExporting(true);
     await new Promise((r) => setTimeout(r, 60));
     try {
-      return await captureRef(canvasRef, { format: 'jpg', quality: 0.95 });
+      const target = compareMode === 'side' || compareMode === 'variants' ? panesRef : canvasRef;
+      return await captureRef(target, { format: 'jpg', quality: 0.95 });
     } catch (e) {
       Alert.alert('Não foi possível exportar', String(e));
       return null;
@@ -245,6 +278,7 @@ export default function Smile() {
         targetShade,
         face: face ?? undefined,
         centralsWidthMm: face ? calibMm : undefined,
+        variants: variants.length ? variants : undefined,
         frame: analysis
           ? {
               midlineShiftMm: analysis.midlineShiftMm,
@@ -329,7 +363,29 @@ export default function Smile() {
             hideLine={exporting}
           />
         )}
-        {showHandles && !editMouth && (
+        {compareMode === 'curtain' && !hidden && area.width > 0 && (
+          <>
+            <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: curtain * area.width, overflow: 'hidden' }}>
+              <Image source={{ uri: photo.uri }} style={{ width: area.width, height: area.height }} resizeMode="cover" />
+            </View>
+            <View pointerEvents="none" style={[styles.curtainLine, { left: curtain * area.width - 1 }]} />
+            <View pointerEvents="none" style={[styles.curtainTag, { left: 8 }]}>
+              <Text style={styles.curtainTagText}>ANTES</Text>
+            </View>
+            <View pointerEvents="none" style={[styles.curtainTag, { right: 8 }]}>
+              <Text style={styles.curtainTagText}>DEPOIS</Text>
+            </View>
+            {!exporting && (
+              <Handle
+                x={curtain * area.width}
+                y={area.height * 0.5}
+                glyph="⇔"
+                onMove={(dx) => setCurtain(Math.min(0.98, Math.max(0.02, curtain + dx / area.width)))}
+              />
+            )}
+          </>
+        )}
+        {showHandles && !editMouth && compareMode === 'edit' && (
           <>
             <Handle x={params.midlineX * area.width} y={t11.y + t11.h + 14} glyph="↕" onMove={onLengthHandle} />
             <Handle x={t23.x + t23.w + 14} y={t23.y + t23.h * 0.5} glyph="↔" onMove={onArchHandle} />
@@ -349,6 +405,60 @@ export default function Smile() {
           </Pressable>
           <Button title="Trocar foto" variant="ghost" onPress={() => setPhoto(null)} />
         </View>
+
+        {(compareMode === 'side' || compareMode === 'variants') && (
+          <View style={{ marginBottom: spacing.md }}>
+            <SmilePanes
+              ref={panesRef}
+              photoUri={photo.uri}
+              aspect={aspect}
+              panes={
+                compareMode === 'side'
+                  ? ([{ label: 'ANTES' }, { label: 'DEPOIS', params, anatomy }] as Pane[])
+                  : ([
+                      ...variants.map((v) => ({ label: v.name, params: v.params, anatomy: anatomyOf(v.params.anatomy) })),
+                      { label: 'ATUAL', params, anatomy },
+                    ] as Pane[])
+              }
+            />
+          </View>
+        )}
+
+        <Card>
+          <SectionTitle>Cenários de tratamento</SectionTitle>
+          <Muted>Um toque aplica um preset de forma, proporção, comprimento e cor; a posição do arco é mantida.</Muted>
+          <View style={styles.chips}>
+            {SCENARIOS.map((s) => (
+              <Chip key={s.id} label={s.name} onPress={() => runScenario(s.id)} />
+            ))}
+          </View>
+        </Card>
+
+        <Card>
+          <SectionTitle>Comparar</SectionTitle>
+          <View style={styles.chips}>
+            <Chip label="Edição" selected={compareMode === 'edit'} onPress={() => setCompareMode('edit')} />
+            <Chip label="Cortina" selected={compareMode === 'curtain'} onPress={() => setCompareMode('curtain')} />
+            <Chip label="Lado a lado" selected={compareMode === 'side'} onPress={() => setCompareMode('side')} />
+            <Chip label={`Variações (${variants.length})`} selected={compareMode === 'variants'} onPress={() => setCompareMode('variants')} />
+          </View>
+          {compareMode === 'curtain' && <Muted>{'Arraste a alça ⇔ para revelar o antes e o depois. "Compartilhar imagem" exporta assim.'}</Muted>}
+          {compareMode === 'side' && <Muted>{'"Compartilhar imagem" exporta os dois painéis juntos.'}</Muted>}
+          {compareMode === 'variants' && (
+            <Muted>
+              {variants.length
+                ? 'Toque numa variação para voltar a editá-la. "Compartilhar imagem" exporta os painéis juntos.'
+                : 'Guarde até 3 variações do caso para comparar com a simulação atual.'}
+            </Muted>
+          )}
+          <View style={styles.chips}>
+            {variants.map((v) => (
+              <Chip key={v.name} label={`${v.name}: ${v.targetShade}`} onPress={() => loadVariant(v)} color={colors.navy} selected={false} />
+            ))}
+            {variants.length < 3 && <Chip label={`Guardar como ${['A', 'B', 'C'][variants.length]}`} onPress={saveVariant} />}
+            {variants.length > 0 && <Chip label="Limpar variações" onPress={() => setVariants([])} />}
+          </View>
+        </Card>
 
         <Card>
           <SectionTitle>Boca</SectionTitle>
@@ -669,6 +779,16 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   compareText: { color: '#fff', fontWeight: '700' },
+  curtainLine: { position: 'absolute', top: 0, bottom: 0, width: 2, backgroundColor: '#fff', opacity: 0.9 },
+  curtainTag: {
+    position: 'absolute',
+    top: 8,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.sm,
+  },
+  curtainTagText: { color: '#fff', fontWeight: '800', fontSize: 11 },
   chips: { flexDirection: 'row', flexWrap: 'wrap' },
   anatomyCard: {
     width: 118,

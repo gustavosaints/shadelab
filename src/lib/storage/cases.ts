@@ -6,6 +6,9 @@ import type { ShadeSystemId } from '@/lib/color/shades';
 import type { FacePoints } from '@/lib/smile/frame';
 import type { SmileParams } from '@/lib/smile/teeth';
 
+/** Variação de um Smile Design (parâmetros + cor-alvo) guardada para comparação. */
+export type SmileVariant = { name: string; params: SmileParams; targetShade: string };
+
 /** Resumo numérico da análise facial (face-bow digital) no momento de salvar. */
 export type FrameSummary = {
   midlineShiftMm: number;
@@ -58,6 +61,8 @@ export type SmileCase = {
   frame?: FrameSummary;
   /** Estilo escolhido quando a simulação foi gerada por IA (tela "Sorriso por IA"). */
   aiStyle?: string;
+  /** Variações guardadas do mesmo caso (até 3), para comparar lado a lado. */
+  variants?: SmileVariant[];
   targetShade: string;
 };
 
