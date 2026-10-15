@@ -13,6 +13,31 @@ export { buildPrompt, describeShade, SMILE_STYLES, type SmileStyleId } from './p
 
 export const DEFAULT_AI_MODEL = 'gemini-2.5-flash-image';
 
+export type ModelInfo = { name: string; displayName: string; image: boolean };
+
+/**
+ * Lista os modelos acessíveis pela chave (GET /models). Marca os que geram imagem
+ * pelo nome ("image"). Serve para diagnosticar chave, região e cota.
+ */
+export async function listModels(apiKey: string): Promise<ModelInfo[]> {
+  const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', {
+    headers: { 'x-goog-api-key': apiKey.trim() },
+  });
+  const json = (await res.json().catch(() => ({}))) as {
+    models?: { name: string; displayName?: string; supportedGenerationMethods?: string[] }[];
+    error?: { message?: string };
+  };
+  if (!res.ok) throw new Error(json.error?.message ?? `HTTP ${res.status}`);
+  return (json.models ?? [])
+    .filter((m) => (m.supportedGenerationMethods ?? []).includes('generateContent'))
+    .map((m) => ({
+      name: m.name.replace(/^models\//, ''),
+      displayName: m.displayName ?? m.name,
+      image: /image/i.test(m.name) || /image/i.test(m.displayName ?? ''),
+    }))
+    .sort((a, b) => Number(b.image) - Number(a.image) || a.name.localeCompare(b.name));
+}
+
 export type GenerateOptions = {
   photoUri: string;
   style: StyleId;
@@ -72,8 +97,15 @@ export async function generateSmile(o: GenerateOptions): Promise<GenerateResult>
     const msg = json.error?.message ?? `HTTP ${res.status}`;
     if (res.status === 400 && /API key/i.test(msg)) throw new Error('Chave da API inválida. Confira nas Configurações.');
     if (res.status === 404) throw new Error(`Modelo "${model}" não encontrado. Ajuste o nome do modelo nas Configurações.`);
-    if (res.status === 429) throw new Error('Limite de uso da API atingido. Tente de novo em instantes.');
-    throw new Error(`Erro do serviço de IA: ${msg}`);
+    if (res.status === 429) {
+      const zeroQuota = /limit:\s*0|quota.*0\b|free tier|billing/i.test(msg);
+      throw new Error(
+        zeroQuota
+          ? `Sua chave não tem cota para este modelo de imagem (plano gratuito). No Google AI Studio, ative o faturamento (pay-as-you-go) ou troque o modelo em "Ver modelos". Mensagem do Google: ${msg}`
+          : `Limite de uso da API atingido. Mensagem do Google: ${msg}`,
+      );
+    }
+    throw new Error(`Erro do serviço de IA (HTTP ${res.status}): ${msg}`);
   }
   if (json.promptFeedback?.blockReason) throw new Error(`A IA recusou a imagem (${json.promptFeedback.blockReason}). Tente outra foto.`);
   const part = json.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);

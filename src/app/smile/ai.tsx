@@ -6,7 +6,7 @@ import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextIn
 import { Button } from '@/components/Button';
 import { Card, Muted, SectionTitle } from '@/components/Card';
 import { Chip } from '@/components/Chip';
-import { DEFAULT_AI_MODEL, generateSmile, SMILE_STYLES, type SmileStyleId } from '@/lib/ai/smileGen';
+import { DEFAULT_AI_MODEL, generateSmile, listModels, SMILE_STYLES, type ModelInfo, type SmileStyleId } from '@/lib/ai/smileGen';
 import { labToHex } from '@/lib/color/convert';
 import { getSystem } from '@/lib/color/shades';
 import { DEFAULT_SMILE_PARAMS } from '@/lib/smile/teeth';
@@ -35,6 +35,24 @@ export default function AiSmile() {
   const [modelDraft, setModelDraft] = useState<string | null>(null);
   const [patientName, setPatientName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [models, setModels] = useState<ModelInfo[] | null>(null);
+  const [listing, setListing] = useState(false);
+
+  const checkModels = async () => {
+    const key = (keyDraft ?? settings.aiApiKey).trim();
+    if (!key) {
+      Alert.alert('Falta a chave', 'Cole a chave da API primeiro.');
+      return;
+    }
+    setListing(true);
+    try {
+      setModels(await listModels(key));
+    } catch (e) {
+      Alert.alert('Não foi possível listar os modelos', String((e as Error).message ?? e));
+    } finally {
+      setListing(false);
+    }
+  };
 
   const hasKey = settings.aiApiKey.trim().length > 0;
   const shadeDef = system.shades.find((s) => s.id === shade) ?? system.shades[0];
@@ -244,7 +262,27 @@ export default function AiSmile() {
             autoCorrect={false}
             placeholderTextColor={colors.muted}
           />
-          <Button title="Salvar" variant="secondary" onPress={saveConfig} />
+          <View style={styles.chips}>
+            <Button title="Salvar" variant="secondary" onPress={saveConfig} />
+            <Button title={listing ? 'Consultando…' : 'Ver modelos da chave'} variant="ghost" onPress={checkModels} loading={listing} />
+          </View>
+          {models && (
+            <>
+              <Muted>
+                {models.some((m) => m.image)
+                  ? 'Modelos de imagem disponíveis para esta chave (toque para usar):'
+                  : 'A chave funciona, mas nenhum modelo de imagem apareceu: a conta pode não ter acesso a geração de imagem.'}
+              </Muted>
+              <View style={styles.chips}>
+                {models
+                  .filter((m) => m.image)
+                  .map((m) => (
+                    <Chip key={m.name} label={m.name} selected={(modelDraft ?? settings.aiModel) === m.name} onPress={() => setModelDraft(m.name)} />
+                  ))}
+              </View>
+              <Muted>{`${models.length} modelos no total. Se o erro de limite continuar com um modelo de imagem, é cota zero do plano gratuito: ative o faturamento em aistudio.google.com (Settings → Plan information).`}</Muted>
+            </>
+          )}
         </Card>
       )}
     </ScrollView>
