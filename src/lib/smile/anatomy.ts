@@ -54,6 +54,15 @@ export type AnatomyPlacement = {
 export const Z_ORDER: Record<ToothKind, number> = { canine: 0, lateral: 1, central: 2 };
 
 /**
+ * Efeito de arco numa foto frontal: lateral e canino estão girados no arco, então aparecem mais
+ * estreitos (encurtamento) e com o eixo levemente inclinado para a linha média.
+ * Os sprites já vêm com um giro leve; aqui entra o restante.
+ */
+export const ARCH_VIS: Record<ToothKind, number> = { central: 1, lateral: 0.94, canine: 0.82 };
+/** Rotação base por dente (graus, horário para o lado direito do paciente; espelhada à esquerda). */
+export const ARCH_ROT: Record<ToothKind, number> = { central: 0, lateral: 2, canine: 6 };
+
+/**
  * Posiciona os seis anteriores usando as medidas reais da anatomia.
  * Mantém a semântica dos parâmetros do modo contorno: `centralWidth` é a largura do
  * central, `heightRatio` a relação altura/largura dele (os outros dentes seguem a
@@ -83,28 +92,28 @@ export function layoutAnatomy(p: SmileParams, def: AnatomyDef, width: number, he
   let edge = midX - gap / 2; // borda mesial do próximo dente
   for (const { kind, k } of kinds) {
     const t = def.teeth[kind];
-    const w = forced && kind !== 'central' ? cw * (kind === 'lateral' ? ratios.lateral : ratios.canine) : t.wMm * s;
+    const w = forced && kind !== 'central' ? cw * (kind === 'lateral' ? ratios.lateral : ratios.canine) : t.wMm * s * ARCH_VIS[kind];
     const h = t.hMm * s * vs;
     const x0 = edge - w;
     const y0 = gumY + t.offsetY * s * vs - p.curve * ch * k * k * 0.5;
     edge = x0 - gap;
     const fdi = `1${k + 1}`;
     const box = applyToothEdit({ x: x0, y: y0, w, h }, p.edits?.[fdi], cw, ch);
-    right.push({ fdi, kind, side: 'right', ...box, tooth: t });
+    right.push({ fdi, kind, side: 'right', ...box, rot: box.rot + ARCH_ROT[kind], tooth: t });
   }
   // lado esquerdo: mesmo encadeamento a partir da linha média, com o ajuste próprio de cada dente
   let edgeL = midX + gap / 2;
   const leftOut: AnatomyPlacement[] = [];
   for (const { kind, k } of kinds) {
     const t = def.teeth[kind];
-    const w = forced && kind !== 'central' ? cw * (kind === 'lateral' ? ratios.lateral : ratios.canine) : t.wMm * s;
+    const w = forced && kind !== 'central' ? cw * (kind === 'lateral' ? ratios.lateral : ratios.canine) : t.wMm * s * ARCH_VIS[kind];
     const h = t.hMm * s * vs;
     const x0 = edgeL;
     const y0 = gumY + t.offsetY * s * vs - p.curve * ch * k * k * 0.5;
     edgeL = x0 + w + gap;
     const fdi = `2${k + 1}`;
     const box = applyToothEdit({ x: x0, y: y0, w, h }, p.edits?.[fdi], cw, ch);
-    leftOut.push({ fdi, kind, side: 'left', ...box, tooth: t });
+    leftOut.push({ fdi, kind, side: 'left', ...box, rot: box.rot - ARCH_ROT[kind], tooth: t });
   }
   return [...right, ...leftOut].sort((a, b) => a.x - b.x);
 }

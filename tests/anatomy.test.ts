@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { layoutAnatomy, type AnatomyDef } from '@/lib/smile/anatomy';
+import { ARCH_ROT, ARCH_VIS, layoutAnatomy, type AnatomyDef } from '@/lib/smile/anatomy';
 import { DEFAULT_SMILE_PARAMS, WIDTH_RATIOS } from '@/lib/smile/teeth';
 
 // anatomia fictícia com medidas parecidas com as reais (mm)
@@ -59,7 +59,8 @@ describe('layoutAnatomy', () => {
     const t12 = teeth.find((t) => t.fdi === '12')!;
     const t13 = teeth.find((t) => t.fdi === '13')!;
     const s = t11.w / DEF.teeth.central.wMm;
-    expect(t12.w).toBeCloseTo(DEF.teeth.lateral.wMm * s, 6);
+    expect(t12.w).toBeCloseTo(DEF.teeth.lateral.wMm * s * ARCH_VIS.lateral, 6); // encurtamento do arco
+    expect(t13.w).toBeCloseTo(DEF.teeth.canine.wMm * s * ARCH_VIS.canine, 6);
     expect(t12.x + t12.w).toBeCloseTo(t11.x, 6); // contato, sem sobreposição
     expect(t13.x + t13.w).toBeCloseTo(t12.x, 6);
     expect(t12.y).toBeGreaterThan(t11.y); // zênite do lateral mais baixo
@@ -76,12 +77,13 @@ describe('layoutAnatomy', () => {
     expect(e12.h).toBeCloseTo(b12.h * 0.9, 6);
     expect(e12.x + e12.w / 2).toBeCloseTo(b12.x + b12.w / 2 + 0.2 * cw, 6);
     expect(e12.y).toBeGreaterThan(b12.y);
-    expect(e12.rot).toBe(8);
-    // o vizinho não muda
+    expect(e12.rot).toBe(8 + ARCH_ROT.lateral);
+    // o vizinho não muda (mantém só a rotação base do arco, espelhada do outro lado)
     const b13 = base.find((t) => t.fdi === '13')!;
     const e13 = edited.find((t) => t.fdi === '13')!;
     expect(e13.x).toBeCloseTo(b13.x, 6);
-    expect(e13.rot).toBe(0);
+    expect(e13.rot).toBe(ARCH_ROT.canine);
+    expect(edited.find((t) => t.fdi === '23')!.rot).toBe(-ARCH_ROT.canine);
   });
 
   it('proporção áurea força 62% e 38% da largura do central', () => {

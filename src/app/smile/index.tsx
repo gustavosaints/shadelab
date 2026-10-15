@@ -254,7 +254,12 @@ export default function Smile() {
     setDetecting('Encaixando os dentes na boca…');
     try {
       const fit = await fitTeethToPhoto(photo, params.mouth, face?.philtrum.x ?? params.midlineX, params);
-      if (fit && fit.fit.confidence >= 0.6) {
+      // sanidade: um central costuma ter 10% a 20% da largura da boca (comissura a comissura);
+      // fora disso a detecção pegou a boca inteira ou um reflexo, e é melhor encaixar pela boca
+      const xs = params.mouth.map((m) => m.x);
+      const mouthW = Math.max(...xs) - Math.min(...xs);
+      const plausible = fit && fit.params.centralWidth > 0.09 * mouthW && fit.params.centralWidth < 0.21 * mouthW;
+      if (fit && plausible && fit.fit.confidence >= 0.6) {
         setParams(clampParams(fit.params));
         setDetectNote(`Dentes alinhados pelos espaços encontrados na foto (${Math.round(fit.fit.confidence * 100)}%).`);
         return;
