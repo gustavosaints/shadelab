@@ -31,6 +31,16 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
 - `src/lib/smile/mouth.ts` contorno da boca (8 pontos, frações da imagem, em `SmileParams.mouth`): `ClipPath` no
   `SmileOverlay` recorta os dentes pela abertura dos lábios; `fitToMouth` encaixa o arco (72% da largura da boca).
   UI em `components/MouthOutline.tsx`.
+- Fluxo do Smile Design (2026-10-15): foto fixa no alto (canvas com altura máx. 50% da tela) e passos rolando embaixo:
+  Foto → Boca → Dentes → Cor e forma → Comparar. `smile/capture.tsx` é a câmera guiada (silhueta SVG, `mirror` na
+  frontal, conferência do enquadramento após o clique via `checkFraming`); devolve a foto por `pendingPhoto.ts`.
+  Detecção automática: `components/FaceLandmarker.tsx` = WebView invisível com MediaPipe Face Landmarker (CDN +
+  modelo do Google, precisa de internet na 1ª vez); `lib/face/landmarks.ts` mapeia os 478 marcos para boca (lábio
+  interno), face-bow e caixa do rosto; `lib/face/detect.ts` recorta a boca e chama `lib/smile/autofit.ts`
+  (máscara de dente por claridade/saturação, vales de claridade = espaços interproximais → linha média, largura e
+  altura do central, larguras de laterais/caninos em `edits`). Tudo com ajuste manual: "Mover todos" (arco) /
+  "Mover um" (toque seleciona o dente). Reabrir caso: `/smile?caseId=` carrega e salva por cima; a análise de cor
+  aceita `caseId` + dados do caso em `/shade/analyze`.
 - `src/lib/smile/scenarios.ts` cenários de tratamento com um toque (natural, facetas, clareamento, gengivectomia,
   fechar diastema, alinhar): presets sobre os parâmetros atuais + cor sugerida por escala. Na tela: cartão
   "Comparar" com cortina arrastável (foto original recortada por cima do canvas), lado a lado e variações

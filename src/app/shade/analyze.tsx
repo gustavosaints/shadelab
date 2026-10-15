@@ -26,7 +26,19 @@ import { newCaseId, persistPhoto, saveCase } from '@/lib/storage/cases';
 import { loadSettings, saveCalibration, saveSettings, type ReferenceMode, type Settings } from '@/lib/storage/settings';
 import { colors, radius, spacing } from '@/theme';
 
-type Params = { uri: string; w: string; h: string; mode?: 'shade' | 'calibrate'; shade?: string };
+type Params = {
+  uri: string;
+  w: string;
+  h: string;
+  mode?: 'shade' | 'calibrate';
+  shade?: string;
+  /** Reanálise de um caso existente: o salvar atualiza este caso. */
+  caseId?: string;
+  patient?: string;
+  tooth?: string;
+  notes?: string;
+  createdAt?: string;
+};
 type Pt = { x: number; y: number };
 
 const MARKER_SCREEN = 40; // tamanho do quadrado na tela, em px
@@ -34,7 +46,18 @@ const MARKER_SCREEN = 40; // tamanho do quadrado na tela, em px
 const HETEROGENEOUS_CV = 0.2;
 
 export default function Analyze() {
-  const { uri, w, h, mode = 'shade', shade: calibShade } = useLocalSearchParams<Params>();
+  const {
+    uri,
+    w,
+    h,
+    mode = 'shade',
+    shade: calibShade,
+    caseId,
+    patient,
+    tooth: toothParam,
+    notes: notesParam,
+    createdAt: createdAtParam,
+  } = useLocalSearchParams<Params>();
   const imgW = Number(w) || 1;
   const imgH = Number(h) || 1;
 
@@ -54,9 +77,9 @@ export default function Analyze() {
     refSample?: Sample;
     gingivaLab?: Lab;
   } | null>(null);
-  const [patientName, setPatientName] = useState('');
-  const [toothNumber, setToothNumber] = useState('');
-  const [notes, setNotes] = useState('');
+  const [patientName, setPatientName] = useState(patient && patient !== 'Sem nome' ? patient : '');
+  const [toothNumber, setToothNumber] = useState(toothParam ?? '');
+  const [notes, setNotes] = useState(notesParam ?? '');
 
   useEffect(() => {
     loadSettings().then((s) => {
@@ -156,11 +179,11 @@ export default function Analyze() {
     if (!result || !settings) return;
     setBusy(true);
     try {
-      const id = newCaseId();
-      const photoUri = await persistPhoto(uri, id);
+      const id = caseId || newCaseId();
+      const photoUri = caseId ? uri : await persistPhoto(uri, id);
       await saveCase({
         id,
-        createdAt: new Date().toISOString(),
+        createdAt: createdAtParam || new Date().toISOString(),
         patientName: patientName.trim() || 'Sem nome',
         tooth: toothNumber.trim(),
         notes: notes.trim(),

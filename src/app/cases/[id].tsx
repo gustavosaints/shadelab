@@ -86,7 +86,8 @@ function SmileDetail({ c }: { c: SmileCase }) {
         <SectionTitle>Foto original</SectionTitle>
         <Image source={{ uri: c.photoUri }} style={styles.photo} resizeMode="cover" />
       </Card>
-      <Button title="Compartilhar simulação" onPress={shareImage} />
+      <Button title="Editar simulação" onPress={() => router.push({ pathname: '/smile', params: { caseId: c.id } })} />
+      <Button title="Compartilhar simulação" variant="secondary" onPress={shareImage} style={{ marginTop: 8 }} />
       <Button title="Excluir" variant="ghost" onPress={remove} style={{ marginTop: 8 }} />
     </ScrollView>
   );
@@ -213,6 +214,26 @@ ${c.notes ? `<div class="box"><b>Observações</b><br/>${esc(c.notes).replace(/\
         </Card>
       )}
       <Button title="Exportar PDF para o laboratório" onPress={exportPdf} />
+      <Button
+        title="Refazer a análise de cor"
+        variant="secondary"
+        style={{ marginTop: 8 }}
+        onPress={() =>
+          router.push({
+            pathname: '/shade/analyze',
+            params: {
+              uri: c.photoUri,
+              w: String(c.photoWidth),
+              h: String(c.photoHeight),
+              caseId: c.id,
+              patient: c.patientName,
+              tooth: c.tooth,
+              notes: c.notes,
+              createdAt: c.createdAt,
+            },
+          })
+        }
+      />
       <Button title="Excluir caso" variant="ghost" onPress={remove} style={{ marginTop: 8 }} />
     </ScrollView>
   );

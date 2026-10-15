@@ -23,6 +23,7 @@ export default function RootLayout() {
         <Stack.Screen name="settings" options={{ title: 'Configurações' }} />
         <Stack.Screen name="smile/index" options={{ title: 'Smile Design' }} />
         <Stack.Screen name="smile/ai" options={{ title: 'Sorriso por IA' }} />
+        <Stack.Screen name="smile/capture" options={{ title: 'Foto do sorriso', headerShown: false }} />
       </Stack>
     </>
   );
