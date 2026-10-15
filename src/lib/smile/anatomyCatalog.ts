@@ -158,30 +158,4 @@ export const ANATOMY_CATALOG: AnatomyDef[] = [
     },
     },
   },
-  {
-    id: 'jan-hajto-f31',
-    name: "Hajto F31",
-    shape: 'oval',
-    thumb: require('../../../assets/anatomia/jan-hajto-f31/thumb.png'),
-    teeth: {
-    central: {
-      width: 251, height: 325, wMm: 8.461, hMm: 11.004, offsetX: 0, offsetY: 0,
-      fill: require('../../../assets/anatomia/jan-hajto-f31/central-fill.png'),
-      shade: require('../../../assets/anatomia/jan-hajto-f31/central-shade.png'),
-      gloss: require('../../../assets/anatomia/jan-hajto-f31/central-gloss.png'),
-    },
-    lateral: {
-      width: 169, height: 271, wMm: 5.646, hMm: 9.161, offsetX: -5.796, offsetY: 0.8,
-      fill: require('../../../assets/anatomia/jan-hajto-f31/lateral-fill.png'),
-      shade: require('../../../assets/anatomia/jan-hajto-f31/lateral-shade.png'),
-      gloss: require('../../../assets/anatomia/jan-hajto-f31/lateral-gloss.png'),
-    },
-    canine: {
-      width: 174, height: 310, wMm: 5.823, hMm: 10.511, offsetX: -11.77, offsetY: 0,
-      fill: require('../../../assets/anatomia/jan-hajto-f31/canine-fill.png'),
-      shade: require('../../../assets/anatomia/jan-hajto-f31/canine-shade.png'),
-      gloss: require('../../../assets/anatomia/jan-hajto-f31/canine-gloss.png'),
-    },
-    },
-  },
 ];
