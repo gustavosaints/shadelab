@@ -40,7 +40,7 @@ import {
   setCentralWidthMm,
   type FacePoints,
 } from '@/lib/smile/frame';
-import { addMouthPoint, defaultMouth, fitToMouth, removeMouthPoint } from '@/lib/smile/mouth';
+import { addMouthPoint, defaultMouth, fitToMouth, mouthBounds, removeMouthPoint } from '@/lib/smile/mouth';
 import { takePendingPhoto } from '@/lib/smile/pendingPhoto';
 import { applyScenario, SCENARIOS } from '@/lib/smile/scenarios';
 import {
@@ -69,6 +69,9 @@ type MoveMode = 'arch' | 'one';
 /** O que está selecionado para mover/dimensionar no passo Ajustar. */
 type Selection = { kind: 'none' } | { kind: 'arch' } | { kind: 'tooth'; fdi: string };
 type CompareMode = 'edit' | 'curtain' | 'side' | 'variants';
+
+/** Identifica uma boca (pontos arredondados) para saber se os dentes já foram encaixados nela. */
+const mouthSignature = (mouth: SmileParams['mouth']) => (mouth ? mouth.map((m) => `${m.x.toFixed(3)},${m.y.toFixed(3)}`).join(';') : null);
 
 const STEPS: { id: Step; label: string }[] = [
   { id: 'foto', label: '1 Foto' },
@@ -130,6 +133,9 @@ export default function Smile() {
   const gesture = useRef<GestureStart | null>(null);
   const zoomStart = useRef(zoom);
   const pendingDetect = useRef<Photo | null>(null);
+  /** Assinatura da boca para a qual os dentes já foram encaixados (evita arco com tamanho padrão na boca). */
+  const fittedMouth = useRef<string | null>(null);
+  const fitting = useRef(false);
 
   const system = getSystem(settings.shadeSystem);
   const set = (patch: Partial<SmileParams>) => setParams((p) => clampParams({ ...p, ...patch }));
@@ -167,6 +173,7 @@ export default function Smile() {
       );
       setPhoto({ uri: c.photoUri, width: size.w, height: size.h });
       setParams(c.params);
+      fittedMouth.current = mouthSignature(c.params.mouth); // caso salvo já foi encaixado
       setTargetShade(c.targetShade);
       setPatientName(c.patientName === 'Sem nome' ? '' : c.patientName);
       setNotes(c.notes);
@@ -188,6 +195,7 @@ export default function Smile() {
     setCreatedAt(null);
     setPhoto({ ...p, uri });
     setParams(DEFAULT_SMILE_PARAMS);
+    fittedMouth.current = null;
     setFace(null);
     setSelection({ kind: 'none' });
     setVariants([]);
@@ -264,7 +272,9 @@ export default function Smile() {
    * de laterais/caninos quando quase todos os espaços foram vistos).
    */
   const fitTeeth = async () => {
-    if (!photo || !params.mouth || !area.width) return;
+    if (!photo || !params.mouth || !area.width || fitting.current) return;
+    fitting.current = true;
+    fittedMouth.current = mouthSignature(params.mouth);
     setDetecting('Encaixando os dentes na boca…');
     const byMouth = archFittedParams({ ...params, edits: undefined });
     try {
@@ -287,9 +297,19 @@ export default function Smile() {
       setParams(byMouth);
       setDetectNote('Encaixados pela largura da boca. Ajuste no passo 4 se precisar.');
     } finally {
+      fitting.current = false;
       setDetecting(null);
     }
   };
+  // Garantia: ao chegar em Forma/Ajustar/Comparar (por qualquer caminho, inclusive pelos chips de passo) com uma
+  // boca que ainda não teve os dentes encaixados, encaixa. Sem isso o arco ficava no tamanho padrão (8,5% da
+  // largura da FOTO), gigante numa foto de rosto inteiro.
+  useEffect(() => {
+    if (step === 'foto' || step === 'boca' || !photo || !params.mouth || !area.width || detecting) return;
+    if (fittedMouth.current === mouthSignature(params.mouth)) return;
+    fitTeeth();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, params.mouth, area.width, detecting]);
 
   // ----- Foto vinda da câmera guiada e detecção automática ao medir a área -----
   useFocusEffect(
@@ -327,6 +347,7 @@ export default function Smile() {
     if (!d) return;
     setPhoto(d.photo);
     setParams(d.params);
+    fittedMouth.current = mouthSignature(d.params.mouth);
     setTargetShade(d.targetShade);
     if (d.face) setFace(d.face);
     if (d.centralsWidthMm) setCentralsWidthMm(d.centralsWidthMm);
@@ -394,6 +415,10 @@ export default function Smile() {
   const t11 = teeth.find((t) => t.fdi === '11');
   const t23 = teeth.find((t) => t.fdi === '23');
   const cwPx = params.centralWidth * area.width;
+  // central fora de 9–21% da largura da boca = arco desproporcional (ex.: tamanho padrão nunca encaixado)
+  const mouthWPx = params.mouth && area.width ? mouthBounds(params.mouth, area.width, area.height).widthPx : 0;
+  const centralOfMouth = mouthWPx > 0 ? cwPx / mouthWPx : 0;
+  const archOff = centralOfMouth > 0 && (centralOfMouth < 0.09 || centralOfMouth > 0.21);
   const shapeMix = params.shapeMix ?? SHAPE_MIX[params.shape];
   const calibMm = parseFloat(centralsWidthMm.replace(',', '.')) || 0;
   const analysis = face && area.width ? analyzeFrame(face, calibMm, params, area.width, area.height) : null;
@@ -735,6 +760,9 @@ export default function Smile() {
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: spacing.md, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
         {detectNote && <Muted>{detectNote}</Muted>}
+        {archOff && step !== 'foto' && step !== 'boca' && !detecting && (
+          <Muted>{`Atenção: o central está com ${Math.round(centralOfMouth * 100)}% da largura da boca (esperado 12–18%). Toque em «Reencaixar na boca».`}</Muted>
+        )}
 
         {step === 'foto' && (
           <Card>
@@ -847,7 +875,7 @@ export default function Smile() {
                   selected={moveMode === 'arch'}
                   onPress={() => {
                     setMoveMode('arch');
-                    setSelection({ kind: 'arch' });
+                    setSelection({ kind: 'none' }); // regra: só toque nos dentes seleciona (pinça continua zoom até lá)
                   }}
                 />
                 <Chip

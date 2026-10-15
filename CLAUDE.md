@@ -33,7 +33,10 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   UI em `components/MouthOutline.tsx`.
 - Fluxo do Smile Design (2026-10-15): foto fixa no alto (canvas com altura máx. 50% da tela) e passos rolando embaixo:
   Foto → Boca → Forma e cor (contorno é o padrão; ao entrar, `fitTeeth` encaixa pela análise de pixels ou pela boca)
-  → Ajustar → Comparar. Regra de gestos (pedido do Gustavo): pinça na foto é SEMPRE zoom da imagem e um dedo
+  → Ajustar → Comparar. Um efeito garante o encaixe (`fittedMouth`): ao chegar em Forma/Ajustar/Comparar por qualquer
+  caminho com uma boca ainda não encaixada, `fitTeeth` roda sozinho (antes, entrar pelos chips de passo deixava o arco
+  no tamanho PADRÃO = 8,5% da largura da foto → dentes "gigantes" numa foto de rosto inteiro, 2026-10-15); um aviso
+  aparece se o central ficar fora de 9–21% da largura da boca. Regra de gestos (pedido do Gustavo): pinça na foto é SEMPRE zoom da imagem e um dedo
   arrasta a vista ampliada; para mover/dimensionar dentes é preciso tocar neles antes no passo Ajustar
   ("Conjunto" seleciona o arco, "Unitário" um dente; toque fora solta). A câmera guiada NÃO valida o enquadramento
   (ele pediu para tirar o verde/vermelho): só mostra o guia e a frase para sorrir. `smile/capture.tsx` é a câmera guiada AO VIVO: um WebView com
