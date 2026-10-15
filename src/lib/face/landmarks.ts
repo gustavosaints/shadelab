@@ -129,16 +129,64 @@ export type FramingGuide = {
  */
 export const DEFAULT_GUIDE: FramingGuide = { cx: 0.5, cy: 0.42, rx: 0.23, ry: 0.3, mouthCy: 0.585, mouthH: 0.09 };
 
-/**
- * Silhueta de cabeça e ombros num viewBox 0 0 100 100 (x e y em % da área de prévia).
- * `head` é o contorno fechado da cabeça; `shoulders` são as linhas do pescoço e ombros.
- */
-export const HEAD_SILHOUETTE = {
-  head: 'M50,70 C61,70 71,60 72.5,47 C74,34 70,15 50,12 C30,15 26,34 27.5,47 C29,60 39,70 50,70 Z',
-  shoulders: 'M42,69.5 C42,75 41,79 39,82 C27,84 14,89 4,100 M58,69.5 C58,75 59,79 61,82 C73,84 86,89 96,100',
-  /** Faixa da boca: x, y, largura, altura (%). */
-  mouth: { x: 38, y: 54, w: 24, h: 9 },
+export type Silhouette = {
+  /** Caminho SVG fechado da cabeça, em px da área de prévia. */
+  head: string;
+  /** Pescoço e ombros, em px. */
+  shoulders: string;
+  /** Faixa da boca, em px. */
+  mouth: { x: number; y: number; w: number; h: number };
+  /** Guia equivalente em frações, para `checkFraming`. */
+  guide: FramingGuide;
 };
+
+/**
+ * Silhueta de cabeça e ombros em pixels, com proporção real de cabeça (altura ≈ 1,3 × largura),
+ * independente da proporção da tela. A cabeça ocupa ~46% da largura (ou menos, se a tela for baixa).
+ */
+export function headSilhouette(W: number, H: number): Silhouette {
+  const headW = Math.min(0.46 * W, (0.6 * H) / 1.3);
+  const hw = headW; // unidade: largura da cabeça
+  const cx = W / 2;
+  const cy = Math.max(0.65 * hw + 0.06 * H, 0.4 * H);
+  const f = (n: number) => n.toFixed(1);
+  // formato de ovo: mais largo nas têmporas, mais estreito no queixo
+  const pts = [
+    [0, 0.65],
+    [0.22, 0.65, 0.44, 0.47, 0.48, 0.17],
+    [0.52, -0.15, 0.42, -0.62, 0, -0.65],
+    [-0.42, -0.62, -0.52, -0.15, -0.48, 0.17],
+    [-0.44, 0.47, -0.22, 0.65, 0, 0.65],
+  ];
+  const X = (u: number) => f(cx + u * hw);
+  const Y = (u: number) => f(cy + u * hw);
+  const head =
+    `M${X(pts[0][0])},${Y(pts[0][1])} ` +
+    pts
+      .slice(1)
+      .map((c) => `C${X(c[0])},${Y(c[1])} ${X(c[2])},${Y(c[3])} ${X(c[4])},${Y(c[5])}`)
+      .join(' ') +
+    ' Z';
+  const shoulders =
+    `M${X(-0.17)},${Y(0.62)} C${X(-0.17)},${Y(0.74)} ${X(-0.19)},${Y(0.82)} ${X(-0.24)},${Y(0.88)} ` +
+    `C${f(cx - 0.3 * W)},${Y(0.95)} ${f(cx - 0.46 * W)},${f(cy + 1.1 * hw)} ${f(cx - 0.5 * W)},${f(H)} ` +
+    `M${X(0.17)},${Y(0.62)} C${X(0.17)},${Y(0.74)} ${X(0.19)},${Y(0.82)} ${X(0.24)},${Y(0.88)} ` +
+    `C${f(cx + 0.3 * W)},${Y(0.95)} ${f(cx + 0.46 * W)},${f(cy + 1.1 * hw)} ${f(cx + 0.5 * W)},${f(H)}`;
+  const mouth = { x: cx - 0.25 * hw, y: cy + 0.25 * hw, w: 0.5 * hw, h: 0.16 * hw };
+  return {
+    head,
+    shoulders,
+    mouth,
+    guide: {
+      cx: 0.5,
+      cy: cy / H,
+      rx: (0.5 * hw) / W,
+      ry: (0.65 * hw) / H,
+      mouthCy: (mouth.y + mouth.h / 2) / H,
+      mouthH: mouth.h / H,
+    },
+  };
+}
 
 export type FramingCheck = { ok: boolean; issues: string[] };
 

@@ -3,14 +3,14 @@ import { File, Paths } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useRef, useState } from 'react';
-import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { Button } from '@/components/Button';
 import { FaceLandmarker, type FaceLandmarkerHandle } from '@/components/FaceLandmarker';
 import { detectFace } from '@/lib/face/detect';
-import { checkFraming, DEFAULT_GUIDE, HEAD_SILHOUETTE, type FramingCheck } from '@/lib/face/landmarks';
+import { checkFraming, headSilhouette, type FramingCheck } from '@/lib/face/landmarks';
 import { setPendingPhoto } from '@/lib/smile/pendingPhoto';
 import { colors, spacing } from '@/theme';
 
@@ -29,10 +29,10 @@ export default function SmileCapture() {
 // Prévia ao vivo no WebView
 // ---------------------------------------------------------------------------------------------
 
-const G = DEFAULT_GUIDE;
-const S = HEAD_SILHOUETTE;
-
-const LIVE_HTML = `<!doctype html><html><head><meta charset="utf-8">
+/** HTML da prévia ao vivo para uma tela de W×H px (a silhueta é desenhada em px, sem esticar). */
+const liveHtml = (W: number, H: number) => {
+  const S = headSilhouette(W, H);
+  return `<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <style>
   html,body{margin:0;height:100%;background:#000;overflow:hidden}
@@ -41,18 +41,18 @@ const LIVE_HTML = `<!doctype html><html><head><meta charset="utf-8">
   #shade{fill:rgba(0,0,0,0.28)}
 </style></head><body>
 <video id="v" autoplay playsinline muted></video>
-<svg viewBox="0 0 100 100" preserveAspectRatio="none">
-  <defs><mask id="m"><rect width="100" height="100" fill="#fff"/><path d="${S.head}" fill="#000"/></mask></defs>
-  <rect id="shade" width="100" height="100" mask="url(#m)"/>
-  <path id="head" d="${S.head}" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="0.8" vector-effect="non-scaling-stroke" stroke-dasharray="2 1.5"/>
-  <path id="sh" d="${S.shoulders}" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="0.6" vector-effect="non-scaling-stroke" stroke-dasharray="2 1.5"/>
-  <rect id="mouth" x="${S.mouth.x}" y="${S.mouth.y}" width="${S.mouth.w}" height="${S.mouth.h}" rx="2" fill="none" stroke="rgba(255,255,255,0.8)" stroke-width="0.5" vector-effect="non-scaling-stroke" stroke-dasharray="1.5 1.2"/>
+<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+  <defs><mask id="m"><rect width="${W}" height="${H}" fill="#fff"/><path d="${S.head}" fill="#000"/></mask></defs>
+  <rect id="shade" width="${W}" height="${H}" mask="url(#m)"/>
+  <path id="head" d="${S.head}" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="2.5" stroke-dasharray="8 6"/>
+  <path id="sh" d="${S.shoulders}" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="2" stroke-dasharray="8 6"/>
+  <rect id="mouth" x="${S.mouth.x.toFixed(1)}" y="${S.mouth.y.toFixed(1)}" width="${S.mouth.w.toFixed(1)}" height="${S.mouth.h.toFixed(1)}" rx="10" fill="none" stroke="rgba(255,255,255,0.8)" stroke-width="1.5" stroke-dasharray="6 5"/>
 </svg>
 <script type="module">
   const post = (o) => window.ReactNativeWebView.postMessage(JSON.stringify(o));
   const v = document.getElementById('v');
   const head = document.getElementById('head'), sh = document.getElementById('sh'), mouth = document.getElementById('mouth');
-  const GUIDE = ${JSON.stringify(G)};
+  const GUIDE = ${JSON.stringify(S.guide)};
   let facing = 'user', stream = null, mirrored = true, landmarker = null, lastPost = 0, lastOk = null, lastT = 0;
 
   function stopStream(){ if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } }
@@ -83,8 +83,8 @@ const LIVE_HTML = `<!doctype html><html><head><meta charset="utf-8">
   function setColor(state){
     const col = state === 'ok' ? '#00E676' : state === 'bad' ? '#FF5252' : 'rgba(255,255,255,0.9)';
     head.setAttribute('stroke', col); mouth.setAttribute('stroke', col); sh.setAttribute('stroke', col);
-    head.setAttribute('stroke-width', state === 'ok' ? '1.4' : '0.8');
-    if (state === 'ok') { head.removeAttribute('stroke-dasharray'); } else { head.setAttribute('stroke-dasharray', '2 1.5'); }
+    head.setAttribute('stroke-width', state === 'ok' ? '4' : '2.5');
+    if (state === 'ok') { head.removeAttribute('stroke-dasharray'); } else { head.setAttribute('stroke-dasharray', '8 6'); }
   }
 
   // posição do vídeo na tela com object-fit: cover
@@ -139,10 +139,12 @@ const LIVE_HTML = `<!doctype html><html><head><meta charset="utf-8">
     } catch (e) { post({ type:'detector', ok:false, error:String(e && e.message || e) }); }
   })();
 </script></body></html>`;
+};
 
 function LiveCapture({ onFallback }: { onFallback: () => void }) {
   const web = useRef<WebView>(null);
   const insets = useSafeAreaInsets();
+  const { width: winW, height: winH } = useWindowDimensions();
   const [cameraOk, setCameraOk] = useState<boolean | null>(null);
   const [detectorOk, setDetectorOk] = useState<boolean | null>(null);
   const [framing, setFraming] = useState<{ ok: boolean; issues: string[] } | null>(null);
@@ -206,7 +208,7 @@ function LiveCapture({ onFallback }: { onFallback: () => void }) {
     <View style={styles.root}>
       <WebView
         ref={web}
-        source={{ html: LIVE_HTML, baseUrl: 'https://shadelab.app/' }}
+        source={{ html: liveHtml(winW, winH), baseUrl: 'https://shadelab.app/' }}
         onMessage={onMessage}
         style={StyleSheet.absoluteFill}
         javaScriptEnabled
@@ -270,7 +272,7 @@ function NativeCapture() {
     try {
       if (!landmarker.current) throw new Error('detector indisponível');
       const det = await detectFace(landmarker.current, s.uri);
-      setCheck(det ? checkFraming(det.box, DEFAULT_GUIDE) : { ok: false, issues: ['Nenhum rosto encontrado'] });
+      setCheck(det ? checkFraming(det.box, headSilhouette(size.width || 1, size.height || 1).guide) : { ok: false, issues: ['Nenhum rosto encontrado'] });
     } catch (e) {
       setCheck({ ok: false, issues: [`Não deu para conferir: ${String((e as Error).message ?? e)}`] });
     } finally {
@@ -330,13 +332,17 @@ function NativeCapture() {
       ) : (
         <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing={facing} mirror={facing === 'front'} flash="off" animateShutter={false} onCameraReady={() => setReady(true)} />
       )}
-      {size.width > 0 && (
-        <Svg pointerEvents="none" width={size.width} height={size.height} viewBox="0 0 100 100" preserveAspectRatio="none" style={StyleSheet.absoluteFill}>
-          <Path d={S.head} stroke={frameColor} strokeWidth={check?.ok ? 1.4 : 0.8} vectorEffect="non-scaling-stroke" strokeDasharray={check ? undefined : '2 1.5'} fill="none" />
-          <Path d={S.shoulders} stroke={frameColor} strokeWidth={0.6} vectorEffect="non-scaling-stroke" strokeDasharray="2 1.5" fill="none" />
-          <Rect x={S.mouth.x} y={S.mouth.y} width={S.mouth.w} height={S.mouth.h} rx={2} stroke={frameColor} strokeWidth={0.5} vectorEffect="non-scaling-stroke" strokeDasharray="1.5 1.2" fill="none" />
-        </Svg>
-      )}
+      {size.width > 0 &&
+        (() => {
+          const S = headSilhouette(size.width, size.height);
+          return (
+            <Svg pointerEvents="none" width={size.width} height={size.height} style={StyleSheet.absoluteFill}>
+              <Path d={S.head} stroke={frameColor} strokeWidth={check?.ok ? 4 : 2.5} strokeDasharray={check ? undefined : '8 6'} fill="none" />
+              <Path d={S.shoulders} stroke={frameColor} strokeWidth={2} strokeDasharray="8 6" fill="none" />
+              <Rect x={S.mouth.x} y={S.mouth.y} width={S.mouth.w} height={S.mouth.h} rx={10} stroke={frameColor} strokeWidth={1.5} strokeDasharray="6 5" fill="none" />
+            </Svg>
+          );
+        })()}
       <View style={[styles.top, { paddingTop: insets.top + 8 }]}>
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <Text style={styles.topBtn}>Fechar</Text>
