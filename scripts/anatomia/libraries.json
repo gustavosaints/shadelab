@@ -1,17 +1,9 @@
 [
-  { "lib": "Jan Hajto F31", "name": "Hajto F31", "shape": "oval" },
-  { "lib": "Jan Hajto F1", "name": "Hajto F1", "shape": "oval" },
-  { "lib": "Jan Hajto F2", "name": "Hajto F2", "shape": "oval" },
-  { "lib": "Jan Hajto F6", "name": "Hajto F6", "shape": "triangular" },
-  { "lib": "Jan Hajto F8", "name": "Hajto F8", "shape": "square" },
-  { "lib": "Jan Hajto F12", "name": "Hajto F12", "shape": "oval" },
-  { "lib": "Jan Hajto F14", "name": "Hajto F14", "shape": "square" },
-  { "lib": "Jan Hajto F16", "name": "Hajto F16", "shape": "triangular" },
-  { "lib": "Jan Hajto F19", "name": "Hajto F19", "shape": "oval" },
-  { "lib": "Jan Hajto F23", "name": "Hajto F23", "shape": "square" },
-  { "lib": "Jan Hajto F26", "name": "Hajto F26", "shape": "oval" },
-  { "lib": "Jan Hajto M2", "name": "Hajto M2", "shape": "square" },
-  { "lib": "Jan Hajto M5", "name": "Hajto M5", "shape": "square" },
-  { "lib": "Jan Hajto M7", "name": "Hajto M7", "shape": "triangular" },
-  { "lib": "Jan Hajto M9", "name": "Hajto M9", "shape": "oval" }
+  { "lib": "Expression S1 Exo", "name": "Expression S1", "shape": "square" },
+  { "lib": "Expression S2 Exo", "name": "Expression S2", "shape": "square" },
+  { "lib": "Expression S3 Exo", "name": "Expression S3", "shape": "square" },
+  { "lib": "G008-Shorodok Dmitry", "name": "Shorodok G008", "shape": "mixed" },
+  { "lib": "G009-Shorodok Dmitry", "name": "Shorodok G009", "shape": "mixed" },
+  { "lib": "Maxxima", "name": "Maxxima", "shape": "mixed" },
+  { "lib": "Jan Hajto F31", "name": "Hajto F31", "shape": "oval" }
 ]
