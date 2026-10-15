@@ -32,8 +32,12 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   `SmileOverlay` recorta os dentes pela abertura dos lábios; `fitToMouth` encaixa o arco (72% da largura da boca).
   UI em `components/MouthOutline.tsx`.
 - Fluxo do Smile Design (2026-10-15): foto fixa no alto (canvas com altura máx. 50% da tela) e passos rolando embaixo:
-  Foto → Boca → Dentes → Cor e forma → Comparar. `smile/capture.tsx` é a câmera guiada (silhueta SVG, `mirror` na
-  frontal, conferência do enquadramento após o clique via `checkFraming`); devolve a foto por `pendingPhoto.ts`.
+  Foto → Boca → Dentes → Cor e forma → Comparar. `smile/capture.tsx` é a câmera guiada AO VIVO: um WebView com
+  getUserMedia + MediaPipe em modo vídeo desenha a silhueta de cabeça e ombros (`HEAD_SILHOUETTE`) e a deixa verde
+  quando o rosto está enquadrado; a captura é feita no canvas do WebView (selfie espelhada) e volta por
+  `pendingPhoto.ts`. Se o WebView não liberar a câmera, cai para `NativeCapture` (expo-camera, conferência após o
+  clique via `checkFraming`). Zoom da vista no editor: chip "Zoom" na barra de passos; a vista interna cresce em
+  layout (não em transform), então `area` já vem em px ampliados e os gestos continuam coerentes.
   Detecção automática: `components/FaceLandmarker.tsx` = WebView invisível com MediaPipe Face Landmarker (CDN +
   modelo do Google, precisa de internet na 1ª vez); `lib/face/landmarks.ts` mapeia os 478 marcos para boca (lábio
   interno), face-bow e caixa do rosto; `lib/face/detect.ts` recorta a boca e chama `lib/smile/autofit.ts`

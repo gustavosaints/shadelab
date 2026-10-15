@@ -123,8 +123,22 @@ export type FramingGuide = {
   mouthH: number;
 };
 
-/** Guia padrão de enquadramento: rosto centralizado ocupando ~55% da largura, boca no terço inferior. */
-export const DEFAULT_GUIDE: FramingGuide = { cx: 0.5, cy: 0.47, rx: 0.3, ry: 0.36, mouthCy: 0.66, mouthH: 0.1 };
+/**
+ * Guia padrão de enquadramento (frações da área de prévia): cabeça centralizada ocupando ~46% da largura,
+ * boca pouco abaixo do meio. Bate com a silhueta `HEAD_SILHOUETTE`.
+ */
+export const DEFAULT_GUIDE: FramingGuide = { cx: 0.5, cy: 0.42, rx: 0.23, ry: 0.3, mouthCy: 0.585, mouthH: 0.09 };
+
+/**
+ * Silhueta de cabeça e ombros num viewBox 0 0 100 100 (x e y em % da área de prévia).
+ * `head` é o contorno fechado da cabeça; `shoulders` são as linhas do pescoço e ombros.
+ */
+export const HEAD_SILHOUETTE = {
+  head: 'M50,70 C61,70 71,60 72.5,47 C74,34 70,15 50,12 C30,15 26,34 27.5,47 C29,60 39,70 50,70 Z',
+  shoulders: 'M42,69.5 C42,75 41,79 39,82 C27,84 14,89 4,100 M58,69.5 C58,75 59,79 61,82 C73,84 86,89 96,100',
+  /** Faixa da boca: x, y, largura, altura (%). */
+  mouth: { x: 38, y: 54, w: 24, h: 9 },
+};
 
 export type FramingCheck = { ok: boolean; issues: string[] };
 

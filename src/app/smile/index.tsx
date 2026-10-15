@@ -115,6 +115,9 @@ export default function Smile() {
   const [variants, setVariants] = useState<SmileVariant[]>([]);
   // dente a dente
   const [selectedTooth, setSelectedTooth] = useState<string | null>(null);
+  // zoom da vista (a foto e os dentes crescem juntos; os comandos continuam em px da vista ampliada)
+  const [zoom, setZoom] = useState({ scale: 1, tx: 0, ty: 0 });
+  const [zoomMode, setZoomMode] = useState(false);
 
   const canvasRef = useRef<View>(null);
   const panesRef = useRef<View>(null);
@@ -125,6 +128,10 @@ export default function Smile() {
   const set = (patch: Partial<SmileParams>) => setParams((p) => clampParams({ ...p, ...patch }));
   const anatomyOf = (id?: string) => (id ? ANATOMY_CATALOG.find((a) => a.id === id) : undefined);
   const anatomy = anatomyOf(params.anatomy);
+  // tamanho do canvas: largura da tela, altura no máximo metade da tela, mantendo a proporção da foto
+  const aspect = photo ? photo.width / photo.height : 4 / 3;
+  const canvasW = Math.min(winW, winH * 0.5 * aspect);
+  const canvasH = canvasW / aspect;
   const editOf = (fdi: string): ToothEdit => params.edits?.[fdi] ?? NO_EDIT;
   const setEdit = (fdi: string, patch: Partial<ToothEdit>) =>
     setParams((p) => ({ ...p, edits: { ...p.edits, [fdi]: clampEdit({ ...(p.edits?.[fdi] ?? NO_EDIT), ...patch }) } }));
@@ -271,6 +278,14 @@ export default function Smile() {
   const dist = (t: Touch[]) => (t.length >= 2 ? Math.hypot(t[1].pageX - t[0].pageX, t[1].pageY - t[0].pageY) : 0);
   const centroid = (t: Touch[]) => ({ x: t.reduce((s, p) => s + p.pageX, 0) / t.length, y: t.reduce((s, p) => s + p.pageY, 0) / t.length });
 
+  const zoomStart = useRef(zoom);
+  const clampZoom = (z: { scale: number; tx: number; ty: number }) => {
+    const scale = Math.min(4, Math.max(1, z.scale));
+    const w = canvasW * scale;
+    const h = canvasH * scale;
+    return { scale, tx: Math.min(0, Math.max(canvasW - w, z.tx)), ty: Math.min(0, Math.max(canvasH - h, z.ty)) };
+  };
+
   const begin = (e: GestureResponderEvent) => {
     const t = touchesOf(e);
     gesture.current = {
@@ -280,6 +295,7 @@ export default function Smile() {
       start: { x: e.nativeEvent.locationX, y: e.nativeEvent.locationY },
       moved: false,
     };
+    zoomStart.current = zoom;
     setDragging(true);
   };
   const onCanvasMove = (e: GestureResponderEvent) => {
@@ -289,11 +305,30 @@ export default function Smile() {
     const now = t.length ? t : [{ pageX: e.nativeEvent.pageX, pageY: e.nativeEvent.pageY }];
     if (now.length !== g.touches.length) {
       gesture.current = { ...g, touches: now, params, dist: dist(now) };
+      zoomStart.current = zoom;
       return;
     }
     const c0 = centroid(g.touches);
     const c1 = centroid(now);
     if (Math.hypot(c1.x - c0.x, c1.y - c0.y) > 6) g.moved = true;
+    if (zoomMode || (now.length >= 2 && zoom.scale > 1 && step !== 'dentes')) {
+      // zoom da vista: pinça escala em torno do ponto entre os dedos; um dedo arrasta a vista
+      const z0 = zoomStart.current;
+      let scale = z0.scale;
+      let tx = z0.tx + (c1.x - c0.x);
+      let ty = z0.ty + (c1.y - c0.y);
+      if (now.length >= 2 && g.dist > 10) {
+        scale = z0.scale * (dist(now) / g.dist);
+        const k = scale / z0.scale;
+        // mantém fixo o ponto do conteúdo sob o toque inicial (coordenadas do canvas externo)
+        const fx = g.start.x;
+        const fy = g.start.y;
+        tx = fx - (fx - z0.tx) * k + (c1.x - c0.x);
+        ty = fy - (fy - z0.ty) * k + (c1.y - c0.y);
+      }
+      setZoom(clampZoom({ scale, tx, ty }));
+      return;
+    }
     if (step === 'boca') return; // na etapa da boca só as alças do contorno mexem
     if (moveMode === 'one' && selectedTooth && now.length === 1) {
       const cw = g.params.centralWidth * area.width;
@@ -315,8 +350,11 @@ export default function Smile() {
     gesture.current = null;
     setDragging(false);
     // toque sem arrastar no modo "um": seleciona o dente sob o dedo
-    if (g && !g.moved && moveMode === 'one' && step === 'dentes') {
-      const hit = teeth.find((t) => g.start.x >= t.x && g.start.x <= t.x + t.w && g.start.y >= t.y && g.start.y <= t.y + t.h);
+    if (g && !g.moved && moveMode === 'one' && step === 'dentes' && !zoomMode) {
+      // o toque chega em coordenadas do canvas externo; o conteúdo está deslocado pelo zoom
+      const px = g.start.x - zoom.tx;
+      const py = g.start.y - zoom.ty;
+      const hit = teeth.find((t) => px >= t.x && px <= t.x + t.w && py >= t.y && py <= t.y + t.h);
       setSelectedTooth(hit ? hit.fdi : null);
     }
   };
@@ -446,10 +484,6 @@ export default function Smile() {
   }
 
   // ----- Tela com foto: canvas fixo + passos + comandos rolando -----
-  const aspect = photo.width / photo.height;
-  const maxCanvasH = winH * 0.5;
-  const canvasW = Math.min(winW, maxCanvasH * aspect);
-  const canvasH = canvasW / aspect;
   const showHandles = !hidden && !exporting && !!t11 && !!t23;
   const editMouth = step === 'boca' && !exporting;
   const selectedForOverlay = step === 'dentes' && moveMode === 'one' && !exporting ? (selectedTooth ?? undefined) : undefined;
@@ -462,7 +496,6 @@ export default function Smile() {
           ref={canvasRef}
           collapsable={false}
           style={[styles.canvas, { width: canvasW, height: canvasH }]}
-          onLayout={(e) => setArea(e.nativeEvent.layout)}
           onStartShouldSetResponder={() => true}
           onMoveShouldSetResponder={() => true}
           onResponderTerminationRequest={() => false}
@@ -470,6 +503,14 @@ export default function Smile() {
           onResponderMove={onCanvasMove}
           onResponderRelease={end}
           onResponderTerminate={end}
+        >
+        <View
+          style={
+            exporting
+              ? { position: 'absolute', left: 0, top: 0, width: canvasW, height: canvasH }
+              : { position: 'absolute', left: zoom.tx, top: zoom.ty, width: canvasW * zoom.scale, height: canvasH * zoom.scale }
+          }
+          onLayout={(e) => setArea({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
         >
           <Image source={{ uri: photo.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
           <SmileOverlay params={params} width={area.width} height={area.height} hidden={hidden || step === 'boca'} anatomy={anatomy} selected={selectedForOverlay} />
@@ -500,6 +541,7 @@ export default function Smile() {
               <Handle x={t23.x + t23.w + 14} y={t23.y + t23.h * 0.5} glyph="↔" onMove={onArchHandle} />
             </>
           )}
+        </View>
           {detecting && (
             <View pointerEvents="none" style={styles.detecting}>
               <Text style={styles.detectingText}>{detecting}</Text>
@@ -512,6 +554,17 @@ export default function Smile() {
         {STEPS.map((s) => (
           <Chip key={s.id} label={s.label} selected={step === s.id} onPress={() => setStep(s.id)} />
         ))}
+        <View style={{ width: 1, height: 24, backgroundColor: colors.border, marginRight: 8 }} />
+        <Chip label={zoomMode ? `Zoom ${zoom.scale.toFixed(1)}x ✓` : 'Zoom'} selected={zoomMode} color={colors.navy} onPress={() => setZoomMode(!zoomMode)} />
+        {zoom.scale > 1 && (
+          <Chip
+            label="1x"
+            onPress={() => {
+              setZoom({ scale: 1, tx: 0, ty: 0 });
+              setZoomMode(false);
+            }}
+          />
+        )}
       </ScrollView>
 
       <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: 40 }} keyboardShouldPersistTaps="handled" scrollEnabled={!dragging}>
