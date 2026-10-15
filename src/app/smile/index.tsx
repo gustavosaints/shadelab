@@ -45,6 +45,8 @@ import {
   mirrorEdit,
   mirrorFdi,
   NO_EDIT,
+  SHAPE_MIX,
+  shapeFromMix,
   WIDTH_RATIOS,
   type SmileParams,
   type ToothEdit,
@@ -178,6 +180,7 @@ export default function Smile() {
   const t23 = teeth.find((t) => t.fdi === '23');
   const cwPx = params.centralWidth * area.width;
   const ratios = WIDTH_RATIOS[params.proportion];
+  const shapeMix = params.shapeMix ?? SHAPE_MIX[params.shape];
   const calibMm = parseFloat(centralsWidthMm.replace(',', '.')) || 0;
   const analysis = face && area.width ? analyzeFrame(face, calibMm, params, area.width, area.height) : null;
   const archFactor = 1 + ratios.lateral + ratios.canine + 2.5 * params.spacing;
@@ -430,14 +433,25 @@ export default function Smile() {
             <>
               <SectionTitle>Forma</SectionTitle>
               <View style={styles.chips}>
-                <Chip label="Oval" selected={params.shape === 'oval'} onPress={() => set({ shape: 'oval' })} />
-                <Chip label="Quadrada" selected={params.shape === 'square'} onPress={() => set({ shape: 'square' })} />
+                <Chip
+                  label="Quadrada"
+                  selected={shapeFromMix(shapeMix) === 'square'}
+                  onPress={() => set({ shape: 'square', shapeMix: SHAPE_MIX.square })}
+                />
+                <Chip label="Oval" selected={shapeFromMix(shapeMix) === 'oval'} onPress={() => set({ shape: 'oval', shapeMix: SHAPE_MIX.oval })} />
                 <Chip
                   label="Triangular"
-                  selected={params.shape === 'triangular'}
-                  onPress={() => set({ shape: 'triangular' })}
+                  selected={shapeFromMix(shapeMix) === 'triangular'}
+                  onPress={() => set({ shape: 'triangular', shapeMix: SHAPE_MIX.triangular })}
                 />
               </View>
+              <Control
+                label="Transição da forma (quadrada → oval → triangular)"
+                value={shapeMix}
+                min={0}
+                max={1}
+                onChange={(v) => set({ shapeMix: v, shape: shapeFromMix(v) })}
+              />
             </>
           )}
           <SectionTitle>Proporção</SectionTitle>

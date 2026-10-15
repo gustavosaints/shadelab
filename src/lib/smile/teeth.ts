@@ -28,6 +28,8 @@ export type SmileParams = {
   /** Curva do sorriso: elevação dos dentes posteriores, fração da altura do central. */
   curve: number;
   shape: ToothShape;
+  /** Posição na barra contínua de forma (0 quadrada, 0,5 oval, 1 triangular). Ausente = usa `shape`. */
+  shapeMix?: number;
   proportion: Proportion;
   /** Opacidade da simulação (0..1). */
   opacity: number;
@@ -147,6 +149,26 @@ const OUTLINES: Record<ToothKind, Pt[]> = {
   ],
 };
 
+/**
+ * Posição da forma na barra contínua: 0 = quadrada, 0.5 = oval, 1 = triangular.
+ * Os contornos têm o mesmo número de pontos, então a interpolação é suave, sem saltos.
+ */
+export const SHAPE_MIX: Record<ToothShape, number> = { square: 0, oval: 0.5, triangular: 1 };
+
+/** Forma nominal mais próxima de uma posição da barra (para rótulos e compatibilidade). */
+export function shapeFromMix(mix: number): ToothShape {
+  return mix < 0.25 ? 'square' : mix > 0.75 ? 'triangular' : 'oval';
+}
+
+/** Contorno interpolado entre quadrada → oval → triangular, no quadrado unitário. */
+export function mixedShapePoints(kind: ToothKind, mix: number): Pt[] {
+  const m = Math.min(1, Math.max(0, mix));
+  const from = m < 0.5 ? shapePoints(kind, 'square') : shapePoints(kind, 'oval');
+  const to = m < 0.5 ? shapePoints(kind, 'oval') : shapePoints(kind, 'triangular');
+  const t = m < 0.5 ? m / 0.5 : (m - 0.5) / 0.5;
+  return from.map(([x, y], i) => [x + (to[i][0] - x) * t, y + (to[i][1] - y) * t]);
+}
+
 /** Deforma o contorno base conforme a forma escolhida. */
 function shapePoints(kind: ToothKind, shape: ToothShape): Pt[] {
   const base = OUTLINES[kind];
@@ -183,8 +205,8 @@ function smoothClosed(pts: Pt[], tension = 0.42): { start: Pt; segments: [Pt, Pt
   return { start: pts[0], segments: segs };
 }
 
-function unitOutline(kind: ToothKind, shape: ToothShape): { start: Pt; segments: [Pt, Pt, Pt][] } {
-  return smoothClosed(shapePoints(kind, shape));
+function unitOutline(kind: ToothKind, shape: ToothShape | number): { start: Pt; segments: [Pt, Pt, Pt][] } {
+  return smoothClosed(typeof shape === 'number' ? mixedShapePoints(kind, shape) : shapePoints(kind, shape));
 }
 
 const f = (n: number) => Number(n.toFixed(2));
@@ -193,7 +215,7 @@ const f = (n: number) => Number(n.toFixed(2));
  * Caminho SVG absoluto do dente na caixa (x, y, w, h).
  * `side === 'right'` (dentes 11–13, à esquerda do observador): mesial fica à direita.
  */
-export function toothPath(x: number, y: number, w: number, h: number, shape: ToothShape, kind: ToothKind, side: Side): string {
+export function toothPath(x: number, y: number, w: number, h: number, shape: ToothShape | number, kind: ToothKind, side: Side): string {
   const { start, segments } = unitOutline(kind, shape);
   const map = ([ux, uy]: Pt): Pt => [x + (side === 'right' ? ux : 1 - ux) * w, y + uy * h];
   const [sx, sy] = map(start);
@@ -237,7 +259,8 @@ export function layoutTeeth(p: SmileParams, width: number, height: number): Toot
       const y0 = gumY + ZENITH_OFFSET[t.kind] * ch - p.curve * ch * t.k * t.k * 0.5;
       const fdi = dir < 0 ? `1${t.k + 1}` : `2${t.k + 1}`;
       const { x, y, w: ew, h: eh, rot } = applyToothEdit({ x: x0, y: y0, w, h }, p.edits?.[fdi], cw, ch);
-      out.push({ fdi, kind: t.kind, side, x, y, w: ew, h: eh, rot, d: toothPath(x, y, ew, eh, p.shape, t.kind, side) });
+      const shape = p.shapeMix ?? SHAPE_MIX[p.shape];
+      out.push({ fdi, kind: t.kind, side, x, y, w: ew, h: eh, rot, d: toothPath(x, y, ew, eh, shape, t.kind, side) });
       edge = dir > 0 ? x0 + w + gap : x0 - gap;
     }
   }
