@@ -1,42 +1,13 @@
 [
-  {
-    "lib": "Expression S1 Exo",
-    "name": "Expression S1",
-    "shape": "square"
-  },
-  {
-    "lib": "Expression S2 Exo",
-    "name": "Expression S2",
-    "shape": "square"
-  },
-  {
-    "lib": "Expression S3 Exo",
-    "name": "Expression S3",
-    "shape": "square"
-  },
-  {
-    "lib": "G008-Shorodok Dmitry",
-    "name": "Shorodok G008",
-    "shape": "mixed"
-  },
-  {
-    "lib": "G009-Shorodok Dmitry",
-    "name": "Shorodok G009",
-    "shape": "mixed"
-  },
-  {
-    "lib": "Maxxima",
-    "name": "Maxxima",
-    "shape": "mixed"
-  },
-  {
-    "lib": "JO 2026",
-    "name": "JO 2026",
-    "shape": "square"
-  },
-  {
-    "lib": "JO 2026 SMOOTH",
-    "name": "JO 2026 Smooth",
-    "shape": "square"
-  }
+  { "lib": "BRYAN AVELAR - X1", "name": "Avelar X1", "shape": "mixed" },
+  { "lib": "BRYAN AVELAR - X2", "name": "Avelar X2", "shape": "mixed" },
+  { "lib": "BRYAN AVELAR - X3", "name": "Avelar X3", "shape": "mixed" },
+  { "lib": "BRYAN AVELAR - X4", "name": "Avelar X4", "shape": "mixed" },
+  { "lib": "DA507", "name": "DA507", "shape": "mixed" },
+  { "lib": "DT.Salloum R1", "name": "Salloum R1", "shape": "mixed" },
+  { "lib": "JO 2026", "name": "JO 2026", "shape": "square" },
+  { "lib": "JO 2026 SMOOTH", "name": "JO 2026 Smooth", "shape": "square" },
+  { "lib": "G010-Shorodok Dmitry", "name": "Shorodok G010", "shape": "mixed" },
+  { "lib": "G011-Shorodok Dmitry", "name": "Shorodok G011", "shape": "mixed" },
+  { "lib": "G013-Shorodok Dmitry", "name": "Shorodok G013", "shape": "mixed" }
 ]
