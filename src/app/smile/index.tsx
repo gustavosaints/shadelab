@@ -73,6 +73,9 @@ type CompareMode = 'edit' | 'curtain' | 'side' | 'variants';
 /** Identifica uma boca (pontos arredondados) para saber se os dentes já foram encaixados nela. */
 const mouthSignature = (mouth: SmileParams['mouth']) => (mouth ? mouth.map((m) => `${m.x.toFixed(3)},${m.y.toFixed(3)}`).join(';') : null);
 
+/** Marca visível da versão do código em execução (confere se o Expo Go recarregou). */
+const BUILD_TAG = 'v15/10 16:40';
+
 const STEPS: { id: Step; label: string }[] = [
   { id: 'foto', label: '1 Foto' },
   { id: 'boca', label: '2 Boca' },
@@ -134,7 +137,7 @@ export default function Smile() {
   const zoomStart = useRef(zoom);
   const pendingDetect = useRef<Photo | null>(null);
   /** Assinatura da boca para a qual os dentes já foram encaixados (evita arco com tamanho padrão na boca). */
-  const fittedMouth = useRef<string | null>(null);
+  const [fittedMouth, setFittedMouth] = useState<string | null>(null);
   const fitting = useRef(false);
 
   const system = getSystem(settings.shadeSystem);
@@ -173,7 +176,7 @@ export default function Smile() {
       );
       setPhoto({ uri: c.photoUri, width: size.w, height: size.h });
       setParams(c.params);
-      fittedMouth.current = mouthSignature(c.params.mouth); // caso salvo já foi encaixado
+      setFittedMouth(mouthSignature(c.params.mouth)); // caso salvo já foi encaixado
       setTargetShade(c.targetShade);
       setPatientName(c.patientName === 'Sem nome' ? '' : c.patientName);
       setNotes(c.notes);
@@ -195,7 +198,7 @@ export default function Smile() {
     setCreatedAt(null);
     setPhoto({ ...p, uri });
     setParams(DEFAULT_SMILE_PARAMS);
-    fittedMouth.current = null;
+    setFittedMouth(null);
     setFace(null);
     setSelection({ kind: 'none' });
     setVariants([]);
@@ -259,7 +262,8 @@ export default function Smile() {
   /** Parâmetros com o arco encaixado na boca (72% entre as comissuras, gengiva sob o lábio). */
   const archFittedParams = (base: SmileParams): SmileParams => {
     if (!base.mouth || !area.width) return base;
-    const cur = anatomy ? layoutAnatomy(base, anatomy, area.width, area.height) : layoutTeeth(base, area.width, area.height);
+    const def = anatomyOf(base.anatomy);
+    const cur = def ? layoutAnatomy(base, def, area.width, area.height) : layoutTeeth(base, area.width, area.height);
     const t23 = cur.find((t) => t.fdi === '23');
     const t11 = cur.find((t) => t.fdi === '11');
     if (!t23 || !t11) return base;
@@ -274,9 +278,10 @@ export default function Smile() {
   const fitTeeth = async () => {
     if (!photo || !params.mouth || !area.width || fitting.current) return;
     fitting.current = true;
-    fittedMouth.current = mouthSignature(params.mouth);
+    setFittedMouth(mouthSignature(params.mouth));
     setDetecting('Encaixando os dentes na boca…');
     const byMouth = archFittedParams({ ...params, edits: undefined });
+    setParams(byMouth); // já aplica a largura pela boca; a análise de pixels (abaixo) só refina
     try {
       const fit = await fitTeethToPhoto(photo, params.mouth, face?.philtrum.x ?? params.midlineX, byMouth);
       if (fit && fit.fit.confidence >= 0.6) {
@@ -306,10 +311,11 @@ export default function Smile() {
   // largura da FOTO), gigante numa foto de rosto inteiro.
   useEffect(() => {
     if (step === 'foto' || step === 'boca' || !photo || !params.mouth || !area.width || detecting) return;
-    if (fittedMouth.current === mouthSignature(params.mouth)) return;
-    fitTeeth();
+    if (fittedMouth === mouthSignature(params.mouth)) return;
+    const t = setTimeout(() => fitTeeth(), 0);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, params.mouth, area.width, detecting]);
+  }, [step, params.mouth, area.width, detecting, fittedMouth]);
 
   // ----- Foto vinda da câmera guiada e detecção automática ao medir a área -----
   useFocusEffect(
@@ -347,7 +353,7 @@ export default function Smile() {
     if (!d) return;
     setPhoto(d.photo);
     setParams(d.params);
-    fittedMouth.current = mouthSignature(d.params.mouth);
+    setFittedMouth(mouthSignature(d.params.mouth));
     setTargetShade(d.targetShade);
     if (d.face) setFace(d.face);
     if (d.centralsWidthMm) setCentralsWidthMm(d.centralsWidthMm);
@@ -744,6 +750,11 @@ export default function Smile() {
           )}
         </View>
       </View>
+      {!exporting && step !== 'foto' && area.width > 0 && (
+        <Text style={styles.diag}>
+          {`${BUILD_TAG} · central ${(params.centralWidth * 100).toFixed(1)}% da foto${mouthWPx ? ` = ${Math.round(centralOfMouth * 100)}% da boca (boca ${Math.round((mouthWPx / area.width) * 100)}% da foto)` : ' · sem boca'} · área ${Math.round(area.width)}×${Math.round(area.height)} · zoom ${zoom.scale.toFixed(1)} · ${anatomy ? anatomy.name : 'contorno'} · encaixe ${fittedMouth === mouthSignature(params.mouth) ? 'ok' : 'pendente'}`}
+        </Text>
+      )}
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.stepBar} contentContainerStyle={{ paddingHorizontal: spacing.sm, alignItems: 'center' }}>
         <Pressable onPress={undo} disabled={!history.past.length} style={[styles.histBtn, !history.past.length && { opacity: 0.3 }]} hitSlop={6}>
@@ -816,14 +827,14 @@ export default function Smile() {
               </ScrollView>
               <SectionTitle>Anatomia</SectionTitle>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <Pressable onPress={() => set({ anatomy: undefined })} style={[styles.anatomyCard, !anatomy && styles.anatomyCardSelected]}>
+                <Pressable onPress={() => setParams(archFittedParams({ ...params, anatomy: undefined, edits: undefined }))} style={[styles.anatomyCard, !anatomy && styles.anatomyCardSelected]}>
                   <View style={styles.anatomyThumbPlaceholder}>
                     <Text style={styles.anatomyGlyph}>◠◠</Text>
                   </View>
                   <Text style={styles.anatomyName}>Contorno</Text>
                 </Pressable>
                 {ANATOMY_CATALOG.map((a) => (
-                  <Pressable key={a.id} onPress={() => set({ anatomy: a.id })} style={[styles.anatomyCard, anatomy?.id === a.id && styles.anatomyCardSelected]}>
+                  <Pressable key={a.id} onPress={() => setParams(archFittedParams({ ...params, anatomy: a.id, edits: undefined }))} style={[styles.anatomyCard, anatomy?.id === a.id && styles.anatomyCardSelected]}>
                     <Image source={a.thumb} style={styles.anatomyThumb} resizeMode="contain" />
                     <Text style={styles.anatomyName} numberOfLines={1}>
                       {a.name}
@@ -1087,6 +1098,7 @@ const styles = StyleSheet.create({
   curtainTagText: { color: '#fff', fontWeight: '800', fontSize: 11 },
   detecting: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.55)', padding: 8, alignItems: 'center' },
   detectingText: { color: '#fff', fontWeight: '700', fontSize: 12, textAlign: 'center' },
+  diag: { fontSize: 10, color: colors.muted, textAlign: 'center', paddingHorizontal: spacing.sm, paddingTop: 4 },
   zoomBadge: { position: 'absolute', right: 8, top: 8, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.sm },
   zoomBadgeText: { color: '#fff', fontWeight: '700', fontSize: 12 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 },
