@@ -171,13 +171,13 @@ export const ANATOMY_CATALOG: AnatomyDef[] = [
       gloss: require('../../../assets/anatomia/jo-2026/central-gloss.png'),
     },
     lateral: {
-      width: 208, height: 303, wMm: 7.427, hMm: 10.889, offsetX: -7.577, offsetY: 0.8,
+      width: 208, height: 293, wMm: 7.427, hMm: 10.506, offsetX: -7.577, offsetY: 0.8,
       fill: require('../../../assets/anatomia/jo-2026/lateral-fill.png'),
       shade: require('../../../assets/anatomia/jo-2026/lateral-shade.png'),
       gloss: require('../../../assets/anatomia/jo-2026/lateral-gloss.png'),
     },
     canine: {
-      width: 228, height: 325, wMm: 8.155, hMm: 11.682, offsetX: -15.883, offsetY: 0,
+      width: 228, height: 331, wMm: 8.155, hMm: 11.919, offsetX: -15.883, offsetY: 0,
       fill: require('../../../assets/anatomia/jo-2026/canine-fill.png'),
       shade: require('../../../assets/anatomia/jo-2026/canine-shade.png'),
       gloss: require('../../../assets/anatomia/jo-2026/canine-gloss.png'),
@@ -197,13 +197,13 @@ export const ANATOMY_CATALOG: AnatomyDef[] = [
       gloss: require('../../../assets/anatomia/jo-2026-smooth/central-gloss.png'),
     },
     lateral: {
-      width: 208, height: 303, wMm: 7.439, hMm: 10.889, offsetX: -7.589, offsetY: 0.8,
+      width: 208, height: 293, wMm: 7.439, hMm: 10.506, offsetX: -7.589, offsetY: 0.8,
       fill: require('../../../assets/anatomia/jo-2026-smooth/lateral-fill.png'),
       shade: require('../../../assets/anatomia/jo-2026-smooth/lateral-shade.png'),
       gloss: require('../../../assets/anatomia/jo-2026-smooth/lateral-gloss.png'),
     },
     canine: {
-      width: 227, height: 325, wMm: 8.104, hMm: 11.682, offsetX: -15.843, offsetY: 0,
+      width: 227, height: 331, wMm: 8.104, hMm: 11.919, offsetX: -15.843, offsetY: 0,
       fill: require('../../../assets/anatomia/jo-2026-smooth/canine-fill.png'),
       shade: require('../../../assets/anatomia/jo-2026-smooth/canine-shade.png'),
       gloss: require('../../../assets/anatomia/jo-2026-smooth/canine-gloss.png'),

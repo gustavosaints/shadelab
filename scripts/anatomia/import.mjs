@@ -14,6 +14,9 @@ import path from 'node:path';
 
 const SRC = process.argv[2] ?? 'C:/exocad-DentalCAD3.3-SR1-2026-01-16/DentalCADApp/library/teeth';
 const DST = path.resolve('reference/anatomia');
+/** Pasta irmã "metadata" da biblioteca do exocad: guarda o XML do arco e a prévia de várias bibliotecas. */
+const META = path.join(SRC, '..', 'metadata');
+const withoutXml = [];
 
 const meshCandidates = (lib, n) => [
   path.join(lib, 'upperjaw', `${n}.eoff`),
@@ -27,7 +30,6 @@ for (const name of fs.readdirSync(SRC)) {
   const lib = path.join(SRC, name);
   if (!fs.statSync(lib).isDirectory()) continue;
   const meshes = [1, 2, 3].map((n) => meshCandidates(lib, n).find((p) => fs.existsSync(p)));
-  const xml = path.join(lib, 'upperjaw.xml');
   if (meshes.some((m) => !m)) {
     skipped.push(name);
     continue;
@@ -35,13 +37,18 @@ for (const name of fs.readdirSync(SRC)) {
   const out = path.join(DST, name, 'upperjaw');
   fs.mkdirSync(out, { recursive: true });
   meshes.forEach((m, i) => fs.copyFileSync(m, path.join(out, `${i + 1}${path.extname(m).toLowerCase()}`)));
-  // o XML do arco é opcional: sem ele, o renderizador alinha os dentes pelo próprio referencial da malha
-  if (fs.existsSync(xml)) fs.copyFileSync(xml, path.join(DST, name, 'upperjaw.xml'));
+  // XML do arco: na própria biblioteca ou em library/metadata/<nome>/ (muitas só têm lá). Sem nenhum dos dois,
+  // o renderizador alinha os dentes pelo próprio referencial da malha.
+  const xmlCandidates = [path.join(lib, 'upperjaw.xml'), path.join(META, name, 'upperjaw.xml')];
+  const xml = xmlCandidates.find((p) => fs.existsSync(p));
+  if (xml) fs.copyFileSync(xml, path.join(DST, name, 'upperjaw.xml'));
+  else withoutXml.push(name);
   for (const extra of ['preview.png', 'upperjaw/1.png', 'upperjaw/2.png', 'upperjaw/3.png']) {
-    const p = path.join(lib, extra);
-    if (fs.existsSync(p)) fs.copyFileSync(p, path.join(DST, name, extra));
+    const p = [path.join(lib, extra), path.join(META, name, extra), path.join(META, name, extra.toUpperCase())].find((c) => fs.existsSync(c));
+    if (p) fs.copyFileSync(p, path.join(DST, name, extra));
   }
   copied++;
 }
 console.log(`Copiadas ${copied} bibliotecas para ${DST}`);
+console.log(`Sem XML do arco (alinhadas pela malha): ${withoutXml.length}${withoutXml.length ? ' → ' + withoutXml.join(' | ') : ''}`);
 console.log(`Puladas (${skipped.length}, sem malha legível): ${skipped.join(' | ')}`);
