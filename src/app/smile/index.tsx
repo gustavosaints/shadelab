@@ -57,7 +57,7 @@ import {
   type ToothEdit,
 } from '@/lib/smile/teeth';
 import { getCase, isSmileCase, newCaseId, persistPhoto, saveCase, type SmileVariant } from '@/lib/storage/cases';
-import { clearSmileDraft, loadSmileDraft, saveSmileDraft } from '@/lib/storage/draft';
+import { clearSmileDraft, loadSmileDraft, saveSmileDraft, type SmileDraft } from '@/lib/storage/draft';
 import { useSettings } from '@/lib/useSettings';
 import { colors, radius, spacing } from '@/theme';
 
@@ -290,8 +290,9 @@ export default function Smile() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [area.width, photo?.uri]);
 
-  // ----- Rascunho automático: recupera ao abrir (sem caseId) e grava a cada alteração -----
+  // ----- Rascunho automático: só segurança. Não abre sozinho; é oferecido na tela inicial do Smile Design. -----
   const hydrated = useRef(false);
+  const [draft, setDraft] = useState<SmileDraft | null>(null);
   useEffect(() => {
     if (caseId) {
       hydrated.current = true;
@@ -299,25 +300,27 @@ export default function Smile() {
     }
     (async () => {
       const d = await loadSmileDraft();
-      if (d && d.photo?.uri) {
-        setPhoto(d.photo);
-        setParams(d.params);
-        setTargetShade(d.targetShade);
-        if (d.face) setFace(d.face);
-        if (d.centralsWidthMm) setCentralsWidthMm(d.centralsWidthMm);
-        setVariants(d.variants ?? []);
-        setPatientName(d.patientName ?? '');
-        setNotes(d.notes ?? '');
-        setEditingId(d.editingId ?? null);
-        setCreatedAt(d.createdAt ?? null);
-        const s = STEPS.find((x) => x.id === d.step)?.id ?? 'ajustar';
-        setStep(s === 'foto' ? 'boca' : s);
-        setDetectNote('Rascunho recuperado de onde você parou. Para começar outro, use "Fotografar com guia" ou "Galeria" no passo 1.');
-      }
+      if (d && d.photo?.uri) setDraft(d);
       hydrated.current = true;
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [caseId]);
+  const resumeDraft = () => {
+    const d = draft;
+    if (!d) return;
+    setPhoto(d.photo);
+    setParams(d.params);
+    setTargetShade(d.targetShade);
+    if (d.face) setFace(d.face);
+    if (d.centralsWidthMm) setCentralsWidthMm(d.centralsWidthMm);
+    setVariants(d.variants ?? []);
+    setPatientName(d.patientName ?? '');
+    setNotes(d.notes ?? '');
+    setEditingId(d.editingId ?? null);
+    setCreatedAt(d.createdAt ?? null);
+    const s = STEPS.find((x) => x.id === d.step)?.id ?? 'ajustar';
+    setStep(s === 'foto' ? 'boca' : s);
+    setDraft(null);
+  };
   useEffect(() => {
     if (!hydrated.current || !photo) return;
     const t = setTimeout(() => {
@@ -568,6 +571,26 @@ export default function Smile() {
           <Button title="Fotografar com guia" onPress={() => router.push('/smile/capture')} style={{ marginTop: 12 }} />
           <Button title="Escolher da galeria" variant="secondary" onPress={pickFromGallery} style={{ marginTop: 8 }} />
         </Card>
+        {draft && (
+          <Card>
+            <SectionTitle>Rascunho não salvo</SectionTitle>
+            <Muted>
+              {`Há uma simulação de ${new Date(draft.updatedAt).toLocaleString('pt-BR')} que não foi salva em Casos${
+                draft.editingId ? ' (edição de um caso existente)' : ''
+              }. Quer continuar de onde parou?`}
+            </Muted>
+            <View style={styles.chips}>
+              <Chip label="Continuar rascunho" selected onPress={resumeDraft} />
+              <Chip
+                label="Descartar"
+                onPress={async () => {
+                  await clearSmileDraft();
+                  setDraft(null);
+                }}
+              />
+            </View>
+          </Card>
+        )}
       </ScrollView>
     );
   }
