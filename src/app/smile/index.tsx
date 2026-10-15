@@ -40,7 +40,7 @@ import {
   setCentralWidthMm,
   type FacePoints,
 } from '@/lib/smile/frame';
-import { defaultMouth, fitToMouth } from '@/lib/smile/mouth';
+import { addMouthPoint, defaultMouth, fitToMouth, removeMouthPoint } from '@/lib/smile/mouth';
 import { takePendingPhoto } from '@/lib/smile/pendingPhoto';
 import { applyScenario, SCENARIOS } from '@/lib/smile/scenarios';
 import {
@@ -688,6 +688,13 @@ export default function Smile() {
               )}
               {params.mouth && <Chip label="Remover contorno" onPress={() => set({ mouth: undefined })} />}
             </View>
+            {params.mouth && (
+              <View style={styles.chips}>
+                <Chip label="+ ponto lábio superior" onPress={() => params.mouth && set({ mouth: addMouthPoint(params.mouth, 'upper') })} />
+                <Chip label="+ ponto lábio inferior" onPress={() => params.mouth && set({ mouth: addMouthPoint(params.mouth, 'lower') })} />
+                {params.mouth.length > 6 && <Chip label="− ponto" onPress={() => params.mouth && set({ mouth: removeMouthPoint(params.mouth) })} />}
+              </View>
+            )}
             <Button title="Boca pronta: escolher forma e cor →" onPress={goToForma} style={{ marginTop: 8 }} />
           </Card>
         )}

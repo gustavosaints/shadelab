@@ -58,18 +58,91 @@ export function mouthPath(mouth: MouthPoint[], width: number, height: number, te
   return parts.join(' ');
 }
 
-/** Medidas úteis do contorno em px: cantos, centro e linha do lábio superior no meio. */
+/** Índices das comissuras: a direita do paciente é o ponto 0; a esquerda, o de maior x. */
+export function mouthCorners(mouth: MouthPoint[]): { r: number; l: number } {
+  let l = 0;
+  for (let i = 1; i < mouth.length; i++) if (mouth[i].x > mouth[l].x) l = i;
+  return { r: 0, l };
+}
+
+/**
+ * Acrescenta um ponto no lábio superior ou inferior, no meio do maior segmento daquele lábio,
+ * para refinar o contorno (funciona com qualquer número de pontos).
+ */
+export function addMouthPoint(mouth: MouthPoint[], lip: 'upper' | 'lower'): MouthPoint[] {
+  const { l } = mouthCorners(mouth);
+  const n = mouth.length;
+  // segmentos do lábio superior: 0→1→…→l ; inferior: l→…→n-1→0
+  const segs: number[] = [];
+  if (lip === 'upper') for (let i = 0; i < l; i++) segs.push(i);
+  else for (let i = l; i < n; i++) segs.push(i);
+  let best = segs[0];
+  let bestLen = -1;
+  for (const i of segs) {
+    const a = mouth[i];
+    const b = mouth[(i + 1) % n];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len > bestLen) {
+      bestLen = len;
+      best = i;
+    }
+  }
+  const a = mouth[best];
+  const b = mouth[(best + 1) % n];
+  const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  const out = [...mouth];
+  out.splice(best + 1, 0, mid);
+  return out;
+}
+
+/** Remove o ponto (que não seja comissura) cuja retirada menos altera o contorno. Mantém no mínimo 6. */
+export function removeMouthPoint(mouth: MouthPoint[]): MouthPoint[] {
+  if (mouth.length <= 6) return mouth;
+  const { r, l } = mouthCorners(mouth);
+  const n = mouth.length;
+  let best = -1;
+  let bestDev = Infinity;
+  for (let i = 0; i < n; i++) {
+    if (i === r || i === l) continue;
+    const a = mouth[(i - 1 + n) % n];
+    const b = mouth[(i + 1) % n];
+    const p = mouth[i];
+    // distância do ponto à reta entre os vizinhos
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy) || 1e-9;
+    const dev = Math.abs(dy * p.x - dx * p.y + b.x * a.y - b.y * a.x) / len;
+    if (dev < bestDev) {
+      bestDev = dev;
+      best = i;
+    }
+  }
+  if (best < 0) return mouth;
+  return mouth.filter((_, i) => i !== best);
+}
+
+/** Medidas úteis do contorno em px: cantos, centro e altura dos lábios no meio. */
 export function mouthBounds(mouth: MouthPoint[], width: number, height: number) {
   const px = mouth.map((p) => ({ x: p.x * width, y: p.y * height }));
-  const cornerR = px[0];
-  const cornerL = px[4];
+  const { r, l } = mouthCorners(mouth);
+  const cornerR = px[r];
+  const cornerL = px[l];
+  const centerX = (cornerR.x + cornerL.x) / 2;
+  // ponto do lábio superior (índices entre r e l) e inferior (os demais) mais próximos do centro
+  const nearest = (idx: number[]) => idx.reduce((b, i) => (Math.abs(px[i].x - centerX) < Math.abs(px[b].x - centerX) ? i : b), idx[0]);
+  const upperIdx: number[] = [];
+  const lowerIdx: number[] = [];
+  for (let i = 0; i < px.length; i++) {
+    if (i === r || i === l) continue;
+    (i > r && i < l ? upperIdx : lowerIdx).push(i);
+  }
   return {
     cornerR,
     cornerL,
-    centerX: (cornerR.x + cornerL.x) / 2,
+    centerX,
     widthPx: Math.hypot(cornerL.x - cornerR.x, cornerL.y - cornerR.y),
-    upperMidY: px[2].y,
-    lowerMidY: px[6].y,
+    upperMidY: upperIdx.length ? px[nearest(upperIdx)].y : cornerR.y,
+    lowerMidY: lowerIdx.length ? px[nearest(lowerIdx)].y : cornerR.y,
   };
 }
 

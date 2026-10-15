@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ANTERIORS_TO_MOUTH, defaultMouth, fitToMouth, mouthBounds, mouthPath } from '@/lib/smile/mouth';
+import { addMouthPoint, ANTERIORS_TO_MOUTH, defaultMouth, fitToMouth, mouthBounds, mouthCorners, mouthPath, removeMouthPoint } from '@/lib/smile/mouth';
 import { DEFAULT_SMILE_PARAMS, layoutTeeth } from '@/lib/smile/teeth';
 
 const W = 1000;
@@ -30,6 +30,26 @@ describe('mouth', () => {
     expect(d.endsWith('Z')).toBe(true);
     expect((d.match(/C /g) ?? []).length).toBe(8);
     expect(mouthPath([{ x: 0, y: 0 }], W, H)).toBe('');
+  });
+
+  it('acrescenta e remove pontos mantendo as comissuras', () => {
+    const m = defaultMouth(teeth, W, H);
+    expect(mouthCorners(m)).toEqual({ r: 0, l: 4 });
+    const up = addMouthPoint(m, 'upper');
+    expect(up).toHaveLength(9);
+    expect(mouthCorners(up).l).toBe(5); // a comissura esquerda andou um índice
+    const low = addMouthPoint(up, 'lower');
+    expect(low).toHaveLength(10);
+    expect(mouthCorners(low)).toEqual({ r: 0, l: 5 });
+    // os pontos novos ficam no meio de um segmento do lábio certo
+    expect(up[1].y).toBeLessThan(m[0].y);
+    const b1 = mouthBounds(m, W, H);
+    const b2 = mouthBounds(low, W, H);
+    expect(b2.widthPx).toBeCloseTo(b1.widthPx, 6);
+    expect(b2.upperMidY).toBeCloseTo(b1.upperMidY, 6);
+    const less = removeMouthPoint(low);
+    expect(less).toHaveLength(9);
+    expect(removeMouthPoint(removeMouthPoint(removeMouthPoint(removeMouthPoint(less))))).toHaveLength(6);
   });
 
   it('encaixa o arco na boca: linha média no centro e largura proporcional', () => {

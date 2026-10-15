@@ -61,10 +61,10 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   `Settings.aiApiKey`, só no aparelho; a tela avisa que a foto sai do aparelho. Resultado gravado no cache e salvo
   como `SmileCase` com `aiStyle`. Ainda não testado com chave real.
 - `assets/anatomia/<id>/` sprites por anatomia: `{central,lateral,canine}-{fill,shade,gloss}.png` + `thumb.png`.
-  Tudo é desenhado dentro do SVG (`components/AnatomyOverlay.tsx` → `AnatomyTeeth`): `fill` (branco) vira `Mask` de
-  luminância de um `Rect` com a cor-alvo; `shade` (preto) e `gloss` (branco) só têm alfa e entram como `Image`.
-  Assim a cor escolhida domina, o sombreamento é preservado e o recorte da boca vale para tudo. Dentes 21–23 =
-  espelho (`transform` scale(-1 1)). Se `Mask` com `Image` falhar no Expo Go, alternativa: `@react-native-masked-view`.
+  Desenho (`components/AnatomyOverlay.tsx` → `AnatomyLayer`): imagens NATIVAS (`Image` com `tintColor` para o
+  `fill`, mais `shade` e `gloss` por cima), porque `Mask` com `Image` do react-native-svg NÃO renderizou no iPhone
+  (Gustavo viu a biblioteca sumir). O recorte pela boca da camada nativa é feito com `@react-native-masked-view`
+  no `SmileOverlay`; o modo contorno continua em SVG com `ClipPath`. Dentes 21–23 = `scaleX: -1`.
   Cada dente é renderizado no seu próprio referencial (vista vestibular com giro leve: lateral 10°, canino 24°) e com
   a fatia distal esmaecida (lateral 10%, canino 30%), para a largura visível bater com uma foto; o layout põe os
   dentes lado a lado por contato (`offsetX` do catálogo não é usado). A versão anterior (rotação real do arco)

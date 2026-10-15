@@ -1,6 +1,6 @@
 import Svg, { Path } from 'react-native-svg';
 import { Handle } from '@/components/Handle';
-import { mouthPath } from '@/lib/smile/mouth';
+import { mouthCorners, mouthPath } from '@/lib/smile/mouth';
 import type { MouthPoint } from '@/lib/smile/teeth';
 
 type Props = {
@@ -17,6 +17,7 @@ type Props = {
 /** Contorno da boca com oito pontos arrastáveis: comissuras, lábio superior e inferior. */
 export function MouthOutline({ mouth, width, height, onChange, readOnly, hideLine }: Props) {
   if (width <= 0 || height <= 0) return null;
+  const corners = mouthCorners(mouth);
   const move = (i: number) => (dx: number, dy: number) => {
     const next = mouth.map((p, k) =>
       k === i ? { x: Math.min(1, Math.max(0, p.x + dx / width)), y: Math.min(1, Math.max(0, p.y + dy / height)) } : p,
@@ -36,7 +37,7 @@ export function MouthOutline({ mouth, width, height, onChange, readOnly, hideLin
             key={i}
             x={p.x * width}
             y={p.y * height}
-            glyph={i === 0 || i === 4 ? '◆' : '•'}
+            glyph={i === corners.r || i === corners.l ? '◆' : '•'}
             size={18}
             color="#E53935"
             onMove={move(i)}
