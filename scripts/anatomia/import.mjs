@@ -28,14 +28,15 @@ for (const name of fs.readdirSync(SRC)) {
   if (!fs.statSync(lib).isDirectory()) continue;
   const meshes = [1, 2, 3].map((n) => meshCandidates(lib, n).find((p) => fs.existsSync(p)));
   const xml = path.join(lib, 'upperjaw.xml');
-  if (meshes.some((m) => !m) || !fs.existsSync(xml)) {
+  if (meshes.some((m) => !m)) {
     skipped.push(name);
     continue;
   }
   const out = path.join(DST, name, 'upperjaw');
   fs.mkdirSync(out, { recursive: true });
   meshes.forEach((m, i) => fs.copyFileSync(m, path.join(out, `${i + 1}${path.extname(m).toLowerCase()}`)));
-  fs.copyFileSync(xml, path.join(DST, name, 'upperjaw.xml'));
+  // o XML do arco é opcional: sem ele, o renderizador alinha os dentes pelo próprio referencial da malha
+  if (fs.existsSync(xml)) fs.copyFileSync(xml, path.join(DST, name, 'upperjaw.xml'));
   for (const extra of ['preview.png', 'upperjaw/1.png', 'upperjaw/2.png', 'upperjaw/3.png']) {
     const p = path.join(lib, extra);
     if (fs.existsSync(p)) fs.copyFileSync(p, path.join(DST, name, extra));

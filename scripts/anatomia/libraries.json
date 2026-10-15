@@ -28,5 +28,15 @@
     "lib": "Maxxima",
     "name": "Maxxima",
     "shape": "mixed"
+  },
+  {
+    "lib": "JO 2026",
+    "name": "JO 2026",
+    "shape": "square"
+  },
+  {
+    "lib": "JO 2026 SMOOTH",
+    "name": "JO 2026 Smooth",
+    "shape": "square"
   }
 ]

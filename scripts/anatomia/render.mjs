@@ -375,15 +375,42 @@ function blit(dst, dw, src, sw, sh, ox, oy) {
   }
 }
 
+/** Níveis verticais sem XML do arco: no referencial da malha (z = incisal), incisal = topo da malha. */
+function localLevels(lib, spec) {
+  const m = readMesh(meshFile(lib, spec.file));
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+  for (let i = 2; i < m.positions.length; i += 3) {
+    if (m.positions[i] < minZ) minZ = m.positions[i];
+    if (m.positions[i] > maxZ) maxZ = m.positions[i];
+  }
+  // eixo "para cima" do sprite = -z: incisal fica em -maxZ e o colo em -minZ
+  return { incisal: -maxZ, top: -minZ };
+}
+
 function renderLibrary(lib) {
-  const bow = readToothBow(path.join(REF, lib, 'upperjaw.xml'));
-  for (const n of ['11', '12', '13', '21', '22', '16', '26']) if (!bow[n]) throw new Error(`${lib}: XML sem dente ${n}`);
-  const arch = archFrame(bow);
-  // escala: o central fica com CENTRAL_PX de altura
+  const xmlPath = path.join(REF, lib, 'upperjaw.xml');
+  let bow = null;
+  let arch = null;
+  if (fs.existsSync(xmlPath)) {
+    const b = readToothBow(xmlPath);
+    if (['11', '12', '13', '21', '22', '16', '26'].every((n) => b[n])) {
+      bow = b;
+      arch = archFrame(b);
+    }
+  }
   // níveis no arco: linha da gengiva comum = incisal do central + altura da coroa; cada dente mantém
-  // a altura entre a sua incisal e essa linha (menos o zênite), e o sprite registra o deslocamento vertical
+  // a altura entre a sua incisal e essa linha (menos o zênite), e o sprite registra o deslocamento vertical.
+  // Sem XML, os três dentes são alinhados pela incisal no referencial de cada malha.
   const levels = {};
-  for (const spec of KINDS) levels[spec.kind] = archLevels(lib, spec, bow, arch);
+  for (const spec of KINDS) levels[spec.kind] = bow ? archLevels(lib, spec, bow, arch) : localLevels(lib, spec);
+  if (!bow) {
+    const base = levels.central.incisal;
+    for (const k of Object.keys(levels)) {
+      const h = levels[k].top - levels[k].incisal;
+      levels[k] = { incisal: base, top: base + h };
+    }
+  }
   const probe = renderTooth(lib, KINDS[0], 4);
   const crown = crownHeight(probe);
   const ppm = CENTRAL_PX / crown;
@@ -477,7 +504,7 @@ if (flag('--occlusal')) {
   console.log('vista oclusal (frente do arco em cima; esquerda da imagem = lado direito do paciente):', out);
 } else if (flag('--previews')) {
   const only = opt('--only')?.split(',').map((s) => s.trim());
-  const libs = fs.readdirSync(REF).filter((d) => fs.existsSync(path.join(REF, d, 'upperjaw.xml')) && (!only || only.includes(d)));
+  const libs = fs.readdirSync(REF).filter((d) => fs.statSync(path.join(REF, d)).isDirectory() && meshFile(d, 1) && (!only || only.includes(d)));
   fs.mkdirSync(PREVIEWS, { recursive: true });
   const ok = [];
   for (const lib of libs) {
