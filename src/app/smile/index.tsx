@@ -57,6 +57,7 @@ import {
   type ToothEdit,
 } from '@/lib/smile/teeth';
 import { getCase, isSmileCase, newCaseId, persistPhoto, saveCase, type SmileVariant } from '@/lib/storage/cases';
+import { clearSmileDraft, loadSmileDraft, saveSmileDraft } from '@/lib/storage/draft';
 import { useSettings } from '@/lib/useSettings';
 import { colors, radius, spacing } from '@/theme';
 
@@ -176,8 +177,12 @@ export default function Smile() {
     })();
   }, [caseId]);
 
-  const startWithPhoto = (p: Photo) => {
-    setPhoto(p);
+  const startWithPhoto = async (p: Photo) => {
+    // guarda uma cópia durável da foto (a da câmera fica no cache e pode sumir) para o rascunho
+    const uri = await persistPhoto(p.uri, 'draft-smile');
+    setEditingId(null);
+    setCreatedAt(null);
+    setPhoto({ ...p, uri });
     setParams(DEFAULT_SMILE_PARAMS);
     setFace(null);
     setSelection({ kind: 'none' });
@@ -187,7 +192,7 @@ export default function Smile() {
     setZoom({ scale: 1, tx: 0, ty: 0 });
     chooseShade(targetShade);
     setStep('boca');
-    pendingDetect.current = p; // detecção automática assim que a área da foto estiver medida
+    pendingDetect.current = { ...p, uri }; // detecção automática assim que a área da foto estiver medida
   };
 
   const pickFromGallery = async () => {
@@ -284,6 +289,54 @@ export default function Smile() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [area.width, photo?.uri]);
+
+  // ----- Rascunho automático: recupera ao abrir (sem caseId) e grava a cada alteração -----
+  const hydrated = useRef(false);
+  useEffect(() => {
+    if (caseId) {
+      hydrated.current = true;
+      return;
+    }
+    (async () => {
+      const d = await loadSmileDraft();
+      if (d && d.photo?.uri) {
+        setPhoto(d.photo);
+        setParams(d.params);
+        setTargetShade(d.targetShade);
+        if (d.face) setFace(d.face);
+        if (d.centralsWidthMm) setCentralsWidthMm(d.centralsWidthMm);
+        setVariants(d.variants ?? []);
+        setPatientName(d.patientName ?? '');
+        setNotes(d.notes ?? '');
+        setEditingId(d.editingId ?? null);
+        setCreatedAt(d.createdAt ?? null);
+        const s = STEPS.find((x) => x.id === d.step)?.id ?? 'ajustar';
+        setStep(s === 'foto' ? 'boca' : s);
+        setDetectNote('Rascunho recuperado de onde você parou. Para começar outro, use "Fotografar com guia" ou "Galeria" no passo 1.');
+      }
+      hydrated.current = true;
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (!hydrated.current || !photo) return;
+    const t = setTimeout(() => {
+      saveSmileDraft({
+        photo,
+        params,
+        targetShade,
+        step,
+        face: face ?? undefined,
+        centralsWidthMm,
+        variants,
+        patientName,
+        notes,
+        editingId: editingId ?? undefined,
+        createdAt: createdAt ?? undefined,
+      });
+    }, 400);
+    return () => clearTimeout(t);
+  }, [photo, params, targetShade, step, face, centralsWidthMm, variants, patientName, notes, editingId, createdAt]);
 
   // ----- Layout atual -----
   const teeth = !area.width ? [] : anatomy ? layoutAnatomy(params, anatomy, area.width, area.height) : layoutTeeth(params, area.width, area.height);
@@ -467,6 +520,7 @@ export default function Smile() {
             }
           : undefined,
       });
+      await clearSmileDraft();
       router.dismissTo({ pathname: '/cases/[id]', params: { id } });
     } catch (e) {
       Alert.alert('Erro ao salvar', String(e));
@@ -474,6 +528,26 @@ export default function Smile() {
       setBusy(false);
     }
   };
+
+  const discardDraft = () =>
+    Alert.alert('Começar do zero', 'Descartar o rascunho atual? O que não foi salvo no caso será perdido.', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Descartar',
+        style: 'destructive',
+        onPress: async () => {
+          await clearSmileDraft();
+          setPhoto(null);
+          setParams(DEFAULT_SMILE_PARAMS);
+          setFace(null);
+          setVariants([]);
+          setEditingId(null);
+          setCreatedAt(null);
+          setDetectNote(null);
+          setStep('foto');
+        },
+      },
+    ]);
 
   const goToForma = async () => {
     setStep('forma');
@@ -592,7 +666,9 @@ export default function Smile() {
               <Chip label="Espelhar foto" onPress={mirror} />
               <Chip label="Fotografar de novo" onPress={() => router.push('/smile/capture')} />
               <Chip label="Galeria" onPress={pickFromGallery} />
+              <Chip label="Começar do zero" onPress={discardDraft} />
             </View>
+            <Muted>O trabalho é guardado automaticamente como rascunho: ao sair e voltar, continua de onde parou.</Muted>
             <Button title="Ir para a boca →" variant="secondary" onPress={() => setStep('boca')} style={{ marginTop: 8 }} />
           </Card>
         )}
