@@ -258,8 +258,6 @@ export default function Smile() {
     const half = t23.x + t23.w - base.midlineX * area.width;
     return clampParams(fitToMouth(base, base.mouth, area.width, area.height, half, t11.h));
   };
-  const fitArchToMouth = () => setParams((p) => archFittedParams(p));
-
   /**
    * Encaixa os dentes na boca. A LARGURA vem sempre da geometria da boca (estável); a análise dos
    * pixels, quando confiável, só refina linha média, gengiva e comprimento (e as larguras relativas
