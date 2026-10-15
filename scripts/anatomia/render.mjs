@@ -44,32 +44,83 @@ const CENTRAL_PX = 320; // altura do central no sprite final
 const SS = 2; // supersampling
 
 // ---------- iluminação de estúdio (espaço da câmera: x direita, y cima, z para a câmera) ----------
+// Visual "porcelana de estúdio" (referência: renders do SmileFy): sombras bem marcadas nas faces proximais e no
+// colo, brilho principal nítido e um brilho largo vertical suave; as bordas escurecem (ângulos de linha visíveis).
 const LIGHTS = [
-  { dir: norm([-0.3, 0.45, 1.0]), diffuse: 0.7, specular: 0.3, shininess: 40 }, // principal, alto à esquerda
-  { dir: norm([-0.12, 0.1, 1.0]), diffuse: 0.0, specular: 0.2, shininess: 6 }, // softbox largo (brilho vertical suave)
-  { dir: norm([0.7, -0.1, 0.75]), diffuse: 0.3, specular: 0.08, shininess: 20 }, // preenchimento à direita
-  { dir: norm([0.1, 1.0, 0.4]), diffuse: 0.15, specular: 0.0, shininess: 1 }, // luz de cima
+  { dir: norm([-0.6, 0.55, 0.65]), diffuse: 0.9, specular: 0.5, shininess: 80 }, // principal, lateral alta à esquerda: modela o volume
+  { dir: norm([-0.15, -0.05, 1.0]), diffuse: 0.15, specular: 0.45, shininess: 50 }, // brilho frontal no terço médio
+  { dir: norm([-0.1, 0.2, 1.0]), diffuse: 0.0, specular: 0.2, shininess: 7 }, // softbox largo (sheen vertical)
+  { dir: norm([0.8, 0.0, 0.5]), diffuse: 0.25, specular: 0.1, shininess: 25 }, // preenchimento à direita
+  { dir: norm([0.1, 1.0, 0.4]), diffuse: 0.1, specular: 0.0, shininess: 1 }, // luz de cima
 ];
-const AMBIENT = 0.3;
-/** Escurecimento máximo pela sombra (a cor-alvo escolhida deve continuar dominando). */
-const SHADE_DEPTH = 0.55;
+const AMBIENT = 0.15;
+/** Escurecimento máximo pela sombra (a cor-alvo escolhida deve continuar dominando no corpo do dente). */
+const SHADE_DEPTH = 0.62;
 
 function shade(n) {
   const nz = Math.max(0, n[2]);
-  let d = AMBIENT + 0.06 * nz;
+  let d = AMBIENT;
   let s = 0;
   for (const l of LIGHTS) {
     const ndl = Math.max(0, dot(n, l.dir));
-    d += l.diffuse * ndl;
+    d += l.diffuse * Math.pow(ndl, 1.2);
     if (l.specular > 0 && ndl > 0) {
       const h = norm([l.dir[0], l.dir[1], l.dir[2] + 1]);
       s += l.specular * Math.pow(Math.max(0, dot(n, h)), l.shininess);
     }
   }
+  // bordas e faces de raspão escurecem (oclusão/ângulos de linha) e as faces proximais rolam para a sombra
+  d *= 0.35 + 0.65 * Math.pow(nz, 0.8);
+  d *= 1 - 0.35 * Math.pow(Math.abs(n[0]), 1.5);
   // leve efeito Fresnel nas bordas (o esmalte reflete mais de raspão)
-  s += 0.1 * Math.pow(1 - nz, 3);
-  const lit = Math.min(1, Math.pow(d, 0.9));
-  return { d: 1 - SHADE_DEPTH * (1 - lit), s: Math.min(0.85, s) };
+  s += 0.08 * Math.pow(1 - nz, 3);
+  // o corpo do dente fica na cor cheia; a sombra se concentra nas faces proximais, no colo e nas bordas
+  const t = Math.min(1, Math.max(0, (d - 0.22) / 0.6));
+  const lit = t * t * (3 - 2 * t);
+  return { d: 1 - SHADE_DEPTH * (1 - lit), s: Math.min(0.95, s * 1.4) };
+}
+
+/**
+ * Suaviza o campo de normais (caixa separável) só onde há superfície, para o sombreamento
+ * virar gradientes limpos em vez de manchas: as malhas vêm de escaneamento e têm ruído.
+ */
+function blurNormals(normals, front, width, height, radius) {
+  const has = (i) => front[i] !== -Infinity;
+  const passes = [normals, new Float32Array(normals.length)];
+  const dirs = [
+    [1, 0],
+    [0, 1],
+  ];
+  let src = passes[0];
+  let dst = passes[1];
+  for (const [dx, dy] of dirs) {
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = y * width + x;
+        if (!has(i)) continue;
+        let ax = 0;
+        let ay = 0;
+        let az = 0;
+        let k = 0;
+        for (let d = -radius; d <= radius; d++) {
+          const xx = x + dx * d;
+          const yy = y + dy * d;
+          if (xx < 0 || yy < 0 || xx >= width || yy >= height) continue;
+          const j = yy * width + xx;
+          if (!has(j)) continue;
+          ax += src[j * 3];
+          ay += src[j * 3 + 1];
+          az += src[j * 3 + 2];
+          k++;
+        }
+        dst[i * 3] = ax / k;
+        dst[i * 3 + 1] = ay / k;
+        dst[i * 3 + 2] = az / k;
+      }
+    }
+    [src, dst] = [dst, src];
+  }
+  return src;
 }
 
 /** Reduz uma imagem RGBA por um fator inteiro (média dos blocos). */
@@ -140,18 +191,18 @@ const crownHeight = (c) => Math.min(c.hMm, Math.max(1.3 * c.wMm, 11));
 /** Zênite gengival por dente (mm abaixo da linha do central): lateral um pouco mais baixo. */
 const ZENITH = { central: 0, lateral: 0.8, canine: 0 };
 /** Transição suave na margem gengival (mm). */
-const GUM_FADE_MM = 1.2;
+const GUM_FADE_MM = 0.7;
 
 /**
  * Ângulo de vista por dente (graus, girando da vestibular para a mesial). Cada dente é visto quase de
  * frente — como lado a lado no Smile Design — com um giro leve para o lateral e o canino não parecerem
  * "chapados". (A rotação real do arco, ~30° e ~50°, sobrepunha os dentes e estreitava demais o canino.)
  */
-const VIEW_ANGLE = { central: 0, lateral: 10, canine: 24 };
+const VIEW_ANGLE = { central: 0, lateral: 8, canine: 18 };
 /** Fração da largura do sprite cortada do lado distal (some no corredor bucal numa foto frontal). */
-const DISTAL_CROP = { central: 0, lateral: 0.1, canine: 0.3 };
-/** Esmaecimento longo a partir da borda distal cortada (fração da largura restante), para não ficar uma reta. */
-const DISTAL_FADE = { central: 0, lateral: 0.3, canine: 0.45 };
+const DISTAL_CROP = { central: 0, lateral: 0.04, canine: 0.16 };
+/** Esmaecimento a partir da borda distal cortada (fração da largura restante), curto para a forma ficar legível. */
+const DISTAL_FADE = { central: 0, lateral: 0.12, canine: 0.2 };
 
 /**
  * Níveis verticais de cada dente no arco (mm, eixo oclusal apontando para cima): borda incisal e topo
@@ -187,6 +238,8 @@ function renderTooth(lib, spec, ppm, keepMm) {
   const up = [0, 0, -1]; // superiores: incisal para baixo
   const right = norm(cross(toward, up));
   const r0 = rasterize(mesh, { right, up, toward }, ppm * SS, 2 * SS);
+  // normais suavizadas (~1,5% da largura) para gradientes limpos
+  const smoothN = blurNormals(r0.normals, r0.front, r0.width, r0.height, Math.max(2, Math.round(r0.width * 0.015)));
 
   // corte na linha da gengiva: descarta as linhas acima dela e esmaece a margem
   const cropTopMm = keepMm === undefined ? r0.bounds.maxY : Math.min(r0.bounds.maxY, r0.bounds.minY + keepMm);
@@ -216,7 +269,7 @@ function renderTooth(lib, spec, ppm, keepMm) {
     for (let x = 0; x < r.width; x++) {
       const i = rowOf(y) * r0.width + colOf(x);
       let n;
-      if (r.front[i] !== -Infinity) n = norm([r.normals[i * 3], r.normals[i * 3 + 1], r.normals[i * 3 + 2]]);
+      if (r.front[i] !== -Infinity) n = norm([smoothN[i * 3], smoothN[i * 3 + 1], smoothN[i * 3 + 2]]);
       else if (r.any[i] !== -Infinity) n = norm([-r.anyNormals[i * 3], -r.anyNormals[i * 3 + 1], -r.anyNormals[i * 3 + 2]]); // parede interna do colo aberto
       else continue;
       // corte plano do colo (face virada para cima): fica fora do sprite

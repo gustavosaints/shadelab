@@ -119,6 +119,10 @@ export default function Smile() {
   const [variants, setVariants] = useState<SmileVariant[]>([]);
   // zoom da vista (a foto e os dentes crescem juntos; os comandos continuam em px da vista ampliada)
   const [zoom, setZoom] = useState({ scale: 1, tx: 0, ty: 0 });
+  // desfazer / refazer: fotografias dos parâmetros, gravadas quando a edição dá uma pausa
+  const [history, setHistory] = useState<{ past: SmileParams[]; future: SmileParams[] }>({ past: [], future: [] });
+  const lastSnapshot = useRef<SmileParams | null>(null);
+  const skipSnapshot = useRef(false);
 
   const canvasRef = useRef<View>(null);
   const panesRef = useRef<View>(null);
@@ -190,6 +194,8 @@ export default function Smile() {
     setCompareMode('edit');
     setDetectNote(null);
     setZoom({ scale: 1, tx: 0, ty: 0 });
+    setHistory({ past: [], future: [] });
+    lastSnapshot.current = null;
     chooseShade(targetShade);
     setStep('boca');
     pendingDetect.current = { ...p, uri }; // detecção automática assim que a área da foto estiver medida
@@ -340,6 +346,36 @@ export default function Smile() {
     }, 400);
     return () => clearTimeout(t);
   }, [photo, params, targetShade, step, face, centralsWidthMm, variants, patientName, notes, editingId, createdAt]);
+
+  // ----- Histórico para desfazer/refazer (uma fotografia a cada pausa de 500 ms na edição) -----
+  useEffect(() => {
+    if (!photo) return;
+    if (skipSnapshot.current) {
+      skipSnapshot.current = false;
+      lastSnapshot.current = params;
+      return;
+    }
+    const t = setTimeout(() => {
+      const prev = lastSnapshot.current;
+      if (prev && prev !== params) setHistory((h) => ({ past: [...h.past.slice(-49), prev], future: [] }));
+      lastSnapshot.current = params;
+    }, 500);
+    return () => clearTimeout(t);
+  }, [params, photo]);
+  const undo = () => {
+    if (!history.past.length) return;
+    const prev = history.past[history.past.length - 1];
+    skipSnapshot.current = true;
+    setHistory({ past: history.past.slice(0, -1), future: [params, ...history.future] });
+    setParams(prev);
+  };
+  const redo = () => {
+    if (!history.future.length) return;
+    const next = history.future[0];
+    skipSnapshot.current = true;
+    setHistory({ past: [...history.past, params], future: history.future.slice(1) });
+    setParams(next);
+  };
 
   // ----- Layout atual -----
   const teeth = !area.width ? [] : anatomy ? layoutAnatomy(params, anatomy, area.width, area.height) : layoutTeeth(params, area.width, area.height);
@@ -673,6 +709,13 @@ export default function Smile() {
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.stepBar} contentContainerStyle={{ paddingHorizontal: spacing.sm, alignItems: 'center' }}>
+        <Pressable onPress={undo} disabled={!history.past.length} style={[styles.histBtn, !history.past.length && { opacity: 0.3 }]} hitSlop={6}>
+          <Text style={styles.histText}>↶</Text>
+        </Pressable>
+        <Pressable onPress={redo} disabled={!history.future.length} style={[styles.histBtn, !history.future.length && { opacity: 0.3 }]} hitSlop={6}>
+          <Text style={styles.histText}>↷</Text>
+        </Pressable>
+        <View style={{ width: 1, height: 24, backgroundColor: colors.border, marginRight: 8 }} />
         {STEPS.map((s) => (
           <Chip key={s.id} label={s.label} selected={step === s.id} onPress={() => setStep(s.id)} />
         ))}
@@ -994,6 +1037,8 @@ function Control({ label, value, min, max, onChange }: { label: string; value: n
 const styles = StyleSheet.create({
   canvas: { backgroundColor: '#000', overflow: 'hidden' },
   stepBar: { flexGrow: 0, paddingVertical: 8, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
+  histBtn: { width: 36, height: 34, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', marginRight: 6, backgroundColor: '#fff' },
+  histText: { fontSize: 20, color: colors.text, fontWeight: '700', lineHeight: 24 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: spacing.sm },
   compare: { backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 12, borderRadius: radius.md },
   compareText: { color: '#fff', fontWeight: '700' },

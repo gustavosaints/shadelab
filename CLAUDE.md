@@ -65,10 +65,13 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   `fill`, mais `shade` e `gloss` por cima), porque `Mask` com `Image` do react-native-svg NÃO renderizou no iPhone
   (Gustavo viu a biblioteca sumir). O recorte pela boca da camada nativa é feito com `@react-native-masked-view`
   no `SmileOverlay`; o modo contorno continua em SVG com `ClipPath`. Dentes 21–23 = `scaleX: -1`.
-  Cada dente é renderizado no seu próprio referencial (vista vestibular com giro leve: lateral 10°, canino 24°) e com
-  a fatia distal esmaecida (lateral 10%, canino 30%), para a largura visível bater com uma foto; o layout põe os
-  dentes lado a lado por contato (`offsetX` do catálogo não é usado). A versão anterior (rotação real do arco)
-  sobrepunha os dentes e foi rejeitada pelo Gustavo.
+  Cada dente é renderizado no seu próprio referencial (vista vestibular com giro leve: lateral 8°, canino 18°) e com
+  a fatia distal levemente esmaecida (lateral 4%, canino 16%); o layout põe os dentes lado a lado por contato
+  (`offsetX` do catálogo não é usado). Visual (2026-10-15, referência: renders do SmileFy que o Gustavo mandou):
+  normais suavizadas (`blurNormals`), luz principal lateral alta, brilho frontal nítido, curva de contraste que
+  deixa o corpo na cor cheia e concentra sombra nas proximais/colo (`SHADE_DEPTH` 0,62). Ele achou as anatomias
+  anteriores "sem forma"; a seleção atual em `libraries.json` é a série Jan Hajto (F31 = a mesma do SmileFy) e ele
+  quer escolher as demais pela folha de contato `reference/renders/_folha-de-contato.png` + `.txt`.
 - Edição dente a dente: `SmileParams.edits[fdi] = { dx, dy, sw, sh, rot }` aplicado por `applyToothEdit` nos dois
   layouts; rotação desenhada com `rotate()` em torno do centro da caixa; com um dente selecionado, arrastar na foto
   move só ele.
