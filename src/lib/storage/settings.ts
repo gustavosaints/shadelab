@@ -13,6 +13,10 @@ export type Settings = {
   calibrations: Partial<Record<ShadeSystemId, Record<string, Lab>>>;
   clinicName: string;
   dentistName: string;
+  /** Chave da API do Google (Gemini) para "Gerar sorriso por IA"; fica só neste aparelho. */
+  aiApiKey: string;
+  /** Nome do modelo de imagem (ex.: gemini-2.5-flash-image). */
+  aiModel: string;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -22,6 +26,8 @@ export const DEFAULT_SETTINGS: Settings = {
   calibrations: {},
   clinicName: '',
   dentistName: '',
+  aiApiKey: '',
+  aiModel: 'gemini-2.5-flash-image',
 };
 
 const KEY = 'shadelab.settings.v1';

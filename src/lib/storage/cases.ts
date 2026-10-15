@@ -56,6 +56,8 @@ export type SmileCase = {
   centralsWidthMm?: number;
   /** Resumo numérico da análise facial no momento de salvar. */
   frame?: FrameSummary;
+  /** Estilo escolhido quando a simulação foi gerada por IA (tela "Sorriso por IA"). */
+  aiStyle?: string;
   targetShade: string;
 };
 

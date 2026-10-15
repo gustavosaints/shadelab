@@ -31,6 +31,12 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
 - `src/lib/smile/mouth.ts` contorno da boca (8 pontos, frações da imagem, em `SmileParams.mouth`): `ClipPath` no
   `SmileOverlay` recorta os dentes pela abertura dos lábios; `fitToMouth` encaixa o arco (72% da largura da boca).
   UI em `components/MouthOutline.tsx`.
+- `src/app/smile/ai.tsx` + `src/lib/ai/` "Sorriso por IA" (separado do Smile Design manual): foto → estilo
+  (natural, Hollywood, jovem, discreto, alinhado, clareamento) + cor da escala → `generateSmile` chama o Gemini
+  (REST `generateContent`, resposta em imagem; modelo em `Settings.aiModel`, padrão `gemini-2.5-flash-image`) com a
+  foto reduzida a 1536 px e o prompt de `prompt.ts` (cor descrita em palavras + sRGB). A chave fica em
+  `Settings.aiApiKey`, só no aparelho; a tela avisa que a foto sai do aparelho. Resultado gravado no cache e salvo
+  como `SmileCase` com `aiStyle`. Ainda não testado com chave real.
 - `assets/anatomia/<id>/` sprites por anatomia: `{central,lateral,canine}-{fill,shade,gloss}.png` + `thumb.png`.
   Tudo é desenhado dentro do SVG (`components/AnatomyOverlay.tsx` → `AnatomyTeeth`): `fill` (branco) vira `Mask` de
   luminância de um `Rect` com a cor-alvo; `shade` (preto) e `gloss` (branco) só têm alfa e entram como `Image`.

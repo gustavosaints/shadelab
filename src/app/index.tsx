@@ -24,6 +24,12 @@ export default function Home() {
       route: '/smile',
       color: colors.accent,
     },
+    {
+      title: 'Sorriso por IA',
+      subtitle: 'Foto do sorriso + tipo + cor da escala: a IA gera os dentes novos',
+      route: '/smile/ai',
+      color: '#7E57C2',
+    },
     { title: 'Casos', subtitle: 'Histórico de pacientes e envio ao laboratório', route: '/cases', color: colors.navy },
     {
       title: 'Configurações',
