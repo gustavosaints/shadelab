@@ -53,7 +53,6 @@ import {
   NO_EDIT,
   SHAPE_MIX,
   shapeFromMix,
-  WIDTH_RATIOS,
   type SmileParams,
   type ToothEdit,
 } from '@/lib/smile/teeth';
@@ -64,38 +63,42 @@ import { colors, radius, spacing } from '@/theme';
 type Photo = { uri: string; width: number; height: number };
 type Touch = { pageX: number; pageY: number };
 type GestureStart = { touches: Touch[]; params: SmileParams; dist: number; start: { x: number; y: number }; moved: boolean };
-type Step = 'foto' | 'boca' | 'dentes' | 'cor' | 'comparar';
-type MoveMode = 'all' | 'one';
+type Step = 'foto' | 'boca' | 'forma' | 'ajustar' | 'comparar';
+type MoveMode = 'arch' | 'one';
+/** O que está selecionado para mover/dimensionar no passo Ajustar. */
+type Selection = { kind: 'none' } | { kind: 'arch' } | { kind: 'tooth'; fdi: string };
 type CompareMode = 'edit' | 'curtain' | 'side' | 'variants';
 
 const STEPS: { id: Step; label: string }[] = [
   { id: 'foto', label: '1 Foto' },
   { id: 'boca', label: '2 Boca' },
-  { id: 'dentes', label: '3 Dentes' },
-  { id: 'cor', label: '4 Cor e forma' },
+  { id: 'forma', label: '3 Forma e cor' },
+  { id: 'ajustar', label: '4 Ajustar' },
   { id: 'comparar', label: '5 Comparar' },
 ];
 
-const DEFAULT_ANATOMY = 'jan-hajto-f1';
+/** Anatomia usada pelos cenários que trocam a forma (facetas etc.). */
+const SCENARIO_ANATOMY = 'jan-hajto-f1';
 
 /**
  * Smile Design em passos, com a foto fixa no alto e os comandos rolando embaixo:
- * Foto (câmera guiada) → Boca (detecção automática, editável) → Dentes (alinhamento
- * automático das anatomias, mover todos ou um) → Cor e forma → Comparar e salvar.
+ * Foto (câmera guiada) → Boca (detecção automática, editável) → Forma e cor (contorno
+ * ou anatomia, já encaixados na boca) → Ajustar (conjunto ou dente a dente) → Comparar.
+ * Pinça na foto é sempre zoom da imagem; para dimensionar os dentes, toque neles antes.
  */
 export default function Smile() {
   const { caseId } = useLocalSearchParams<{ caseId?: string }>();
   const [settings] = useSettings();
   const { width: winW, height: winH } = useWindowDimensions();
   const [photo, setPhoto] = useState<Photo | null>(null);
-  const [params, setParams] = useState<SmileParams>({ ...DEFAULT_SMILE_PARAMS, anatomy: DEFAULT_ANATOMY });
+  const [params, setParams] = useState<SmileParams>(DEFAULT_SMILE_PARAMS);
   const [targetShade, setTargetShade] = useState('B1');
   const [step, setStep] = useState<Step>('foto');
-  const [moveMode, setMoveMode] = useState<MoveMode>('all');
+  const [moveMode, setMoveMode] = useState<MoveMode>('arch');
+  const [selection, setSelection] = useState<Selection>({ kind: 'none' });
   const [hidden, setHidden] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [fine, setFine] = useState(false);
-  const [dragging, setDragging] = useState(false);
   const [area, setArea] = useState({ width: 0, height: 0 });
   const [busy, setBusy] = useState(false);
   const [detecting, setDetecting] = useState<string | null>(null);
@@ -113,16 +116,15 @@ export default function Smile() {
   const [compareMode, setCompareMode] = useState<CompareMode>('edit');
   const [curtain, setCurtain] = useState(0.5);
   const [variants, setVariants] = useState<SmileVariant[]>([]);
-  // dente a dente
-  const [selectedTooth, setSelectedTooth] = useState<string | null>(null);
   // zoom da vista (a foto e os dentes crescem juntos; os comandos continuam em px da vista ampliada)
   const [zoom, setZoom] = useState({ scale: 1, tx: 0, ty: 0 });
-  const [zoomMode, setZoomMode] = useState(false);
 
   const canvasRef = useRef<View>(null);
   const panesRef = useRef<View>(null);
   const landmarker = useRef<FaceLandmarkerHandle>(null);
   const gesture = useRef<GestureStart | null>(null);
+  const zoomStart = useRef(zoom);
+  const pendingDetect = useRef<Photo | null>(null);
 
   const system = getSystem(settings.shadeSystem);
   const set = (patch: Partial<SmileParams>) => setParams((p) => clampParams({ ...p, ...patch }));
@@ -135,6 +137,7 @@ export default function Smile() {
   const editOf = (fdi: string): ToothEdit => params.edits?.[fdi] ?? NO_EDIT;
   const setEdit = (fdi: string, patch: Partial<ToothEdit>) =>
     setParams((p) => ({ ...p, edits: { ...p.edits, [fdi]: clampEdit({ ...(p.edits?.[fdi] ?? NO_EDIT), ...patch }) } }));
+  const selectedTooth = selection.kind === 'tooth' ? selection.fdi : null;
 
   const chooseShade = (id: string) => {
     const shade = system.shades.find((s) => s.id === id);
@@ -169,23 +172,22 @@ export default function Smile() {
       }
       setEditingId(c.id);
       setCreatedAt(c.createdAt);
-      setStep('dentes');
+      setStep('ajustar');
     })();
   }, [caseId]);
 
-  const pendingDetect = useRef<Photo | null>(null);
   const startWithPhoto = (p: Photo) => {
     setPhoto(p);
-    setParams({ ...DEFAULT_SMILE_PARAMS, anatomy: DEFAULT_ANATOMY });
+    setParams(DEFAULT_SMILE_PARAMS);
     setFace(null);
-    setSelectedTooth(null);
+    setSelection({ kind: 'none' });
     setVariants([]);
     setCompareMode('edit');
     setDetectNote(null);
+    setZoom({ scale: 1, tx: 0, ty: 0 });
     chooseShade(targetShade);
     setStep('boca');
-    // detecção automática assim que a área da foto estiver medida
-    pendingDetect.current = p;
+    pendingDetect.current = p; // detecção automática assim que a área da foto estiver medida
   };
 
   const pickFromGallery = async () => {
@@ -201,7 +203,6 @@ export default function Smile() {
     try {
       const uri = await flipPhoto(photo.uri);
       setPhoto({ ...photo, uri });
-      // espelha também o que já foi marcado
       setParams((p) => ({
         ...p,
         midlineX: 1 - p.midlineX,
@@ -214,8 +215,8 @@ export default function Smile() {
     }
   };
 
-  // ----- Detecção automática: boca, rosto e dentes -----
-  const runDetection = async (p: Photo, alsoTeeth: boolean) => {
+  // ----- Detecção automática: boca e rosto -----
+  const runDetection = async (p: Photo) => {
     if (!landmarker.current) return;
     setDetecting('Procurando rosto e boca…');
     try {
@@ -227,8 +228,7 @@ export default function Smile() {
       }
       set({ mouth: det.mouth, midlineX: det.face.philtrum.x });
       setFace(det.face);
-      if (alsoTeeth) await runTeethFit(p, det.mouth, det.face.philtrum.x);
-      else setDetectNote('Boca detectada. Ajuste os pontos se precisar.');
+      setDetectNote('Boca encontrada. Ajuste os pontos se precisar e siga para a forma.');
     } catch (e) {
       setDetectNote(`Detecção automática indisponível (${String((e as Error).message ?? e)}). Delimite a boca à mão.`);
       if (!params.mouth && area.width) set({ mouth: defaultMouth(layoutTeeth(params, area.width, area.height), area.width, area.height) });
@@ -237,23 +237,35 @@ export default function Smile() {
     }
   };
 
-  const runTeethFit = async (p: Photo, mouth: SmileParams['mouth'], midlineX: number) => {
-    if (!mouth) return;
-    setDetecting('Procurando os dentes…');
+  /** Encaixa os dentes na boca: primeiro pela análise dos pixels; se falhar, pela geometria da boca. */
+  const fitTeeth = async () => {
+    if (!photo || !params.mouth || !area.width) return;
+    setDetecting('Encaixando os dentes na boca…');
     try {
-      const fit = await fitTeethToPhoto(p, mouth, midlineX, { ...params, mouth, anatomy: params.anatomy ?? DEFAULT_ANATOMY });
-      if (!fit) {
-        setDetectNote('Boca detectada, mas não consegui separar os dentes. Use "Encaixar na boca" e ajuste.');
+      const fit = await fitTeethToPhoto(photo, params.mouth, face?.philtrum.x ?? params.midlineX, params);
+      if (fit && fit.fit.confidence >= 0.6) {
+        setParams(clampParams(fit.params));
+        setDetectNote(`Dentes alinhados pelos espaços encontrados na foto (${Math.round(fit.fit.confidence * 100)}%).`);
         return;
       }
-      setParams(clampParams(fit.params));
-      const pct = Math.round(fit.fit.confidence * 100);
-      setDetectNote(pct >= 80 ? `Dentes alinhados automaticamente (${pct}% dos espaços encontrados).` : `Alinhamento parcial (${pct}%). Confira e ajuste.`);
-    } catch (e) {
-      setDetectNote(`Não consegui analisar os dentes (${String((e as Error).message ?? e)}).`);
+      fitArchToMouth();
+      setDetectNote(fit ? 'Poucos espaços visíveis: encaixei pela largura da boca. Ajuste no passo 4.' : 'Encaixei pela largura da boca. Ajuste no passo 4.');
+    } catch {
+      fitArchToMouth();
+      setDetectNote('Encaixei pela largura da boca. Ajuste no passo 4.');
     } finally {
       setDetecting(null);
     }
+  };
+
+  const fitArchToMouth = () => {
+    if (!params.mouth || !area.width) return;
+    const cur = anatomy ? layoutAnatomy(params, anatomy, area.width, area.height) : layoutTeeth(params, area.width, area.height);
+    const t23 = cur.find((t) => t.fdi === '23');
+    const t11 = cur.find((t) => t.fdi === '11');
+    if (!t23 || !t11) return;
+    const half = t23.x + t23.w - params.midlineX * area.width;
+    set(fitToMouth(params, params.mouth, area.width, area.height, half, t11.h));
   };
 
   // ----- Foto vinda da câmera guiada e detecção automática ao medir a área -----
@@ -268,23 +280,32 @@ export default function Smile() {
     if (pendingDetect.current && area.width > 0) {
       const p = pendingDetect.current;
       pendingDetect.current = null;
-      runDetection(p, true);
+      runDetection(p);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [area.width, photo?.uri]);
+
+  // ----- Layout atual -----
+  const teeth = !area.width ? [] : anatomy ? layoutAnatomy(params, anatomy, area.width, area.height) : layoutTeeth(params, area.width, area.height);
+  const t11 = teeth.find((t) => t.fdi === '11');
+  const t23 = teeth.find((t) => t.fdi === '23');
+  const cwPx = params.centralWidth * area.width;
+  const shapeMix = params.shapeMix ?? SHAPE_MIX[params.shape];
+  const calibMm = parseFloat(centralsWidthMm.replace(',', '.')) || 0;
+  const analysis = face && area.width ? analyzeFrame(face, calibMm, params, area.width, area.height) : null;
 
   // ----- Gestos na foto -----
   const touchesOf = (e: GestureResponderEvent): Touch[] => (e.nativeEvent.touches ?? []).map((t) => ({ pageX: t.pageX, pageY: t.pageY }));
   const dist = (t: Touch[]) => (t.length >= 2 ? Math.hypot(t[1].pageX - t[0].pageX, t[1].pageY - t[0].pageY) : 0);
   const centroid = (t: Touch[]) => ({ x: t.reduce((s, p) => s + p.pageX, 0) / t.length, y: t.reduce((s, p) => s + p.pageY, 0) / t.length });
-
-  const zoomStart = useRef(zoom);
   const clampZoom = (z: { scale: number; tx: number; ty: number }) => {
     const scale = Math.min(4, Math.max(1, z.scale));
     const w = canvasW * scale;
     const h = canvasH * scale;
     return { scale, tx: Math.min(0, Math.max(canvasW - w, z.tx)), ty: Math.min(0, Math.max(canvasH - h, z.ty)) };
   };
+  /** No passo Ajustar, com algo selecionado, os gestos mexem na seleção; fora disso, mexem na vista. */
+  const gestureTargetsTeeth = step === 'ajustar' && selection.kind !== 'none';
 
   const begin = (e: GestureResponderEvent) => {
     const t = touchesOf(e);
@@ -296,7 +317,6 @@ export default function Smile() {
       moved: false,
     };
     zoomStart.current = zoom;
-    setDragging(true);
   };
   const onCanvasMove = (e: GestureResponderEvent) => {
     const g = gesture.current;
@@ -311,8 +331,9 @@ export default function Smile() {
     const c0 = centroid(g.touches);
     const c1 = centroid(now);
     if (Math.hypot(c1.x - c0.x, c1.y - c0.y) > 6) g.moved = true;
-    if (zoomMode || (now.length >= 2 && zoom.scale > 1 && step !== 'dentes')) {
-      // zoom da vista: pinça escala em torno do ponto entre os dedos; um dedo arrasta a vista
+
+    if (!gestureTargetsTeeth) {
+      // vista: pinça amplia em torno do toque inicial; um dedo arrasta a vista ampliada
       const z0 = zoomStart.current;
       let scale = z0.scale;
       let tx = z0.tx + (c1.x - c0.x);
@@ -320,24 +341,28 @@ export default function Smile() {
       if (now.length >= 2 && g.dist > 10) {
         scale = z0.scale * (dist(now) / g.dist);
         const k = scale / z0.scale;
-        // mantém fixo o ponto do conteúdo sob o toque inicial (coordenadas do canvas externo)
-        const fx = g.start.x;
-        const fy = g.start.y;
-        tx = fx - (fx - z0.tx) * k + (c1.x - c0.x);
-        ty = fy - (fy - z0.ty) * k + (c1.y - c0.y);
+        tx = g.start.x - (g.start.x - z0.tx) * k + (c1.x - c0.x);
+        ty = g.start.y - (g.start.y - z0.ty) * k + (c1.y - c0.y);
+      } else if (z0.scale <= 1) {
+        return; // sem zoom, um dedo não faz nada na vista
       }
       setZoom(clampZoom({ scale, tx, ty }));
       return;
     }
-    if (step === 'boca') return; // na etapa da boca só as alças do contorno mexem
-    if (moveMode === 'one' && selectedTooth && now.length === 1) {
+    if (selection.kind === 'tooth' && now.length === 1) {
       const cw = g.params.centralWidth * area.width;
       const ch = cw * g.params.heightRatio;
-      const base = g.params.edits?.[selectedTooth] ?? NO_EDIT;
-      setEdit(selectedTooth, { dx: base.dx + (c1.x - c0.x) / cw, dy: base.dy + (c1.y - c0.y) / ch });
+      const base = g.params.edits?.[selection.fdi] ?? NO_EDIT;
+      setEdit(selection.fdi, { dx: base.dx + (c1.x - c0.x) / cw, dy: base.dy + (c1.y - c0.y) / ch });
       return;
     }
-    if (moveMode === 'one') return;
+    if (selection.kind === 'tooth' && now.length >= 2 && g.dist > 10) {
+      const base = g.params.edits?.[selection.fdi] ?? NO_EDIT;
+      const k = dist(now) / g.dist;
+      setEdit(selection.fdi, { sw: base.sw * k, sh: base.sh * k });
+      return;
+    }
+    // conjunto: arrasta o arco, pinça dimensiona
     const patch: Partial<SmileParams> = {
       midlineX: g.params.midlineX + (c1.x - c0.x) / area.width,
       gumY: g.params.gumY + (c1.y - c0.y) / area.height,
@@ -348,27 +373,15 @@ export default function Smile() {
   const end = () => {
     const g = gesture.current;
     gesture.current = null;
-    setDragging(false);
-    // toque sem arrastar no modo "um": seleciona o dente sob o dedo
-    if (g && !g.moved && moveMode === 'one' && step === 'dentes' && !zoomMode) {
-      // o toque chega em coordenadas do canvas externo; o conteúdo está deslocado pelo zoom
+    // toque sem arrastar no passo Ajustar: seleciona dente (Unitário) ou arco (Conjunto); fora dos dentes, limpa
+    if (g && !g.moved && step === 'ajustar') {
       const px = g.start.x - zoom.tx;
       const py = g.start.y - zoom.ty;
       const hit = teeth.find((t) => px >= t.x && px <= t.x + t.w && py >= t.y && py <= t.y + t.h);
-      setSelectedTooth(hit ? hit.fdi : null);
+      if (!hit) setSelection({ kind: 'none' });
+      else setSelection(moveMode === 'one' ? { kind: 'tooth', fdi: hit.fdi } : { kind: 'arch' });
     }
   };
-
-  // ----- Layout atual -----
-  const teeth = !area.width ? [] : anatomy ? layoutAnatomy(params, anatomy, area.width, area.height) : layoutTeeth(params, area.width, area.height);
-  const t11 = teeth.find((t) => t.fdi === '11');
-  const t23 = teeth.find((t) => t.fdi === '23');
-  const cwPx = params.centralWidth * area.width;
-  const ratios = WIDTH_RATIOS[params.proportion];
-  const shapeMix = params.shapeMix ?? SHAPE_MIX[params.shape];
-  const calibMm = parseFloat(centralsWidthMm.replace(',', '.')) || 0;
-  const analysis = face && area.width ? analyzeFrame(face, calibMm, params, area.width, area.height) : null;
-  const archFactor = 1 + ratios.lateral + ratios.canine + 2.5 * params.spacing;
 
   const onLengthHandle = (_dx: number, dy: number) => {
     if (!cwPx) return;
@@ -381,15 +394,12 @@ export default function Smile() {
     const half = outerX - midPx;
     const newHalf = half + dx;
     const ch = cwPx * params.heightRatio;
-    set({
-      centralWidth: half > 1 ? params.centralWidth * (Math.max(1, newHalf) / half) : Math.max(1, newHalf) / archFactor / area.width,
-      curve: params.curve - dy / (ch * 2),
-    });
+    if (half > 1) set({ centralWidth: params.centralWidth * (Math.max(1, newHalf) / half), curve: params.curve - dy / (ch * 2) });
   };
 
   const runScenario = (id: (typeof SCENARIOS)[number]['id']) => {
     if (!area.width) return;
-    const r = applyScenario(id, params, { system: settings.shadeSystem, defaultAnatomy: anatomy?.id ?? DEFAULT_ANATOMY, aspect: area.width / area.height });
+    const r = applyScenario(id, params, { system: settings.shadeSystem, defaultAnatomy: anatomy?.id ?? SCENARIO_ANATOMY, aspect: area.width / area.height });
     setParams(clampParams(r.params));
     if (r.shade) chooseShade(r.shade);
   };
@@ -465,6 +475,11 @@ export default function Smile() {
     }
   };
 
+  const goToForma = async () => {
+    setStep('forma');
+    await fitTeeth();
+  };
+
   // ----- Tela sem foto -----
   if (!photo) {
     return (
@@ -473,8 +488,8 @@ export default function Smile() {
         <Card>
           <SectionTitle>1. Foto do sorriso</SectionTitle>
           <Muted>
-            Use a câmera guiada: uma silhueta ajuda a enquadrar o rosto sempre do mesmo jeito e a moldura fica verde
-            quando o enquadramento está bom. Depois o app encontra a boca e alinha os dentes sozinho.
+            Use a câmera guiada: um guia de rosto padroniza o enquadramento. Depois o app encontra a boca e encaixa
+            os dentes para você escolher forma e cor.
           </Muted>
           <Button title="Fotografar com guia" onPress={() => router.push('/smile/capture')} style={{ marginTop: 12 }} />
           <Button title="Escolher da galeria" variant="secondary" onPress={pickFromGallery} style={{ marginTop: 8 }} />
@@ -484,9 +499,9 @@ export default function Smile() {
   }
 
   // ----- Tela com foto: canvas fixo + passos + comandos rolando -----
-  const showHandles = !hidden && !exporting && !!t11 && !!t23;
-  const editMouth = step === 'boca' && !exporting;
-  const selectedForOverlay = step === 'dentes' && moveMode === 'one' && !exporting ? (selectedTooth ?? undefined) : undefined;
+  const showTeeth = step !== 'boca' && !hidden;
+  const selectedForOverlay = step === 'ajustar' && !exporting && selectedTooth ? selectedTooth : undefined;
+  const archHandles = step === 'ajustar' && selection.kind === 'arch' && !exporting && !!t11 && !!t23;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -504,48 +519,58 @@ export default function Smile() {
           onResponderRelease={end}
           onResponderTerminate={end}
         >
-        <View
-          style={
-            exporting
-              ? { position: 'absolute', left: 0, top: 0, width: canvasW, height: canvasH }
-              : { position: 'absolute', left: zoom.tx, top: zoom.ty, width: canvasW * zoom.scale, height: canvasH * zoom.scale }
-          }
-          onLayout={(e) => setArea({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
-        >
-          <Image source={{ uri: photo.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-          <SmileOverlay params={params} width={area.width} height={area.height} hidden={hidden || step === 'boca'} anatomy={anatomy} selected={selectedForOverlay} />
-          {face && showFace && step === 'cor' && !hidden && area.width > 0 && (
-            <FaceFrame face={face} width={area.width} height={area.height} teeth={teeth} dentalMidlineX={params.midlineX * area.width} onChange={setFace} readOnly={exporting} />
-          )}
-          {params.mouth && !hidden && area.width > 0 && (step === 'boca' || step === 'dentes') && (
-            <MouthOutline mouth={params.mouth} width={area.width} height={area.height} onChange={(m) => set({ mouth: m })} readOnly={!editMouth} hideLine={exporting || step !== 'boca'} />
-          )}
-          {step === 'comparar' && compareMode === 'curtain' && !hidden && area.width > 0 && (
-            <>
-              <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: curtain * area.width, overflow: 'hidden' }}>
-                <Image source={{ uri: photo.uri }} style={{ width: area.width, height: area.height }} resizeMode="cover" />
-              </View>
-              <View pointerEvents="none" style={[styles.curtainLine, { left: curtain * area.width - 1 }]} />
-              <View pointerEvents="none" style={[styles.curtainTag, { left: 8 }]}>
-                <Text style={styles.curtainTagText}>ANTES</Text>
-              </View>
-              <View pointerEvents="none" style={[styles.curtainTag, { right: 8 }]}>
-                <Text style={styles.curtainTagText}>DEPOIS</Text>
-              </View>
-              {!exporting && <Handle x={curtain * area.width} y={area.height * 0.5} glyph="⇔" onMove={(dx) => setCurtain(Math.min(0.98, Math.max(0.02, curtain + dx / area.width)))} />}
-            </>
-          )}
-          {showHandles && step === 'dentes' && moveMode === 'all' && (
-            <>
-              <Handle x={params.midlineX * area.width} y={t11.y + t11.h + 14} glyph="↕" onMove={onLengthHandle} />
-              <Handle x={t23.x + t23.w + 14} y={t23.y + t23.h * 0.5} glyph="↔" onMove={onArchHandle} />
-            </>
-          )}
-        </View>
+          <View
+            style={
+              exporting
+                ? { position: 'absolute', left: 0, top: 0, width: canvasW, height: canvasH }
+                : { position: 'absolute', left: zoom.tx, top: zoom.ty, width: canvasW * zoom.scale, height: canvasH * zoom.scale }
+            }
+            onLayout={(e) => setArea({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
+          >
+            <Image source={{ uri: photo.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+            <SmileOverlay params={params} width={area.width} height={area.height} hidden={!showTeeth} anatomy={anatomy} selected={selectedForOverlay} />
+            {face && showFace && step === 'ajustar' && !hidden && area.width > 0 && (
+              <FaceFrame face={face} width={area.width} height={area.height} teeth={teeth} dentalMidlineX={params.midlineX * area.width} onChange={setFace} readOnly={exporting} />
+            )}
+            {params.mouth && step === 'boca' && area.width > 0 && (
+              <MouthOutline mouth={params.mouth} width={area.width} height={area.height} onChange={(m) => set({ mouth: m })} readOnly={exporting} hideLine={exporting} />
+            )}
+            {step === 'comparar' && compareMode === 'curtain' && !hidden && area.width > 0 && (
+              <>
+                <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: curtain * area.width, overflow: 'hidden' }}>
+                  <Image source={{ uri: photo.uri }} style={{ width: area.width, height: area.height }} resizeMode="cover" />
+                </View>
+                <View pointerEvents="none" style={[styles.curtainLine, { left: curtain * area.width - 1 }]} />
+                <View pointerEvents="none" style={[styles.curtainTag, { left: 8 }]}>
+                  <Text style={styles.curtainTagText}>ANTES</Text>
+                </View>
+                <View pointerEvents="none" style={[styles.curtainTag, { right: 8 }]}>
+                  <Text style={styles.curtainTagText}>DEPOIS</Text>
+                </View>
+                {!exporting && <Handle x={curtain * area.width} y={area.height * 0.5} glyph="⇔" onMove={(dx) => setCurtain(Math.min(0.98, Math.max(0.02, curtain + dx / area.width)))} />}
+              </>
+            )}
+            {archHandles && (
+              <>
+                <Handle x={params.midlineX * area.width} y={t11.y + t11.h + 14} glyph="↕" onMove={onLengthHandle} />
+                <Handle x={t23.x + t23.w + 14} y={t23.y + t23.h * 0.5} glyph="↔" onMove={onArchHandle} />
+              </>
+            )}
+          </View>
           {detecting && (
             <View pointerEvents="none" style={styles.detecting}>
               <Text style={styles.detectingText}>{detecting}</Text>
             </View>
+          )}
+          {!exporting && step === 'ajustar' && selection.kind !== 'none' && !detecting && (
+            <View pointerEvents="none" style={styles.detecting}>
+              <Text style={styles.detectingText}>{selection.kind === 'arch' ? 'Conjunto selecionado: arraste para mover, pinça para o tamanho' : `Dente ${selectedTooth} selecionado: arraste para mover, pinça para o tamanho`}</Text>
+            </View>
+          )}
+          {!exporting && zoom.scale > 1 && (
+            <Pressable onPress={() => setZoom({ scale: 1, tx: 0, ty: 0 })} style={styles.zoomBadge}>
+              <Text style={styles.zoomBadgeText}>{`${zoom.scale.toFixed(1)}x · tocar para 1x`}</Text>
+            </Pressable>
           )}
         </View>
       </View>
@@ -554,26 +579,15 @@ export default function Smile() {
         {STEPS.map((s) => (
           <Chip key={s.id} label={s.label} selected={step === s.id} onPress={() => setStep(s.id)} />
         ))}
-        <View style={{ width: 1, height: 24, backgroundColor: colors.border, marginRight: 8 }} />
-        <Chip label={zoomMode ? `Zoom ${zoom.scale.toFixed(1)}x ✓` : 'Zoom'} selected={zoomMode} color={colors.navy} onPress={() => setZoomMode(!zoomMode)} />
-        {zoom.scale > 1 && (
-          <Chip
-            label="1x"
-            onPress={() => {
-              setZoom({ scale: 1, tx: 0, ty: 0 });
-              setZoomMode(false);
-            }}
-          />
-        )}
       </ScrollView>
 
-      <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: 40 }} keyboardShouldPersistTaps="handled" scrollEnabled={!dragging}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: spacing.md, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
         {detectNote && <Muted>{detectNote}</Muted>}
 
         {step === 'foto' && (
           <Card>
             <SectionTitle>Foto</SectionTitle>
-            <Muted>{'Se a selfie saiu invertida, use "Espelhar foto". Trocar a foto reinicia a simulação.'}</Muted>
+            <Muted>{'Pinça na foto dá zoom. Se a selfie saiu invertida, use "Espelhar foto". Trocar a foto reinicia a simulação.'}</Muted>
             <View style={styles.chips}>
               <Chip label="Espelhar foto" onPress={mirror} />
               <Chip label="Fotografar de novo" onPress={() => router.push('/smile/capture')} />
@@ -588,97 +602,21 @@ export default function Smile() {
             <SectionTitle>Delimitar a boca</SectionTitle>
             <Muted>
               {params.mouth
-                ? 'Contorno encontrado automaticamente. Arraste os pontos vermelhos (◆ comissuras, • lábios) até a borda interna dos lábios. Os dentes só aparecem dentro dele.'
+                ? 'Arraste os pontos vermelhos (◆ comissuras, • lábios) até a borda interna dos lábios. Pinça na foto aproxima; um dedo arrasta a vista ampliada.'
                 : 'Toque em "Detectar" para encontrar a boca, ou "Marcar à mão".'}
             </Muted>
             <View style={styles.chips}>
-              <Chip label="Detectar de novo" onPress={() => runDetection(photo, false)} />
+              <Chip label="Detectar de novo" onPress={() => runDetection(photo)} />
               {!params.mouth && (
-                <Chip
-                  label="Marcar à mão"
-                  onPress={() => area.width && set({ mouth: defaultMouth(layoutTeeth(params, area.width, area.height), area.width, area.height) })}
-                />
+                <Chip label="Marcar à mão" onPress={() => area.width && set({ mouth: defaultMouth(layoutTeeth(params, area.width, area.height), area.width, area.height) })} />
               )}
               {params.mouth && <Chip label="Remover contorno" onPress={() => set({ mouth: undefined })} />}
             </View>
-            <Button
-              title="Boca pronta: alinhar os dentes →"
-              onPress={async () => {
-                setStep('dentes');
-                if (params.mouth) await runTeethFit(photo, params.mouth, face?.philtrum.x ?? params.midlineX);
-              }}
-              style={{ marginTop: 8 }}
-            />
+            <Button title="Boca pronta: escolher forma e cor →" onPress={goToForma} style={{ marginTop: 8 }} />
           </Card>
         )}
 
-        {step === 'dentes' && (
-          <>
-            <Card>
-              <SectionTitle>Dentes</SectionTitle>
-              <View style={styles.chips}>
-                <Chip label="Mover todos" selected={moveMode === 'all'} onPress={() => setMoveMode('all')} />
-                <Chip label="Mover um" selected={moveMode === 'one'} onPress={() => setMoveMode('one')} />
-              </View>
-              <Muted>
-                {moveMode === 'all'
-                  ? 'Arraste a foto para mover o arco inteiro, pinça para o tamanho, alça ↕ comprimento, alça ↔ largura e curva.'
-                  : selectedTooth
-                    ? `Dente ${selectedTooth}: arraste na foto para mover; abaixo, rotação e tamanho. Toque em outro dente para trocar.`
-                    : 'Toque num dente na foto para selecioná-lo.'}
-              </Muted>
-              <View style={styles.chips}>
-                <Chip label="Alinhar automaticamente" onPress={() => params.mouth && runTeethFit(photo, params.mouth, face?.philtrum.x ?? params.midlineX)} />
-                <Chip
-                  label="Encaixar na boca"
-                  onPress={() => {
-                    if (!params.mouth || !area.width || !t23 || !t11) return;
-                    const half = t23.x + t23.w - params.midlineX * area.width;
-                    set(fitToMouth(params, params.mouth, area.width, area.height, half, t11.h));
-                  }}
-                />
-                {params.edits && <Chip label="Zerar ajustes individuais" onPress={() => setParams((p) => ({ ...p, edits: undefined }))} />}
-              </View>
-              {moveMode === 'one' && (
-                <View style={styles.chips}>
-                  {['13', '12', '11', '21', '22', '23'].map((fdi) => (
-                    <Chip
-                      key={fdi}
-                      label={fdi}
-                      selected={selectedTooth === fdi}
-                      color={params.edits?.[fdi] ? colors.navy : undefined}
-                      onPress={() => setSelectedTooth(selectedTooth === fdi ? null : fdi)}
-                    />
-                  ))}
-                </View>
-              )}
-              {moveMode === 'one' && selectedTooth && (
-                <>
-                  <Control label="Rotação (°)" value={editOf(selectedTooth).rot} min={-25} max={25} onChange={(v) => setEdit(selectedTooth, { rot: v })} />
-                  <Control label="Largura" value={editOf(selectedTooth).sw} min={0.6} max={1.4} onChange={(v) => setEdit(selectedTooth, { sw: v })} />
-                  <Control label="Comprimento" value={editOf(selectedTooth).sh} min={0.6} max={1.4} onChange={(v) => setEdit(selectedTooth, { sh: v })} />
-                  <View style={styles.chips}>
-                    <Chip label={`Espelhar no ${mirrorFdi(selectedTooth)}`} onPress={() => setEdit(mirrorFdi(selectedTooth), mirrorEdit(editOf(selectedTooth)))} />
-                    <Chip label="Zerar este" onPress={() => setEdit(selectedTooth, NO_EDIT)} />
-                  </View>
-                </>
-              )}
-            </Card>
-            <Button title="Ajuste fino" variant="ghost" onPress={() => setFine(!fine)} />
-            {fine && (
-              <Card>
-                <Control label="Largura" value={params.centralWidth} min={0.04} max={0.2} onChange={(v) => set({ centralWidth: v })} />
-                <Control label="Comprimento" value={params.heightRatio} min={0.8} max={1.6} onChange={(v) => set({ heightRatio: v })} />
-                <Control label="Espaçamento" value={params.spacing} min={0} max={0.15} onChange={(v) => set({ spacing: v })} />
-                <Control label="Curva do sorriso" value={params.curve} min={-0.1} max={0.35} onChange={(v) => set({ curve: v })} />
-                <Control label="Opacidade" value={params.opacity} min={0.2} max={1} onChange={(v) => set({ opacity: v })} />
-              </Card>
-            )}
-            <Button title="Cor e forma →" variant="secondary" onPress={() => setStep('cor')} />
-          </>
-        )}
-
-        {step === 'cor' && (
+        {step === 'forma' && (
           <>
             <Card>
               <SectionTitle>Cor-alvo</SectionTitle>
@@ -712,7 +650,7 @@ export default function Smile() {
                     <Chip label="Oval" selected={shapeFromMix(shapeMix) === 'oval'} onPress={() => set({ shape: 'oval', shapeMix: SHAPE_MIX.oval })} />
                     <Chip label="Triangular" selected={shapeFromMix(shapeMix) === 'triangular'} onPress={() => set({ shape: 'triangular', shapeMix: SHAPE_MIX.triangular })} />
                   </View>
-                  <Control label="Transição da forma" value={shapeMix} min={0} max={1} onChange={(v) => set({ shapeMix: v, shape: shapeFromMix(v) })} />
+                  <Control label="Transição da forma (quadrada → oval → triangular)" value={shapeMix} min={0} max={1} onChange={(v) => set({ shapeMix: v, shape: shapeFromMix(v) })} />
                 </>
               )}
               <SectionTitle>Proporção</SectionTitle>
@@ -721,8 +659,10 @@ export default function Smile() {
                 <Chip label="Áurea (62% / 38%)" selected={params.proportion === 'golden'} onPress={() => set({ proportion: 'golden' })} />
                 <Chip label="RED (70% / 50%)" selected={params.proportion === 'red'} onPress={() => set({ proportion: 'red' })} />
               </View>
+              <View style={styles.chips}>
+                <Chip label="Reencaixar na boca" onPress={fitTeeth} />
+              </View>
             </Card>
-
             <Card>
               <SectionTitle>Cenários de tratamento</SectionTitle>
               <Muted>Um toque aplica um preset de forma, proporção, comprimento e cor; a posição do arco é mantida.</Muted>
@@ -732,7 +672,80 @@ export default function Smile() {
                 ))}
               </View>
             </Card>
+            <Button title="Ajustar os dentes →" onPress={() => setStep('ajustar')} />
+          </>
+        )}
 
+        {step === 'ajustar' && (
+          <>
+            <Card>
+              <SectionTitle>Ajustar</SectionTitle>
+              <View style={styles.chips}>
+                <Chip
+                  label="Conjunto"
+                  selected={moveMode === 'arch'}
+                  onPress={() => {
+                    setMoveMode('arch');
+                    setSelection({ kind: 'arch' });
+                  }}
+                />
+                <Chip
+                  label="Unitário"
+                  selected={moveMode === 'one'}
+                  onPress={() => {
+                    setMoveMode('one');
+                    setSelection({ kind: 'none' });
+                  }}
+                />
+              </View>
+              <Muted>
+                {moveMode === 'arch'
+                  ? selection.kind === 'arch'
+                    ? 'Conjunto selecionado: arraste para mover o arco, pinça para o tamanho, alça ↕ comprimento, alça ↔ largura e curva. Toque fora dos dentes para soltar (aí a pinça volta a ser zoom da foto).'
+                    : 'Toque nos dentes para selecionar o conjunto. Sem seleção, pinça e arraste mexem na foto.'
+                  : selectedTooth
+                    ? `Dente ${selectedTooth}: arraste para mover, pinça para o tamanho; rotação e medidas abaixo. Toque em outro dente para trocar, fora deles para soltar.`
+                    : 'Toque num dente na foto para selecioná-lo. Sem seleção, pinça e arraste mexem na foto.'}
+              </Muted>
+              {moveMode === 'one' && (
+                <View style={styles.chips}>
+                  {['13', '12', '11', '21', '22', '23'].map((fdi) => (
+                    <Chip
+                      key={fdi}
+                      label={fdi}
+                      selected={selectedTooth === fdi}
+                      color={params.edits?.[fdi] ? colors.navy : undefined}
+                      onPress={() => setSelection(selectedTooth === fdi ? { kind: 'none' } : { kind: 'tooth', fdi })}
+                    />
+                  ))}
+                </View>
+              )}
+              {selectedTooth && (
+                <>
+                  <Control label="Rotação (°)" value={editOf(selectedTooth).rot} min={-25} max={25} onChange={(v) => setEdit(selectedTooth, { rot: v })} />
+                  <Control label="Largura" value={editOf(selectedTooth).sw} min={0.6} max={1.4} onChange={(v) => setEdit(selectedTooth, { sw: v })} />
+                  <Control label="Comprimento" value={editOf(selectedTooth).sh} min={0.6} max={1.4} onChange={(v) => setEdit(selectedTooth, { sh: v })} />
+                  <View style={styles.chips}>
+                    <Chip label={`Espelhar no ${mirrorFdi(selectedTooth)}`} onPress={() => setEdit(mirrorFdi(selectedTooth), mirrorEdit(editOf(selectedTooth)))} />
+                    <Chip label="Zerar este" onPress={() => setEdit(selectedTooth, NO_EDIT)} />
+                  </View>
+                </>
+              )}
+              <View style={styles.chips}>
+                <Chip label="Reencaixar na boca" onPress={fitTeeth} />
+                {params.edits && <Chip label="Zerar ajustes individuais" onPress={() => setParams((p) => ({ ...p, edits: undefined }))} />}
+              </View>
+            </Card>
+            <Button title="Ajuste fino" variant="ghost" onPress={() => setFine(!fine)} />
+            {fine && (
+              <Card>
+                <Control label="Largura" value={params.centralWidth} min={0.04} max={0.2} onChange={(v) => set({ centralWidth: v })} />
+                <Control label="Comprimento" value={params.heightRatio} min={0.8} max={1.6} onChange={(v) => set({ heightRatio: v })} />
+                <Control label="Espaçamento" value={params.spacing} min={0} max={0.15} onChange={(v) => set({ spacing: v })} />
+                <Control label="Curva do sorriso" value={params.curve} min={-0.1} max={0.35} onChange={(v) => set({ curve: v })} />
+                <Control label="Opacidade" value={params.opacity} min={0.2} max={1} onChange={(v) => set({ opacity: v })} />
+              </Card>
+            )}
             <Card>
               <SectionTitle>Análise facial (face-bow digital)</SectionTitle>
               {!face ? (
@@ -882,7 +895,9 @@ const styles = StyleSheet.create({
   curtainTag: { position: 'absolute', top: 8, backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.sm },
   curtainTagText: { color: '#fff', fontWeight: '800', fontSize: 11 },
   detecting: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.55)', padding: 8, alignItems: 'center' },
-  detectingText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  detectingText: { color: '#fff', fontWeight: '700', fontSize: 12, textAlign: 'center' },
+  zoomBadge: { position: 'absolute', right: 8, top: 8, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.sm },
+  zoomBadgeText: { color: '#fff', fontWeight: '700', fontSize: 12 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 },
   anatomyCard: { width: 118, marginRight: 8, marginBottom: 8, borderRadius: radius.md, borderWidth: 2, borderColor: colors.border, backgroundColor: '#2A2224', overflow: 'hidden' },
   anatomyCardSelected: { borderColor: colors.primary },
