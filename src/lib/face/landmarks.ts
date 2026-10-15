@@ -129,59 +129,67 @@ export type FramingGuide = {
  */
 export const DEFAULT_GUIDE: FramingGuide = { cx: 0.5, cy: 0.42, rx: 0.23, ry: 0.3, mouthCy: 0.585, mouthH: 0.09 };
 
-export type Silhouette = {
-  /** Caminho SVG fechado da cabeça, em px da área de prévia. */
+export type FaceGuide = {
+  /** Janela 3:4 da câmera dentro da área (px); fora dela ficam barras pretas. */
+  frame: { x: number; y: number; w: number; h: number };
+  /** Contorno do rosto (têmporas → mandíbula → queixo) e arco do alto da cabeça, em px. */
   head: string;
-  /** Pescoço e ombros, em px. */
-  shoulders: string;
+  /** Traços de referência: orelhas, sobrancelhas, olhos, nariz e lábios, em px. */
+  features: string;
+  /** Cruz de alinhamento: vertical pela linha média e horizontal pelos olhos. */
+  cross: { x: number; eyeY: number };
   /** Faixa da boca, em px. */
   mouth: { x: number; y: number; w: number; h: number };
-  /** Guia equivalente em frações, para `checkFraming`. */
+  /** Guia equivalente em frações da área inteira, para `checkFraming`. */
   guide: FramingGuide;
 };
 
 /**
- * Silhueta de cabeça e ombros em pixels, com proporção real de cabeça (altura ≈ 1,3 × largura),
- * independente da proporção da tela. A cabeça ocupa ~46% da largura (ou menos, se a tela for baixa).
+ * Guia de rosto no estilo "ficha de foto": janela 3:4, rosto grande (≈78% da largura da janela),
+ * traços de orelhas, sobrancelhas, olhos, nariz e lábios, e cruz de alinhamento. Tudo em px da
+ * área W×H, com proporção real de rosto, independente da proporção da tela.
  */
-export function headSilhouette(W: number, H: number): Silhouette {
-  const headW = Math.min(0.46 * W, (0.6 * H) / 1.3);
-  const hw = headW; // unidade: largura da cabeça
-  const cx = W / 2;
-  const cy = Math.max(0.65 * hw + 0.06 * H, 0.4 * H);
+export function faceGuide(W: number, H: number): FaceGuide {
+  // janela 3:4 centralizada
+  let fw = W;
+  let fh = (W * 4) / 3;
+  if (fh > H) {
+    fh = H;
+    fw = (H * 3) / 4;
+  }
+  const frame = { x: (W - fw) / 2, y: (H - fh) / 2, w: fw, h: fh };
+  const u = 0.78 * fw; // unidade: largura do rosto nas têmporas
+  const cx = frame.x + fw / 2;
+  const eyeY = frame.y + 0.42 * fh;
+  const cy = eyeY + 0.14 * u; // centro de referência do rosto
   const f = (n: number) => n.toFixed(1);
-  // formato de ovo: mais largo nas têmporas, mais estreito no queixo
-  const pts = [
-    [0, 0.65],
-    [0.22, 0.65, 0.44, 0.47, 0.48, 0.17],
-    [0.52, -0.15, 0.42, -0.62, 0, -0.65],
-    [-0.42, -0.62, -0.52, -0.15, -0.48, 0.17],
-    [-0.44, 0.47, -0.22, 0.65, 0, 0.65],
-  ];
-  const X = (u: number) => f(cx + u * hw);
-  const Y = (u: number) => f(cy + u * hw);
-  const head =
-    `M${X(pts[0][0])},${Y(pts[0][1])} ` +
-    pts
-      .slice(1)
-      .map((c) => `C${X(c[0])},${Y(c[1])} ${X(c[2])},${Y(c[3])} ${X(c[4])},${Y(c[5])}`)
-      .join(' ') +
-    ' Z';
-  const shoulders =
-    `M${X(-0.17)},${Y(0.62)} C${X(-0.17)},${Y(0.74)} ${X(-0.19)},${Y(0.82)} ${X(-0.24)},${Y(0.88)} ` +
-    `C${f(cx - 0.3 * W)},${Y(0.95)} ${f(cx - 0.46 * W)},${f(cy + 1.1 * hw)} ${f(cx - 0.5 * W)},${f(H)} ` +
-    `M${X(0.17)},${Y(0.62)} C${X(0.17)},${Y(0.74)} ${X(0.19)},${Y(0.82)} ${X(0.24)},${Y(0.88)} ` +
-    `C${f(cx + 0.3 * W)},${Y(0.95)} ${f(cx + 0.46 * W)},${f(cy + 1.1 * hw)} ${f(cx + 0.5 * W)},${f(H)}`;
-  const mouth = { x: cx - 0.25 * hw, y: cy + 0.25 * hw, w: 0.5 * hw, h: 0.16 * hw };
+  const X = (a: number) => f(cx + a * u);
+  const Y = (a: number) => f(cy + a * u);
+  const mirror = (d: string) => d.replace(/(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g, (_m, x: string, y: string) => `${f(2 * cx - parseFloat(x))},${y}`);
+
+  // lado esquerdo do rosto (do observador), depois espelhado
+  // queixo arredondado: a metade termina um pouco antes da linha média e fecha com uma curva curta
+  const headLeft = `M${X(-0.5)},${Y(-0.3)} C${X(-0.53)},${Y(0.05)} ${X(-0.42)},${Y(0.56)} ${X(-0.08)},${Y(0.675)} Q${X(0)},${Y(0.69)} ${X(0.08)},${Y(0.675)}`;
+  const head = `${headLeft} ${mirror(headLeft)} M${X(-0.5)},${Y(-0.3)} C${X(-0.5)},${Y(-0.75)} ${X(0.5)},${Y(-0.75)} ${X(0.5)},${Y(-0.3)}`;
+  const earL = `M${X(-0.52)},${Y(-0.12)} C${X(-0.62)},${Y(-0.14)} ${X(-0.62)},${Y(0.2)} ${X(-0.5)},${Y(0.24)}`;
+  const browL = `M${X(-0.42)},${Y(-0.27)} Q${X(-0.25)},${Y(-0.35)} ${X(-0.08)},${Y(-0.27)}`;
+  const eyeL = `M${X(-0.4)},${Y(-0.14)} Q${X(-0.25)},${Y(-0.22)} ${X(-0.1)},${Y(-0.14)} Q${X(-0.25)},${Y(-0.07)} ${X(-0.4)},${Y(-0.14)}`;
+  const noseL = `M${X(-0.11)},${Y(0.17)} Q${X(-0.15)},${Y(0.22)} ${X(-0.05)},${Y(0.25)} Q${X(0)},${Y(0.27)} ${X(0)},${Y(0.25)}`;
+  const lipsL = `M${X(-0.22)},${Y(0.4)} Q${X(-0.1)},${Y(0.35)} ${X(-0.03)},${Y(0.38)} Q${X(0)},${Y(0.36)} ${X(0)},${Y(0.38)} M${X(-0.22)},${Y(0.4)} Q${X(-0.1)},${Y(0.52)} ${X(0)},${Y(0.52)}`;
+  const left = [earL, browL, eyeL, noseL, lipsL].join(' ');
+  const features = `${left} ${mirror(left)}`;
+  const mouth = { x: cx - 0.25 * u, y: cy + 0.32 * u, w: 0.5 * u, h: 0.18 * u };
   return {
+    frame,
     head,
-    shoulders,
+    features,
+    cross: { x: cx, eyeY },
     mouth,
     guide: {
-      cx: 0.5,
+      cx: cx / W,
       cy: cy / H,
-      rx: (0.5 * hw) / W,
-      ry: (0.65 * hw) / H,
+      rx: (0.5 * u) / W,
+      ry: (0.68 * u) / H,
       mouthCy: (mouth.y + mouth.h / 2) / H,
       mouthH: mouth.h / H,
     },

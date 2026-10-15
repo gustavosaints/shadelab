@@ -5,19 +5,21 @@ import { router } from 'expo-router';
 import { useRef, useState } from 'react';
 import { Alert, Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Path, Rect } from 'react-native-svg';
+import Svg, { Line, Path, Rect } from 'react-native-svg';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { Button } from '@/components/Button';
 import { FaceLandmarker, type FaceLandmarkerHandle } from '@/components/FaceLandmarker';
 import { detectFace } from '@/lib/face/detect';
-import { checkFraming, headSilhouette, type FramingCheck } from '@/lib/face/landmarks';
+import { checkFraming, faceGuide, type FramingCheck } from '@/lib/face/landmarks';
 import { setPendingPhoto } from '@/lib/smile/pendingPhoto';
 import { colors, spacing } from '@/theme';
 
 /**
  * Câmera guiada do Smile Design com conferência AO VIVO: a prévia roda dentro de um
- * WebView (getUserMedia) junto com o MediaPipe em modo vídeo; a silhueta de cabeça e
- * ombros fica verde quando o rosto está enquadrado, e só então vale clicar.
+ * WebView (getUserMedia) junto com o MediaPipe em modo vídeo. O guia é uma "ficha de
+ * foto": janela 3:4, rosto grande com traços de sobrancelhas, olhos, nariz, lábios e
+ * orelhas, cruz de alinhamento com o ângulo de inclinação da cabeça. Fica verde quando
+ * o rosto está no lugar, nivelado e sorrindo; só então vale clicar.
  * Se o navegador não liberar a câmera, cai para a câmera nativa com conferência após o clique.
  */
 export default function SmileCapture() {
@@ -29,30 +31,37 @@ export default function SmileCapture() {
 // Prévia ao vivo no WebView
 // ---------------------------------------------------------------------------------------------
 
-/** HTML da prévia ao vivo para uma tela de W×H px (a silhueta é desenhada em px, sem esticar). */
+/** HTML da prévia ao vivo para uma área de W×H px (guia desenhado em px, sem esticar). */
 const liveHtml = (W: number, H: number) => {
-  const S = headSilhouette(W, H);
+  const G = faceGuide(W, H);
+  const fr = G.frame;
   return `<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <style>
   html,body{margin:0;height:100%;background:#000;overflow:hidden}
+  #frame{position:absolute;left:${fr.x}px;top:${fr.y}px;width:${fr.w}px;height:${fr.h}px;background:#000;overflow:hidden}
   video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
   svg{position:absolute;inset:0;width:100%;height:100%}
-  #shade{fill:rgba(0,0,0,0.28)}
+  text{font-family:-apple-system,Helvetica,Arial;font-weight:700}
 </style></head><body>
-<video id="v" autoplay playsinline muted></video>
+<div id="frame"><video id="v" autoplay playsinline muted></video></div>
 <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-  <defs><mask id="m"><rect width="${W}" height="${H}" fill="#fff"/><path d="${S.head}" fill="#000"/></mask></defs>
-  <rect id="shade" width="${W}" height="${H}" mask="url(#m)"/>
-  <path id="head" d="${S.head}" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="2.5" stroke-dasharray="8 6"/>
-  <path id="sh" d="${S.shoulders}" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="2" stroke-dasharray="8 6"/>
-  <rect id="mouth" x="${S.mouth.x.toFixed(1)}" y="${S.mouth.y.toFixed(1)}" width="${S.mouth.w.toFixed(1)}" height="${S.mouth.h.toFixed(1)}" rx="10" fill="none" stroke="rgba(255,255,255,0.8)" stroke-width="1.5" stroke-dasharray="6 5"/>
+  <g id="guide" stroke="rgba(230,230,230,0.85)" stroke-width="2.2" fill="none" stroke-linecap="round">
+    <line id="cv" x1="${G.cross.x}" y1="${fr.y}" x2="${G.cross.x}" y2="${fr.y + fr.h}" stroke="rgba(255,80,80,0.75)" stroke-width="1" stroke-dasharray="4 4"/>
+    <line id="ch" x1="${fr.x}" y1="${G.cross.eyeY}" x2="${fr.x + fr.w}" y2="${G.cross.eyeY}" stroke="rgba(255,80,80,0.75)" stroke-width="1" stroke-dasharray="4 4"/>
+    <path id="head" d="${G.head}"/>
+    <path id="feat" d="${G.features}" stroke-width="1.8" opacity="0.9"/>
+    <rect id="mouth" x="${G.mouth.x.toFixed(1)}" y="${G.mouth.y.toFixed(1)}" width="${G.mouth.w.toFixed(1)}" height="${G.mouth.h.toFixed(1)}" rx="10" stroke-width="1.2" stroke-dasharray="6 5" opacity="0.7"/>
+  </g>
+  <text id="angle" x="${(fr.x + fr.w - 8).toFixed(1)}" y="${(G.cross.eyeY - 8).toFixed(1)}" text-anchor="end" font-size="15" fill="rgba(255,80,80,0.95)"></text>
 </svg>
 <script type="module">
   const post = (o) => window.ReactNativeWebView.postMessage(JSON.stringify(o));
   const v = document.getElementById('v');
-  const head = document.getElementById('head'), sh = document.getElementById('sh'), mouth = document.getElementById('mouth');
-  const GUIDE = ${JSON.stringify(S.guide)};
+  const guide = document.getElementById('guide'), angleEl = document.getElementById('angle');
+  const GUIDE = ${JSON.stringify(G.guide)};
+  const FR = ${JSON.stringify(fr)};
+  const W = ${W}, H = ${H};
   let facing = 'user', stream = null, mirrored = true, landmarker = null, lastPost = 0, lastOk = null, lastT = 0;
 
   function stopStream(){ if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } }
@@ -71,46 +80,53 @@ const liveHtml = (W: number, H: number) => {
   window.__switch = () => start(facing === 'user' ? 'environment' : 'user');
   window.__capture = () => {
     try {
-      const c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight;
+      // recorta o que aparece na janela 3:4 (object-fit: cover)
+      const vw = v.videoWidth, vh = v.videoHeight;
+      const s = Math.max(FR.w / vw, FR.h / vh);
+      const cw = Math.round(FR.w / s), chh = Math.round(FR.h / s);
+      const sx = Math.round((vw - cw) / 2), sy = Math.round((vh - chh) / 2);
+      const c = document.createElement('canvas'); c.width = cw; c.height = chh;
       const ctx = c.getContext('2d');
-      if (mirrored) { ctx.translate(c.width, 0); ctx.scale(-1, 1); }
-      ctx.drawImage(v, 0, 0, c.width, c.height);
+      if (mirrored) { ctx.translate(cw, 0); ctx.scale(-1, 1); }
+      ctx.drawImage(v, sx, sy, cw, chh, 0, 0, cw, chh);
       const data = c.toDataURL('image/jpeg', 0.92).split(',')[1];
-      post({ type:'photo', data, width: c.width, height: c.height, mirrored });
+      post({ type:'photo', data, width: cw, height: chh, mirrored });
     } catch (e) { post({ type:'error', error:'captura: ' + String(e && e.message || e) }); }
   };
 
   function setColor(state){
-    const col = state === 'ok' ? '#00E676' : state === 'bad' ? '#FF5252' : 'rgba(255,255,255,0.9)';
-    head.setAttribute('stroke', col); mouth.setAttribute('stroke', col); sh.setAttribute('stroke', col);
-    head.setAttribute('stroke-width', state === 'ok' ? '4' : '2.5');
-    if (state === 'ok') { head.removeAttribute('stroke-dasharray'); } else { head.setAttribute('stroke-dasharray', '8 6'); }
+    const col = state === 'ok' ? '#00E676' : state === 'bad' ? '#FF5252' : 'rgba(230,230,230,0.85)';
+    guide.setAttribute('stroke', col);
+    guide.setAttribute('stroke-width', state === 'ok' ? '3' : '2.2');
   }
 
-  // posição do vídeo na tela com object-fit: cover
+  // marcos (0..1 do vídeo) → frações da área inteira W×H, considerando a janela e o object-fit: cover
   function toDisplay(x, y){
-    const W = innerWidth, H = innerHeight, vw = v.videoWidth, vh = v.videoHeight;
-    const s = Math.max(W / vw, H / vh);
-    const offX = (W - vw * s) / 2, offY = (H - vh * s) / 2;
-    let dx = (x * vw * s + offX) / W; const dy = (y * vh * s + offY) / H;
-    if (mirrored) dx = 1 - dx;
-    return [dx, dy];
+    const vw = v.videoWidth, vh = v.videoHeight;
+    const s = Math.max(FR.w / vw, FR.h / vh);
+    const offX = FR.x + (FR.w - vw * s) / 2, offY = FR.y + (FR.h - vh * s) / 2;
+    let px = x * vw * s + offX; const py = y * vh * s + offY;
+    if (mirrored) px = 2 * (FR.x + FR.w / 2) - px;
+    return [px / W, py / H];
   }
   function check(lm){
     let minX=1,minY=1,maxX=0,maxY=0;
     for (const p of lm){ const [x,y]=toDisplay(p.x,p.y); if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y; }
-    const [uxm, uy] = toDisplay(lm[13].x, lm[13].y); const [lxm, ly] = toDisplay(lm[14].x, lm[14].y);
+    const [, uy] = toDisplay(lm[13].x, lm[13].y); const [, ly] = toDisplay(lm[14].x, lm[14].y);
+    const [rx, ry] = toDisplay(lm[468].x, lm[468].y); const [lx, lyy] = toDisplay(lm[473].x, lm[473].y);
+    const roll = Math.atan2((lyy - ry) * H, (lx - rx) * W) * 180 / Math.PI;
     const w = maxX-minX, h = maxY-minY, cx = minX + w/2, cy = minY + h/2;
     const issues = [];
-    if (Math.abs(cx - GUIDE.cx) > 0.07) issues.push(cx < GUIDE.cx ? 'Mova o rosto para a direita' : 'Mova o rosto para a esquerda');
-    if (Math.abs(cy - GUIDE.cy) > 0.09) issues.push(cy < GUIDE.cy ? 'Abaixe um pouco' : 'Suba um pouco');
+    if (Math.abs(cx - GUIDE.cx) > 0.06) issues.push(cx < GUIDE.cx ? 'Mova o rosto para a direita' : 'Mova o rosto para a esquerda');
+    if (Math.abs(cy - GUIDE.cy) > 0.07) issues.push(cy < GUIDE.cy ? 'Abaixe um pouco' : 'Suba um pouco');
     const ratio = w / (GUIDE.rx * 2);
-    if (ratio < 0.8) issues.push('Aproxime');
-    if (ratio > 1.25) issues.push('Afaste');
+    if (ratio < 0.82) issues.push('Aproxime');
+    if (ratio > 1.22) issues.push('Afaste');
+    if (Math.abs(roll) > 4) issues.push('Nivele a cabeça');
     const mouthCy = (uy + ly) / 2;
     if (Math.abs(mouthCy - GUIDE.mouthCy) > GUIDE.mouthH) issues.push('Boca fora da faixa');
     if (Math.abs(ly - uy) < 0.012) issues.push('Sorria mostrando os dentes');
-    return issues;
+    return { issues, roll };
   }
 
   async function loop(now){
@@ -119,10 +135,13 @@ const liveHtml = (W: number, H: number) => {
     lastT = now;
     let lm = null;
     try { const r = landmarker.detectForVideo(v, now); lm = r.faceLandmarks && r.faceLandmarks[0]; } catch (e) { return; }
-    const issues = lm ? check(lm) : ['Nenhum rosto'];
+    let issues = ['Nenhum rosto'], roll = null;
+    if (lm) { const c = check(lm); issues = c.issues; roll = c.roll; }
     const ok = lm && issues.length === 0;
     setColor(lm ? (ok ? 'ok' : 'bad') : 'none');
-    if (ok !== lastOk || now - lastPost > 400) { lastOk = ok; lastPost = now; post({ type:'framing', ok: !!ok, issues }); }
+    if (roll === null) { angleEl.textContent = ''; }
+    else { angleEl.textContent = (roll > 0 ? '+' : '') + roll.toFixed(0) + '°'; angleEl.setAttribute('fill', Math.abs(roll) <= 4 ? '#00E676' : '#FF5252'); }
+    if (ok !== lastOk || now - lastPost > 400) { lastOk = ok; lastPost = now; post({ type:'framing', ok: !!ok, issues, roll }); }
   }
 
   (async () => {
@@ -199,7 +218,7 @@ function LiveCapture({ onFallback }: { onFallback: () => void }) {
       ? 'Enquadramento OK, pode fotografar.'
       : framing.issues.join(' · ')
     : detectorOk === false
-      ? 'Sem internet: a conferência automática está desligada. Enquadre pela silhueta.'
+      ? 'Sem internet: a conferência automática está desligada. Enquadre pelo guia.'
       : cameraOk
         ? 'Carregando o detector…'
         : 'Abrindo a câmera…';
@@ -248,7 +267,7 @@ function LiveCapture({ onFallback }: { onFallback: () => void }) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Fallback: câmera nativa com silhueta estática e conferência depois do clique
+// Fallback: câmera nativa com guia estático e conferência depois do clique
 // ---------------------------------------------------------------------------------------------
 
 type Shot = { uri: string; width: number; height: number; mirrored: boolean };
@@ -272,7 +291,7 @@ function NativeCapture() {
     try {
       if (!landmarker.current) throw new Error('detector indisponível');
       const det = await detectFace(landmarker.current, s.uri);
-      setCheck(det ? checkFraming(det.box, headSilhouette(size.width || 1, size.height || 1).guide) : { ok: false, issues: ['Nenhum rosto encontrado'] });
+      setCheck(det ? checkFraming(det.box, faceGuide(size.width || 1, size.height || 1).guide) : { ok: false, issues: ['Nenhum rosto encontrado'] });
     } catch (e) {
       setCheck({ ok: false, issues: [`Não deu para conferir: ${String((e as Error).message ?? e)}`] });
     } finally {
@@ -323,7 +342,8 @@ function NativeCapture() {
     );
   }
 
-  const frameColor = check ? (check.ok ? '#00E676' : '#FF5252') : 'rgba(255,255,255,0.85)';
+  const frameColor = check ? (check.ok ? '#00E676' : '#FF5252') : 'rgba(230,230,230,0.85)';
+  const G = size.width > 0 ? faceGuide(size.width, size.height) : null;
   return (
     <View style={styles.root} onLayout={(e) => setSize(e.nativeEvent.layout)}>
       <FaceLandmarker ref={landmarker} />
@@ -332,17 +352,15 @@ function NativeCapture() {
       ) : (
         <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing={facing} mirror={facing === 'front'} flash="off" animateShutter={false} onCameraReady={() => setReady(true)} />
       )}
-      {size.width > 0 &&
-        (() => {
-          const S = headSilhouette(size.width, size.height);
-          return (
-            <Svg pointerEvents="none" width={size.width} height={size.height} style={StyleSheet.absoluteFill}>
-              <Path d={S.head} stroke={frameColor} strokeWidth={check?.ok ? 4 : 2.5} strokeDasharray={check ? undefined : '8 6'} fill="none" />
-              <Path d={S.shoulders} stroke={frameColor} strokeWidth={2} strokeDasharray="8 6" fill="none" />
-              <Rect x={S.mouth.x} y={S.mouth.y} width={S.mouth.w} height={S.mouth.h} rx={10} stroke={frameColor} strokeWidth={1.5} strokeDasharray="6 5" fill="none" />
-            </Svg>
-          );
-        })()}
+      {G && (
+        <Svg pointerEvents="none" width={size.width} height={size.height} style={StyleSheet.absoluteFill}>
+          <Line x1={G.cross.x} y1={G.frame.y} x2={G.cross.x} y2={G.frame.y + G.frame.h} stroke="rgba(255,80,80,0.75)" strokeWidth={1} strokeDasharray="4 4" />
+          <Line x1={G.frame.x} y1={G.cross.eyeY} x2={G.frame.x + G.frame.w} y2={G.cross.eyeY} stroke="rgba(255,80,80,0.75)" strokeWidth={1} strokeDasharray="4 4" />
+          <Path d={G.head} stroke={frameColor} strokeWidth={check?.ok ? 3 : 2.2} fill="none" strokeLinecap="round" />
+          <Path d={G.features} stroke={frameColor} strokeWidth={1.8} fill="none" strokeLinecap="round" opacity={0.9} />
+          <Rect x={G.mouth.x} y={G.mouth.y} width={G.mouth.w} height={G.mouth.h} rx={10} stroke={frameColor} strokeWidth={1.2} strokeDasharray="6 5" fill="none" opacity={0.7} />
+        </Svg>
+      )}
       <View style={[styles.top, { paddingTop: insets.top + 8 }]}>
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <Text style={styles.topBtn}>Fechar</Text>
@@ -359,7 +377,7 @@ function NativeCapture() {
       <View style={[styles.bottom, { paddingBottom: insets.bottom + 16 }]}>
         {!shot ? (
           <>
-            <Text style={styles.tip}>Encaixe a cabeça na silhueta e a boca na faixa. Sorriso amplo mostrando os dentes.</Text>
+            <Text style={styles.tip}>Encaixe o rosto no guia: olhos na linha, boca na faixa. Sorriso amplo mostrando os dentes.</Text>
             <View style={styles.controls}>
               <Pressable onPress={pickPhoto} style={styles.sideBtn}>
                 <Text style={styles.sideText}>Galeria</Text>
