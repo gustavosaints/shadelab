@@ -248,40 +248,49 @@ export default function Smile() {
     }
   };
 
-  /** Encaixa os dentes na boca: primeiro pela análise dos pixels; se falhar, pela geometria da boca. */
+  /** Parâmetros com o arco encaixado na boca (72% entre as comissuras, gengiva sob o lábio). */
+  const archFittedParams = (base: SmileParams): SmileParams => {
+    if (!base.mouth || !area.width) return base;
+    const cur = anatomy ? layoutAnatomy(base, anatomy, area.width, area.height) : layoutTeeth(base, area.width, area.height);
+    const t23 = cur.find((t) => t.fdi === '23');
+    const t11 = cur.find((t) => t.fdi === '11');
+    if (!t23 || !t11) return base;
+    const half = t23.x + t23.w - base.midlineX * area.width;
+    return clampParams(fitToMouth(base, base.mouth, area.width, area.height, half, t11.h));
+  };
+  const fitArchToMouth = () => setParams((p) => archFittedParams(p));
+
+  /**
+   * Encaixa os dentes na boca. A LARGURA vem sempre da geometria da boca (estável); a análise dos
+   * pixels, quando confiável, só refina linha média, gengiva e comprimento (e as larguras relativas
+   * de laterais/caninos quando quase todos os espaços foram vistos).
+   */
   const fitTeeth = async () => {
     if (!photo || !params.mouth || !area.width) return;
     setDetecting('Encaixando os dentes na boca…');
+    const byMouth = archFittedParams({ ...params, edits: undefined });
     try {
-      const fit = await fitTeethToPhoto(photo, params.mouth, face?.philtrum.x ?? params.midlineX, params);
-      // sanidade: um central costuma ter 10% a 20% da largura da boca (comissura a comissura);
-      // fora disso a detecção pegou a boca inteira ou um reflexo, e é melhor encaixar pela boca
-      const xs = params.mouth.map((m) => m.x);
-      const mouthW = Math.max(...xs) - Math.min(...xs);
-      const plausible = fit && fit.params.centralWidth > 0.09 * mouthW && fit.params.centralWidth < 0.21 * mouthW;
-      if (fit && plausible && fit.fit.confidence >= 0.6) {
-        setParams(clampParams(fit.params));
-        setDetectNote(`Dentes alinhados pelos espaços encontrados na foto (${Math.round(fit.fit.confidence * 100)}%).`);
-        return;
+      const fit = await fitTeethToPhoto(photo, params.mouth, face?.philtrum.x ?? params.midlineX, byMouth);
+      if (fit && fit.fit.confidence >= 0.6) {
+        const refined: SmileParams = {
+          ...byMouth,
+          midlineX: fit.params.midlineX,
+          gumY: fit.params.gumY,
+          heightRatio: fit.params.heightRatio,
+          edits: fit.fit.confidence >= 0.8 ? fit.params.edits : undefined,
+        };
+        setParams(clampParams(refined));
+        setDetectNote(`Encaixados pela boca; linha média e gengiva ajustadas pelos dentes da foto (${Math.round(fit.fit.confidence * 100)}%).`);
+      } else {
+        setParams(byMouth);
+        setDetectNote('Encaixados pela largura da boca. Ajuste no passo 4 se precisar.');
       }
-      fitArchToMouth();
-      setDetectNote(fit ? 'Poucos espaços visíveis: encaixei pela largura da boca. Ajuste no passo 4.' : 'Encaixei pela largura da boca. Ajuste no passo 4.');
     } catch {
-      fitArchToMouth();
-      setDetectNote('Encaixei pela largura da boca. Ajuste no passo 4.');
+      setParams(byMouth);
+      setDetectNote('Encaixados pela largura da boca. Ajuste no passo 4 se precisar.');
     } finally {
       setDetecting(null);
     }
-  };
-
-  const fitArchToMouth = () => {
-    if (!params.mouth || !area.width) return;
-    const cur = anatomy ? layoutAnatomy(params, anatomy, area.width, area.height) : layoutTeeth(params, area.width, area.height);
-    const t23 = cur.find((t) => t.fdi === '23');
-    const t11 = cur.find((t) => t.fdi === '11');
-    if (!t23 || !t11) return;
-    const half = t23.x + t23.w - params.midlineX * area.width;
-    set(fitToMouth(params, params.mouth, area.width, area.height, half, t11.h));
   };
 
   // ----- Foto vinda da câmera guiada e detecção automática ao medir a área -----
