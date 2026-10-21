@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 // GERADO por scripts/anatomia/export3d.mjs — não editar à mão.
 // Arcos completos (superior + inferior) das bibliotecas do exocad, em assets/arcos/<id>.bin.
 export type ArchEntry = { id: string; name: string; bin: number };

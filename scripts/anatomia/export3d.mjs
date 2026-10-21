@@ -209,7 +209,8 @@ function writeCatalog(entries) {
   const lines = entries.map((e) => `  { id: '${e.id}', name: ${JSON.stringify(e.name)}, bin: require('../../../assets/arcos/${e.id}.bin') },`);
   fs.writeFileSync(
     CATALOG_TS,
-    `// GERADO por scripts/anatomia/export3d.mjs — não editar à mão.\n// Arcos completos (superior + inferior) das bibliotecas do exocad, em assets/arcos/<id>.bin.\nexport type ArchEntry = { id: string; name: string; bin: number };\nexport const ARCH_CATALOG: ArchEntry[] = [\n${lines.join('\n')}\n];\n`,
+    `/* eslint-disable @typescript-eslint/no-require-imports */
+// GERADO por scripts/anatomia/export3d.mjs — não editar à mão.\n// Arcos completos (superior + inferior) das bibliotecas do exocad, em assets/arcos/<id>.bin.\nexport type ArchEntry = { id: string; name: string; bin: number };\nexport const ARCH_CATALOG: ArchEntry[] = [\n${lines.join('\n')}\n];\n`,
   );
   console.log(`catálogo: ${CATALOG_TS} (${entries.length} arcos)`);
 }
