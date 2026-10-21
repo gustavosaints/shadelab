@@ -67,8 +67,8 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   altura do central, larguras de laterais/caninos em `edits`). Tudo com ajuste manual: "Mover todos" (arco) /
   "Mover um" (toque seleciona o dente). Reabrir caso: `/smile?caseId=` carrega e salva por cima; a análise de cor
   aceita `caseId` + dados do caso em `/shade/analyze`.
-- `src/lib/smile/scenarios.ts` cenários de tratamento com um toque (natural, facetas, clareamento, gengivectomia,
-  fechar diastema, alinhar): presets sobre os parâmetros atuais + cor sugerida por escala. Na tela: cartão
+- `src/lib/smile/scenarios.ts` cenários de tratamento (presets) — a UI foi RETIRADA do Smile Design a pedido do
+  Gustavo em 2026-10-21, junto com as proporções Áurea/RED (só "Natural" fica; o código continua para testes). Na tela: cartão
   "Comparar" com cortina arrastável (foto original recortada por cima do canvas), lado a lado e variações
   (`components/SmilePanes.tsx`, até 3 guardadas em `SmileCase.variants`); "Compartilhar imagem" captura os painéis
   quando um modo lado a lado/variações está ativo.

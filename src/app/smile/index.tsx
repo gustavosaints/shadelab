@@ -41,7 +41,6 @@ import {
 } from '@/lib/smile/frame';
 import { addMouthPoint, defaultMouth, fitToMouth, mouthBounds, removeMouthPoint } from '@/lib/smile/mouth';
 import { takePendingPhoto } from '@/lib/smile/pendingPhoto';
-import { applyScenario, SCENARIOS } from '@/lib/smile/scenarios';
 import {
   clampEdit,
   clampParams,
@@ -548,13 +547,6 @@ export default function Smile() {
     if (half > 1) set({ centralWidth: params.centralWidth * (Math.max(1, newHalf) / half), curve: params.curve - dy / (ch * 2) });
   };
 
-  const runScenario = (id: (typeof SCENARIOS)[number]['id']) => {
-    if (!area.width) return;
-    const r = applyScenario(id, params, { system: settings.shadeSystem, aspect: area.width / area.height });
-    setParams(clampParams(r.params));
-    if (r.shade) chooseShade(r.shade);
-  };
-
   const saveVariant = () => {
     if (variants.length >= 3) return;
     setVariants([...variants, { name: ['A', 'B', 'C'][variants.length], params, targetShade }]);
@@ -870,23 +862,8 @@ export default function Smile() {
                   <Control label="Transição da forma (quadrada → oval → triangular)" value={shapeMix} min={0} max={1} onChange={(v) => set({ shapeMix: v, shape: shapeFromMix(v) })} />
               </>
               )}
-              <SectionTitle>Proporção</SectionTitle>
-              <View style={styles.chips}>
-                <Chip label="Natural" selected={params.proportion === 'natural'} onPress={() => set({ proportion: 'natural' })} />
-                <Chip label="Áurea (62% / 38%)" selected={params.proportion === 'golden'} onPress={() => set({ proportion: 'golden' })} />
-                <Chip label="RED (70% / 50%)" selected={params.proportion === 'red'} onPress={() => set({ proportion: 'red' })} />
-              </View>
               <View style={styles.chips}>
                 <Chip label="Reencaixar na boca" onPress={fitTeeth} />
-              </View>
-            </Card>
-            <Card>
-              <SectionTitle>Cenários de tratamento</SectionTitle>
-              <Muted>Um toque aplica um preset de forma, proporção, comprimento e cor; a posição do arco é mantida.</Muted>
-              <View style={styles.chips}>
-                {SCENARIOS.map((s) => (
-                  <Chip key={s.id} label={s.name} onPress={() => runScenario(s.id)} />
-                ))}
               </View>
             </Card>
             <Button title="Ajustar os dentes →" onPress={() => setStep('ajustar')} />
