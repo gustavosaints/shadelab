@@ -23,7 +23,10 @@
     },
     "android": {
       "package": "com.shadelab.app",
-      "permissions": ["CAMERA", "READ_MEDIA_IMAGES"],
+      "permissions": [
+        "CAMERA",
+        "READ_MEDIA_IMAGES"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#0E1A2B",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -50,7 +53,8 @@
         {
           "photosPermission": "O ShadeLab acessa suas fotos para analisar imagens já capturadas."
         }
-      ]
+      ],
+      "expo-asset"
     ]
   }
 }

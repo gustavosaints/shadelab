@@ -42,7 +42,14 @@ export type SmileParams = {
   mouth?: MouthPoint[];
   /** Ajustes dente a dente (por FDI "11".."23"), por cima do layout automático. */
   edits?: Partial<Record<string, ToothEdit>>;
+  /** Anatomia 3D ao vivo: id do arco em `archCatalog.ts`. Ausente = contornos SVG com `shape`. */
+  arch?: string;
+  /** Ajustes só do 3D: inclinações (graus), inferior visível/abertura (mm), sombra do lábio (0..1). */
+  arch3d?: Partial<Arch3DParams>;
 };
+
+export type Arch3DParams = { rotX: number; rotY: number; rotZ: number; showLower: boolean; lowerGap: number; lipShadow: number; gloss: number };
+export const DEFAULT_ARCH3D: Arch3DParams = { rotX: 0, rotY: 0, rotZ: 0, showLower: true, lowerGap: 0, lipShadow: 0.5, gloss: 0.6 };
 
 export type MouthPoint = { x: number; y: number };
 

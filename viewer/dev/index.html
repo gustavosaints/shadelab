@@ -1,0 +1,66 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>ShadeLab 3D — teste</title>
+    <style>
+      body { margin: 0; background: #222; color: #ddd; font: 13px system-ui, sans-serif; display: flex; }
+      #stage { position: relative; width: 600px; height: 800px; background: #000; flex: none; }
+      #photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+      #frame { position: absolute; inset: 0; }
+      #frame iframe { width: 100%; height: 100%; border: 0; background: transparent; }
+      #panel { padding: 12px; width: 320px; }
+      label { display: block; margin: 6px 0 2px; }
+      input[type=range] { width: 100%; }
+      #log { white-space: pre-wrap; font: 11px monospace; color: #9f9; }
+      svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <div id="stage">
+      <img id="photo" src="face.jpg" />
+      <div id="frame"><iframe id="v" src="frame.html"></iframe></div>
+      <svg id="ov" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+    </div>
+    <div id="panel">
+      <div id="controls"></div>
+      <label><input type="checkbox" id="showMouth" checked /> mostrar contorno da boca</label>
+      <button id="snap">snapshot</button>
+      <div id="log"></div>
+    </div>
+    <script>
+      // boca aproximada para a foto de teste (frações)
+      const MOUTH = [
+        { x: 0.335, y: 0.655 }, { x: 0.40, y: 0.625 }, { x: 0.50, y: 0.615 }, { x: 0.60, y: 0.625 }, { x: 0.665, y: 0.655 },
+        { x: 0.60, y: 0.70 }, { x: 0.50, y: 0.715 }, { x: 0.40, y: 0.70 },
+      ];
+      const P = { midlineX: 0.5, incisalY: 0.675, centralWidth: 0.055, rotX: 0, rotY: 0, rotZ: 0, gloss: 0.6, opacity: 1, showLower: true, lowerGap: 0, lipShadow: 0.5, lipShadowSize: 0.3, crownMm: 10.5, gumFadeMm: 1.5, color: '#e6d3b4' };
+      const RANGES = { midlineX: [0, 1, 0.001], incisalY: [0, 1, 0.001], centralWidth: [0.01, 0.3, 0.001], rotX: [-30, 30, 0.5], rotY: [-30, 30, 0.5], rotZ: [-15, 15, 0.5], gloss: [0, 1, 0.01], opacity: [0, 1, 0.01], lowerGap: [0, 10, 0.1], lipShadow: [0, 1, 0.01], lipShadowSize: [0.05, 1, 0.01], crownMm: [6, 16, 0.1], gumFadeMm: [0.2, 5, 0.1] };
+      const log = (s) => (document.getElementById('log').textContent = s + '\n' + document.getElementById('log').textContent.slice(0, 800));
+      const z = +(new URLSearchParams(location.search).get('zoom') || 1);
+      if (z !== 1) { const st = document.getElementById('stage'); st.style.transformOrigin = '50% 66%'; st.style.transform = 'scale(' + z + ')'; st.style.overflow = 'hidden'; }
+      const v = document.getElementById('v');
+      const api = () => v.contentWindow.ShadeLab3D;
+      const send = () => api() && api().setParams({ ...P, mouth: document.getElementById('showMouth').checked ? MOUTH : MOUTH });
+      const ctr = document.getElementById('controls');
+      for (const [k, [lo, hi, st]] of Object.entries(RANGES)) {
+        const l = document.createElement('label'); l.textContent = k + ' = ' + P[k];
+        const i = document.createElement('input'); i.type = 'range'; i.min = lo; i.max = hi; i.step = st; i.value = P[k];
+        i.oninput = () => { P[k] = +i.value; l.textContent = k + ' = ' + P[k]; send(); };
+        ctr.append(l, i);
+      }
+      const cb = document.createElement('label'); cb.innerHTML = '<input type=checkbox checked id=lw> inferior'; ctr.append(cb);
+      cb.querySelector('input').onchange = (e) => { P.showLower = e.target.checked; send(); };
+      const col = document.createElement('input'); col.type = 'color'; col.value = P.color; col.oninput = () => { P.color = col.value; send(); }; ctr.append(col);
+      document.getElementById('ov').innerHTML = '<polygon points="' + MOUTH.map((m) => (m.x * 100) + ',' + (m.y * 100)).join(' ') + '" fill="none" stroke="#0ff" stroke-width="0.3"/>';
+      document.getElementById('showMouth').onchange = (e) => (document.getElementById('ov').style.display = e.target.checked ? 'block' : 'none');
+      document.getElementById('snap').onclick = () => { const u = api().snapshot(); const w = window.open(); w.document.write('<img src="' + u + '">'); };
+      v.addEventListener('load', async () => {
+        v.contentWindow.onShadeLabMessage = (m) => log(JSON.stringify(m).slice(0, 200));
+        const buf = await (await fetch('../../assets/arcos/avelar-x1.bin')).arrayBuffer();
+        api().loadArch(buf);
+        send();
+      });
+    </script>
+  </body>
+</html>
