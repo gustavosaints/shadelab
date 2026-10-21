@@ -13,6 +13,10 @@ export default function RootLayout() {
           headerTitleStyle: { fontWeight: '700' },
           contentStyle: { backgroundColor: colors.bg },
           headerBackButtonDisplayMode: 'minimal',
+          // sem "voltar" ao deslizar da borda: nas telas de edição (foto com zoom, quadros, alças) o gesto
+          // disparava e jogava o usuário de volta ao início (pedido do Gustavo, 2026-10-21)
+          gestureEnabled: false,
+          fullScreenGestureEnabled: false,
         }}
       >
         <Stack.Screen name="index" options={{ title: 'ShadeLab' }} />
