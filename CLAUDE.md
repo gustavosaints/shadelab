@@ -85,11 +85,10 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
 - Edição dente a dente: `SmileParams.edits[fdi] = { dx, dy, sw, sh, rot }` aplicado por `applyToothEdit` nos dois
   layouts; rotação desenhada com `rotate()` em torno do centro da caixa; com um dente selecionado, arrastar na foto
   move só ele.
-- `scripts/anatomia/` `import.mjs` (copia da biblioteca do exocad só os anteriores superiores), `mesh.mjs` (lê `.eoff`
-  = OFF binário do exocad, e `.stl`), `raster.mjs` (rasterizador ortográfico com z-buffer e normais), `png.mjs`,
-  `render.mjs` (luz de estúdio, translucidez incisal por espessura, corte na linha da gengiva, catálogo TS) e
-  `libraries.json` (quais anatomias entram no app). Orientação das malhas: x = mesial (dente direito), y = vestibular,
-  z = incisal; o `upperjaw.xml` dá posição e eixos de cada dente no arco e a câmera olha o arco de frente.
+- `scripts/anatomia/` `import.mjs` (copia da biblioteca do exocad para `reference/anatomia`, só consulta),
+  `mesh.mjs` (lê `.eoff` = OFF binário do exocad, e `.stl`; `readToothBow` lê o XML do arco), `export3d.mjs` +
+  `arcos.json` (arcos 3D do app). Orientação das malhas: x = mesial (dente direito), y = vestibular, z = incisal; o
+  XML dá posição e eixos de cada dente no arco (cada arcada no seu próprio referencial, z = oclusal).
 - `src/lib/storage/` AsyncStorage: `settings.ts` e `cases.ts` (`ShadeCase` | `SmileCase`, fotos copiadas para
   `Paths.document/cases`).
 - `src/components/` `Marker` (quadrado de amostra arrastável), `Handle` (alça), `SmileOverlay` (SVG), etc.
@@ -117,6 +116,5 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
    com cor/opacidade e carimbo para esconder os dentes originais, blur para casar com a foto, antes/depois com
    cortina, PDF do smile frame para o laboratório, marcos faciais automáticos (MediaPipe), vídeo.
 3. "Calibrar meu cartão": fotografar qualquer cartão cinza/branco ao lado de um tab conhecido e guardar o Lab real.
-4. Depois: 3D ao vivo (expo-gl + three.js) para girar/inclinar e ajustar curvatura do arco.
-5. Build iOS via EAS (`eas build --platform ios --profile production` + `eas submit`) — trocar `bundleIdentifier`
+4. Build iOS via EAS (`eas build --platform ios --profile production` + `eas submit`) — trocar `bundleIdentifier`
    em `app.json` antes do primeiro build.
