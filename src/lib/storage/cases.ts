@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Directory, File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
 import type { Lab } from '@/lib/color/convert';
+import type { ThirdsProfile } from '@/lib/color/match';
+import type { Rect } from '@/lib/image/stats';
 import type { ShadeSystemId } from '@/lib/color/shades';
 import type { FacePoints } from '@/lib/smile/frame';
 import type { SmileParams } from '@/lib/smile/teeth';
@@ -41,6 +43,14 @@ export type ShadeCase = {
   gingivaHex?: string;
   matches: StoredMatch[];
   confidence: number;
+  /** Quadro do dente na foto (px da imagem) e orientação, para desenhar os terços no PDF. */
+  toothRect?: Rect;
+  lowerTooth?: boolean;
+  /** Cor por terços (cervical, médio, incisal). */
+  thirds?: ThirdsProfile;
+  gingivaRect?: Rect;
+  /** Tabs de gengiva mais próximos (escala IPS Gingiva). */
+  gingivaMatches?: { shadeId: string; deltaE: number }[];
 };
 
 export type SmileCase = {

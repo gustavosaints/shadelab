@@ -154,3 +154,14 @@ describe('splitThirds', () => {
     expect(low.incisal.y).toBe(20);
   });
 });
+
+describe('matchGingiva', () => {
+  it('acerta cada tab de gengiva pelos valores padrão e prefere a calibração quando completa', async () => {
+    const { GINGIVA_SYSTEM, matchGingiva } = await import('@/lib/color/gingiva');
+    for (const g of GINGIVA_SYSTEM.shades) expect(matchGingiva(g.lab).matches[0].shade.id).toBe(g.id);
+    const calib = Object.fromEntries(GINGIVA_SYSTEM.shades.map((g, i) => [g.id, { L: 40 + i * 8, a: 20, b: 5 }]));
+    const r = matchGingiva({ L: 56, a: 20, b: 5 }, calib);
+    expect(r.calibrated).toBe(true);
+    expect(r.matches[0].shade.id).toBe('G3');
+  });
+});

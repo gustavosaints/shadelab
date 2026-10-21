@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/Button';
 import { colors, spacing } from '@/theme';
 
-type Params = { mode?: 'shade' | 'calibrate'; shade?: string };
+type Params = { mode?: 'shade' | 'calibrate' | 'calibrate-gingiva'; shade?: string };
 
 const ZOOM_STEPS = [0, 0.25, 0.5];
 
@@ -95,7 +95,7 @@ export default function Capture() {
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <Text style={styles.topBtn}>Fechar</Text>
         </Pressable>
-        <Text style={styles.topTitle}>{mode === 'calibrate' ? `Calibrar ${shade}` : 'Tirar cor'}</Text>
+        <Text style={styles.topTitle}>{mode === 'calibrate' ? `Calibrar ${shade}` : mode === 'calibrate-gingiva' ? `Calibrar gengiva ${shade}` : 'Tirar cor'}</Text>
         <Pressable onPress={nextZoom} hitSlop={12}>
           <Text style={[styles.topBtn, { textAlign: 'right' }]}>{`${(1 + zoom * 4).toFixed(zoom ? 1 : 0)}x`}</Text>
         </Pressable>

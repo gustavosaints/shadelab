@@ -5,8 +5,9 @@ import { Button } from '@/components/Button';
 import { Card, Muted, SectionTitle } from '@/components/Card';
 import { Chip } from '@/components/Chip';
 import { labToHex } from '@/lib/color/convert';
+import { GINGIVA_SYSTEM } from '@/lib/color/gingiva';
 import { getSystem, SHADE_SYSTEMS, type ShadeSystemId } from '@/lib/color/shades';
-import { clearCalibration, saveSettings } from '@/lib/storage/settings';
+import { clearCalibration, clearGingivaCalibration, saveSettings } from '@/lib/storage/settings';
 import { useSettings } from '@/lib/useSettings';
 import { colors, radius, spacing } from '@/theme';
 
@@ -17,6 +18,8 @@ export default function Settings() {
   const system = getSystem(settings.shadeSystem);
   const calib = settings.calibrations[settings.shadeSystem] ?? {};
   const done = system.shades.filter((s) => calib[s.id]).length;
+  const gcalib = settings.gingivaCalibrations ?? {};
+  const gdone = GINGIVA_SYSTEM.shades.filter((s) => gcalib[s.id]).length;
 
   const setSystem = async (id: ShadeSystemId) => {
     await saveSettings({ shadeSystem: id, referenceTab: SHADE_SYSTEMS[id].shades[1]?.id ?? '' });
@@ -82,6 +85,40 @@ export default function Settings() {
           })}
         </View>
         {done > 0 && <Button title="Limpar calibração" variant="ghost" onPress={reset} />}
+      </Card>
+
+      <Card>
+        <SectionTitle>{`Calibrar escala de gengiva · ${gdone}/${GINGIVA_SYSTEM.shades.length}`}</SectionTitle>
+        <Muted>
+          {GINGIVA_SYSTEM.name}. Os valores de fábrica são aproximados: fotografe cada tab de gengiva com a mesma referência e
+          luz. A foto do tab fica guardada e aparece no PDF ao lado da gengiva do paciente.
+        </Muted>
+        <View style={styles.grid}>
+          {GINGIVA_SYSTEM.shades.map((s) => {
+            const m = gcalib[s.id];
+            return (
+              <Pressable
+                key={s.id}
+                onPress={() => router.push({ pathname: '/shade/capture', params: { mode: 'calibrate-gingiva', shade: s.id } })}
+                style={[styles.tab, m && styles.tabDone]}
+              >
+                <View style={[styles.tabSwatch, { backgroundColor: labToHex(m ?? s.lab) }]} />
+                <Text style={styles.tabId}>{s.id}</Text>
+                <Text style={[styles.tabStatus, m && { color: colors.accent }]}>{m ? 'medido' : 'medir'}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        {gdone > 0 && (
+          <Button
+            title="Limpar calibração da gengiva"
+            variant="ghost"
+            onPress={async () => {
+              await clearGingivaCalibration();
+              reload();
+            }}
+          />
+        )}
       </Card>
 
       <Card>

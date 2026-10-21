@@ -8,6 +8,8 @@ import { Card, Muted, SectionTitle } from '@/components/Card';
 import { ShadeRow } from '@/components/ShadeRow';
 import { findShade, getSystem } from '@/lib/color/shades';
 import { deleteCase, getCase, isSmileCase, type AnyCase, type ShadeCase, type SmileCase } from '@/lib/storage/cases';
+import { findGingiva } from '@/lib/color/gingiva';
+import { buildShadeReportHtml } from '@/lib/report/shadeReport';
 import { loadSettings } from '@/lib/storage/settings';
 import { colors, radius, spacing } from '@/theme';
 
@@ -99,42 +101,7 @@ function ShadeDetail({ c }: { c: ShadeCase }) {
   const exportPdf = async () => {
     try {
       const s = await loadSettings();
-      const rows = c.matches
-        .map(
-          (m, i) =>
-            `<tr><td>${i === 0 ? 'Mais provável' : i === 1 ? 'Alternativa' : i + 1}</td><td><b>${m.shadeId}</b></td><td>${m.deltaE.toFixed(1)}</td></tr>`,
-        )
-        .join('');
-      const html = `
-<html><head><meta charset="utf-8"><style>
-body{font-family:-apple-system,Helvetica,Arial;padding:28px;color:#13203A}
-h1{margin:0 0 4px;font-size:22px} .muted{color:#6B7690;font-size:13px}
-table{border-collapse:collapse;margin-top:10px;width:100%} td,th{border:1px solid #E3E7EF;padding:8px;text-align:left;font-size:14px}
-.sw{display:inline-block;width:28px;height:28px;border-radius:6px;border:1px solid #ccc;vertical-align:middle;margin-right:8px}
-.box{border:1px solid #E3E7EF;border-radius:10px;padding:14px;margin-top:14px}
-</style></head><body>
-<h1>Prescrição de cor</h1>
-<div class="muted">${s.clinicName || 'ShadeLab'}${s.dentistName ? ' · ' + s.dentistName : ''} · ${new Date(c.createdAt).toLocaleString('pt-BR')}</div>
-<div class="box">
-<b>Paciente:</b> ${esc(c.patientName)}<br/>
-<b>Dente:</b> ${esc(c.tooth) || '—'}<br/>
-<b>Escala:</b> ${system.name} ${c.calibrated ? '(calibrada no aparelho)' : '(valores padrão)'}<br/>
-<b>Referência usada:</b> ${esc(c.referenceLabel)}
-</div>
-<div class="box">
-<span class="sw" style="background:${c.toothHex}"></span><b>Cor sugerida: ${best?.shadeId ?? '—'}</b>
-<div class="muted">Dente medido L*a*b* = ${c.toothLab.L} / ${c.toothLab.a} / ${c.toothLab.b}</div>
-<table><tr><th>Resultado</th><th>Tab</th><th>ΔE00</th></tr>${rows}</table>
-</div>
-${
-  c.gingivaLab
-    ? `<div class="box"><span class="sw" style="background:${c.gingivaHex}"></span><b>Gengiva</b> L*a*b* = ${c.gingivaLab.L} / ${c.gingivaLab.a} / ${c.gingivaLab.b}</div>`
-    : ''
-}
-${c.notes ? `<div class="box"><b>Observações</b><br/>${esc(c.notes).replace(/\n/g, '<br/>')}</div>` : ''}
-<div class="box"><img src="${c.photoUri}" style="max-width:100%;border-radius:8px"/></div>
-<p class="muted">Medição por câmera corrigida por referência. Confirme visualmente com a escala antes da cimentação.</p>
-</body></html>`;
+      const html = await buildShadeReportHtml(c, s);
       const { uri } = await Print.printToFileAsync({ html });
       if (Platform.OS !== 'web' && (await Sharing.isAvailableAsync())) {
         await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf' });
@@ -202,6 +169,9 @@ ${c.notes ? `<div class="box"><b>Observações</b><br/>${esc(c.notes).replace(/\
               </Muted>
             </View>
           </View>
+          {c.gingivaMatches?.map((m, i) => (
+            <ShadeRow key={m.shadeId} rank={i + 1} shadeId={m.shadeId} lab={findGingiva(m.shadeId)?.lab ?? c.gingivaLab!} deltaE={m.deltaE} />
+          ))}
         </Card>
       )}
       {!!c.notes && (
@@ -236,9 +206,6 @@ ${c.notes ? `<div class="box"><b>Observações</b><br/>${esc(c.notes).replace(/\
   );
 }
 
-function esc(s: string) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
 
 const styles = StyleSheet.create({
   photo: { width: '100%', aspectRatio: 4 / 3, borderRadius: radius.md, marginBottom: spacing.md },

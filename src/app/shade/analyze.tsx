@@ -21,18 +21,21 @@ import { Marker } from '@/components/Marker';
 import { ShadeRow } from '@/components/ShadeRow';
 import { correctedLab, type ReferenceSpec } from '@/lib/color/calibrate';
 import { labToHex, roundLab, type Lab } from '@/lib/color/convert';
+import { matchGingiva, type GingivaMatch } from '@/lib/color/gingiva';
 import { matchShadeProfile, type MatchResult, type ThirdsProfile } from '@/lib/color/match';
 import { findShade, getSystem, NEUTRAL_REFERENCES } from '@/lib/color/shades';
+import { cropToFile } from '@/lib/image/crop';
 import { sampleRegion, sampleThirds, type Rect, type Sample } from '@/lib/image/sample';
 import { newCaseId, persistPhoto, saveCase } from '@/lib/storage/cases';
-import { loadSettings, saveCalibration, saveSettings, type ReferenceMode, type Settings } from '@/lib/storage/settings';
+import { loadSettings, saveCalibration, saveGingivaCalibration, saveSettings, type ReferenceMode, type Settings } from '@/lib/storage/settings';
 import { colors, radius, spacing } from '@/theme';
 
 type Params = {
   uri: string;
   w: string;
   h: string;
-  mode?: 'shade' | 'calibrate';
+  mode?: 'shade' | 'calibrate' | 'calibrate-gingiva';
+  /** Tab sendo calibrado (dente: A1…; gengiva: G1…). */
   shade?: string;
   /** Reanálise de um caso existente: o salvar atualiza este caso. */
   caseId?: string;
@@ -88,7 +91,9 @@ export default function Analyze() {
     whole: Sample;
     refSample?: Sample;
     gingivaLab?: Lab;
+    gingivaMatches?: GingivaMatch[];
   } | null>(null);
+  const calibratingGingiva = mode === 'calibrate-gingiva';
   const [patientName, setPatientName] = useState(patient && patient !== 'Sem nome' ? patient : '');
   const [toothNumber, setToothNumber] = useState(toothParam ?? '');
   const [notes, setNotes] = useState(notesParam ?? '');
@@ -202,11 +207,15 @@ export default function Analyze() {
         calibrationThirds: settings.calibrationThirds[settings.shadeSystem],
       });
       let gingivaLab: Lab | undefined;
-      if (useGingiva) {
+      let gingivaMatches: GingivaMatch[] | undefined;
+      if (calibratingGingiva) {
+        gingivaLab = correctedLab(thirds.whole.rgb, refSpec);
+      } else if (useGingiva) {
         const g = await sampleRegion(uri, gingiva, imgW, imgH);
         gingivaLab = correctedLab(g.rgb, refSpec);
+        gingivaMatches = matchGingiva(gingivaLab, settings.gingivaCalibrations).matches;
       }
-      setResult({ match, profile, whole: thirds.whole, refSample, gingivaLab });
+      setResult({ match, profile, whole: thirds.whole, refSample, gingivaLab, gingivaMatches });
       if (thirds.middle.cv > HETEROGENEOUS_CV) {
         setWarning(
           `Variação de ${Math.round(thirds.middle.cv * 100)}% no terço médio do dente. Se houver reflexo, borda ou mancha dentro do quadro, ajuste o quadro para cobrir só a coroa e repita.`,
@@ -224,12 +233,27 @@ export default function Analyze() {
 
   const saveAsCalibration = async () => {
     if (!result || !settings || !calibShade) return;
+    // guarda também a foto recortada do tab real, para o PDF mostrar a escala de verdade
+    let image: string | undefined;
+    try {
+      image = await cropToFile(uri, tooth, imgW, imgH, calibratingGingiva ? `gingiva-${calibShade}` : `${settings.shadeSystem}-${calibShade}`);
+    } catch {
+      image = undefined;
+    }
+    if (calibratingGingiva) {
+      if (!result.gingivaLab) return;
+      await saveGingivaCalibration(calibShade, roundLab(result.gingivaLab, 2), image);
+      Alert.alert('Calibração salva', `Gengiva ${calibShade} registrada (L*a*b* ${fmtLab(result.gingivaLab)}).`, [{ text: 'OK', onPress: () => router.dismissTo('/settings') }]);
+      return;
+    }
     const p = result.profile;
-    await saveCalibration(settings.shadeSystem, calibShade, roundLab(p.middle, 2), {
-      cervical: roundLab(p.cervical, 2),
-      middle: roundLab(p.middle, 2),
-      incisal: roundLab(p.incisal, 2),
-    });
+    await saveCalibration(
+      settings.shadeSystem,
+      calibShade,
+      roundLab(p.middle, 2),
+      { cervical: roundLab(p.cervical, 2), middle: roundLab(p.middle, 2), incisal: roundLab(p.incisal, 2) },
+      image,
+    );
     Alert.alert('Calibração salva', `${calibShade} registrado por terços (médio L*a*b* ${fmtLab(p.middle)}).`, [
       { text: 'OK', onPress: () => router.dismissTo('/settings') },
     ]);
@@ -259,6 +283,11 @@ export default function Analyze() {
         gingivaHex: result.gingivaLab ? labToHex(result.gingivaLab) : undefined,
         matches: result.match.matches.map((m) => ({ shadeId: m.shade.id, deltaE: m.deltaE, quality: m.quality })),
         confidence: result.match.confidence,
+        toothRect: { x: Math.round(tooth.x), y: Math.round(tooth.y), width: Math.round(tooth.width), height: Math.round(tooth.height) },
+        lowerTooth,
+        thirds: { cervical: roundLab(result.profile.cervical, 2), middle: roundLab(result.profile.middle, 2), incisal: roundLab(result.profile.incisal, 2) },
+        gingivaRect: useGingiva ? { x: Math.round(gingiva.x), y: Math.round(gingiva.y), width: Math.round(gingiva.width), height: Math.round(gingiva.height) } : undefined,
+        gingivaMatches: result.gingivaMatches?.map((m) => ({ shadeId: m.shade.id, deltaE: m.deltaE })),
       });
       router.dismissTo({ pathname: '/cases/[id]', params: { id } });
     } catch (e) {
@@ -298,7 +327,14 @@ export default function Analyze() {
             <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="contain" />
             {layout.width > 0 && (
               <>
-                <Marker {...toScreen(tooth)} color={colors.primary} label="Dente" onMove={moveBy(setTooth)} onResize={resizeBy(setTooth)} thirds />
+                <Marker
+                  {...toScreen(tooth)}
+                  color={calibratingGingiva ? '#E05C8A' : colors.primary}
+                  label={mode === 'shade' ? 'Dente' : `Tab ${calibShade}`}
+                  onMove={moveBy(setTooth)}
+                  onResize={resizeBy(setTooth)}
+                  thirds={!calibratingGingiva}
+                />
                 {refMode !== 'none' && (
                   <Marker {...toScreen(ref)} color={colors.accent} label="Referência" onMove={moveBy(setRef)} onResize={resizeBy(setRef)} />
                 )}
@@ -331,7 +367,7 @@ export default function Analyze() {
                 ))}
               </ScrollView>
             )}
-            <SectionTitle>{mode === 'calibrate' ? 'Quadro do tab' : 'Quadro do dente'}</SectionTitle>
+            <SectionTitle>{mode === 'shade' ? 'Quadro do dente' : calibratingGingiva ? 'Quadro do tab de gengiva' : 'Quadro do tab'}</SectionTitle>
             <View style={styles.chips}>
               <Chip label="Superior (colo em cima)" selected={!lowerTooth} onPress={() => setLowerTooth(false)} />
               <Chip label="Inferior (colo embaixo)" selected={lowerTooth} onPress={() => setLowerTooth(true)} />
@@ -349,14 +385,14 @@ export default function Analyze() {
             )}
           </Card>
 
-          <Button title={mode === 'calibrate' ? `Medir tab ${calibShade}` : 'Analisar cor'} onPress={analyze} loading={busy} disabled={!settings} />
+          <Button title={mode === 'shade' ? 'Analisar cor' : `Medir tab ${calibShade}`} onPress={analyze} loading={busy} disabled={!settings} />
 
           {result && (
             <Card style={{ marginTop: spacing.md }}>
               <View style={styles.measuredRow}>
                 <View style={[styles.bigSwatch, { backgroundColor: labToHex(result.match.measured) }]} />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.measuredTitle}>Cor medida (terço médio)</Text>
+                  <Text style={styles.measuredTitle}>{calibratingGingiva ? 'Leitura do quadro' : 'Cor medida (terço médio)'}</Text>
                   <Text style={styles.labText}>L*a*b* {fmtLab(result.match.measured)}</Text>
                   <Muted>
                     {refLabel}
@@ -364,7 +400,7 @@ export default function Analyze() {
                   </Muted>
                 </View>
               </View>
-              {thirdsRow(result.profile)}
+              {!calibratingGingiva && thirdsRow(result.profile)}
 
               {warning && (
                 <View style={styles.warnBox}>
@@ -372,7 +408,18 @@ export default function Analyze() {
                 </View>
               )}
 
-              {mode === 'calibrate' ? (
+              {calibratingGingiva ? (
+                <>
+                  <View style={styles.measuredRow}>
+                    <View style={[styles.bigSwatch, { backgroundColor: result.gingivaLab ? labToHex(result.gingivaLab) : '#ccc' }]} />
+                    <View>
+                      <Text style={styles.measuredTitle}>Tab de gengiva {calibShade}</Text>
+                      <Text style={styles.labText}>L*a*b* {result.gingivaLab ? fmtLab(result.gingivaLab) : '—'}</Text>
+                    </View>
+                  </View>
+                  <Button title={`Salvar como ${calibShade}`} onPress={saveAsCalibration} style={{ marginTop: 12 }} />
+                </>
+              ) : mode === 'calibrate' ? (
                 <>
                   <Muted>
                     Os três terços serão salvos como a cor do tab {calibShade} no seu aparelho. Meça todos os tabs nas mesmas condições de
@@ -392,13 +439,19 @@ export default function Analyze() {
                       : 'As duas opções estão próximas: confira na boca com os dois tabs lado a lado.'}
                   </Muted>
                   {result.gingivaLab && (
-                    <View style={[styles.measuredRow, { marginTop: 12 }]}>
-                      <View style={[styles.bigSwatch, { backgroundColor: labToHex(result.gingivaLab) }]} />
-                      <View>
-                        <Text style={styles.measuredTitle}>Gengiva</Text>
-                        <Text style={styles.labText}>L*a*b* {fmtLab(result.gingivaLab)}</Text>
+                    <>
+                      <View style={[styles.measuredRow, { marginTop: 12 }]}>
+                        <View style={[styles.bigSwatch, { backgroundColor: labToHex(result.gingivaLab) }]} />
+                        <View>
+                          <Text style={styles.measuredTitle}>Gengiva</Text>
+                          <Text style={styles.labText}>L*a*b* {fmtLab(result.gingivaLab)}</Text>
+                        </View>
                       </View>
-                    </View>
+                      {result.gingivaMatches?.map((m, i) => (
+                        <ShadeRow key={m.shade.id} rank={i + 1} shadeId={m.shade.id} lab={m.shade.lab} deltaE={m.deltaE} />
+                      ))}
+                      <Muted>Escala de gengiva IPS Gingiva (G1–G5). Calibre os seus tabs em Configurações para usar a cor real deles.</Muted>
+                    </>
                   )}
                 </>
               )}

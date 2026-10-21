@@ -28,6 +28,13 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   retirado da UI; `quality` continua gravado no caso por compatibilidade). Pinça dá zoom na foto da análise;
   chip Superior/Inferior inverte a ordem dos terços. Câmera de cor: botão Frontal/Traseira, `mirror` ligado na
   frontal (a foto sai como se vê na tela) e zoom 1x/2x/3x no canto.
+  PDF (`src/lib/report/shadeReport.ts`): recorte da boca em volta do quadro do dente com o quadro e as linhas dos
+  terços desenhados em SVG, ao lado da imagem do tab mais próximo — a FOTO REAL do tab se ele foi calibrado
+  (`Settings.tabImages`, recorte gravado em `Paths.document/calib/` por `lib/image/crop.ts` na hora de salvar a
+  calibração) ou, sem calibração, um tab ilustrado com o degradê colo→incisal dos valores da escala. Gengiva:
+  escala `lib/color/gingiva.ts` (IPS Gingiva G1–G5, Lab APROXIMADO — sem valores publicados), calibrável em
+  Configurações (`mode=calibrate-gingiva`, grava Lab + foto em `gingivaCalibrations`/`gingivaTabImages`); o
+  caso guarda `toothRect`, `lowerTooth`, `thirds`, `gingivaRect`, `gingivaMatches`.
 - `src/lib/image/` leitura de pixels (expo-image-manipulator + jpeg-js) e média robusta (descarta 15% extremos).
 - `src/lib/smile/` `teeth.ts` (contornos dos 6 anteriores traçados em quadrado unitário, spline Catmull-Rom, layout por
   proporção natural/áurea), `shading.ts` (gradientes derivados da cor-alvo), `anatomy.ts` (layout com sprites de
