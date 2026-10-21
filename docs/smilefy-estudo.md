@@ -101,6 +101,69 @@ dos dois faz), simplicidade, custo zero e um 2D bem feito. O que vale copiar sã
 O que não vale perseguir agora: IA generativa de foto (custo de servidor, qualidade imprevisível, e tira o
 controle do dentista), 3D a partir de scan intraoral, articulador virtual.
 
+## 6. O app em uso (vídeos do Gustavo, 2026-10-21)
+
+Dois vídeos gravados no iPhone (4 min + 2,5 min) percorrendo o SmileFy v4.8.1 de ponta a ponta. O que aparece na tela:
+
+### 6.1 Paciente e documentação
+- Menu: Novo Paciente, Meus Pacientes, Colabore, Notificações, Suporte, Conta.
+- Ficha "Digitalização do Paciente" com grade de fotos por categoria: Sorriso exagerado, Frontal em repouso, Sorriso com
+  afastador, Perfil em repouso, Perfil sorrindo, 12 horas; "Arquivos adicionais": vídeo de entrevista, arquivos, objeto 3D,
+  scan facial. Botão **Calibrar** no rodapé. Origem da foto: SmileFy Drive, Virtual Patient, Galeria, Tirar foto, iCloud,
+  Dropbox, GDrive.
+- Câmera "Foto de Sorriso IA": guia de rosto desenhado por cima do vídeo (traço branco, olhos/nariz/boca), chave M/AI, botão
+  vermelho de gravar e botão de foto. Sem validação verde/vermelha visível.
+- Ficha do caso: nome, foto, "Versão de nota curta", notas, "Guardar o caso". Lista de pacientes com Abrir / Colabore /
+  DesignForMe (serviço pago de desenho) e nuvem de sincronia.
+- **Linha do tempo do paciente**: cada ação vira um cartão datado (Documentação do Paciente, Smile Design IA, …). "Novo
+  Projeto": Digitalização, Calibração dos Arquivos, Exportar, Smile Design IA, Simulação de Sorriso 3D, Design de Sorriso 3D.
+
+### 6.2 Smile Design IA (One Click)
+- Abas SmileFyAI / AI Clinical Doc / SmileFyAVA. Opções: Smile Design (natural colors), Crown Lengthening & Dominant, Ortho &
+  Veneers, Straight Dentition, Gummy Smile, Hollywood Smile Design, Edentulous Full Arch Implant Bridge, Bleaching; Smile
+  Design With Templates; Merge Smile; IOS Analysis Frontal / Occlusal.
+- "Edição IA": Melhoria de Imagem (Picture Quality, Remove Background, Blur Background) e Paciente Virtual (CranioFacial
+  Assessment, Align Head Frontally, Bigger Smile); AVA: 45 & 90 degrees, Profile 45, Profile 90.
+- Resultado em ~20 s ("Generating image…"), com Desfazer/Refazer e botão "Original" para comparar. No vídeo a IA só
+  clareou/alinhou levemente; o rosto ficou igual.
+
+### 6.3 Simulação de Sorriso 3D (o editor manual — o que mais interessa)
+- **Primeiro vem a grade, depois os dentes**: ao abrir, o app desenha só um "arame": curva do sorriso (incisal) e curva
+  gengival em linha branca pontilhada, e cada dente como um segmento vertical verde com pontos brancos nas pontas
+  (gengival/incisal). Duas alças vermelhas **curve** nas comissuras mudam a curvatura; setas vermelhas grandes
+  (horizontal e vertical) movem o conjunto. Só quando o usuário pede "Estética"/"3D Fy" é que a biblioteca é renderizada
+  ("Por favor, aguarde…"). Isso deixa o posicionamento rápido e sem distração.
+- Modos de toque na foto: **Posicionar / Girar / Tamanho / (A) Todos / Off**.
+- Régua "Sorriso Frontal — Todos — SmileFyAVA" (quais dentes/vistas).
+- Abas: **QUADR.** (frame), **AJUSTES**, **LUZ 3D**, **MODELOS**.
+  - QUADR.: Simetria on/off (desenha linhas horizontais de referência pela face), Facial thirds on/off, Linha média facial;
+    Altura (min–max); **Cálculo Altura/Largura DIREITA e ESQUERDA** (slider 70–90 %, mostra 77/79/80); Curvatura do
+    sorriso; Plano oclusal (inclinação); **Corredor bucal direita/esquerda**.
+  - AJUSTES → Funções: **grupo** on/off (move em conjunto) e **refletir tamanho** (espelha o ajuste no dente homólogo).
+  - LUZ 3D & CORES: Luz 3D on/off, posição (inferior–alto), brilho; **CORES DOS DENTES**: M1 M2 M3 B1 A1 B2 B3 USER +
+    Intensidade de cor; **Sombra lábio superior** (inferior–alto) + Tam. sombra — uma sombra escura projetada do lábio
+    sobre a cervical dos dentes, que é o que faz a simulação "entrar" na foto.
+  - MODELOS: lista com prévia do arco (JCP, JCP2, SFY10, GZ, FO2, F31, MO5, FO6, SFYO1, SFYO2, SFYO3…); ao tocar, um
+    cartão mostra o arco e os seis dentes individuais, com botões **F / S** (frontal / lateral). Toggle Estética / 3D Fy e
+    botão Antes & Depois.
+- Zoom por pinça na foto funciona durante o posicionamento (ele aproxima a boca até os dentes ocuparem a tela) e os
+  pontos da grade acompanham.
+- **Antes e Depois**: tela própria com linha vertical arrastável (Deslizar) ou Lado a Lado, botão "Compa(rar)".
+
+### 6.4 O que isso muda na nossa lista
+1. **Arame antes dos sprites** (alto valor, esforço médio): no passo Boca/Forma desenhar primeiro só as curvas e os eixos dos
+   dentes (barato, nítido) e renderizar a anatomia ao entrar em Ajustar/Comparar ou por um toque "Ver dentes". Resolve a
+   sensação de lentidão e facilita o encaixe.
+2. **Sombra do lábio superior** (alto valor, esforço baixo): gradiente escuro do lábio para a cervical dentro do recorte da
+   boca, com posição e tamanho ajustáveis. É o truque de realismo mais barato do SmileFy.
+3. **Refletir tamanho / grupo** (médio, baixo): já temos `mirrorEdit`; falta o botão "espelhar para o outro lado" e o modo
+   grupo visível.
+4. **Cálculo altura/largura por lado** (médio, baixo): já calculamos a relação L/C do central no face-bow; expor como slider
+   70–90 % que altera `heightRatio` por lado.
+5. **Corredor bucal** (médio, médio): escurecer/estreitar os caninos e o espaço posterior; hoje só temos `ARCH_VIS`.
+6. **Linha do tempo do paciente** (médio, médio): na tela do caso, listar eventos (cor tirada, simulação, variação) em ordem.
+7. **Categorias de foto** (baixo por enquanto): só se o fluxo de documentação for adotado.
+
 ## Fontes
 
 - https://smilefy.com/pricing
