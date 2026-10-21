@@ -42,7 +42,3 @@ yarn-error.*
 
 # anatomias de referência (biblioteca do exocad, proprietária e grande): fora do git
 reference/
-
-# visualizador 3D: página de teste local (foto do Gustavo) e bundle gerado
-viewer/dev/face.jpg
-viewer/dev/smile3d.js

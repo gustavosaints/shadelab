@@ -24,7 +24,6 @@ import { FaceFrame } from '@/components/FaceFrame';
 import { FaceLandmarker, type FaceLandmarkerHandle } from '@/components/FaceLandmarker';
 import { Handle } from '@/components/Handle';
 import { MouthOutline } from '@/components/MouthOutline';
-import { Smile3D, type Smile3DHandle, type Viewer3DParams } from '@/components/Smile3D';
 import { SmileOverlay } from '@/components/SmileOverlay';
 import { SmilePanes, type Pane } from '@/components/SmilePanes';
 import { labToHex } from '@/lib/color/convert';
@@ -45,7 +44,6 @@ import { applyScenario, SCENARIOS } from '@/lib/smile/scenarios';
 import {
   clampEdit,
   clampParams,
-  DEFAULT_ARCH3D,
   DEFAULT_SMILE_PARAMS,
   layoutTeeth,
   mirrorEdit,
@@ -56,7 +54,6 @@ import {
   type SmileParams,
   type ToothEdit,
 } from '@/lib/smile/teeth';
-import { ARCH_CATALOG } from '@/lib/smile/archCatalog';
 import { getCase, isSmileCase, newCaseId, persistPhoto, saveCase, type SmileVariant } from '@/lib/storage/cases';
 import { clearSmileDraft, loadSmileDraft, saveSmileDraft, type SmileDraft } from '@/lib/storage/draft';
 import { useSettings } from '@/lib/useSettings';
@@ -133,7 +130,6 @@ export default function Smile() {
   const canvasRef = useRef<View>(null);
   const panesRef = useRef<View>(null);
   const landmarker = useRef<FaceLandmarkerHandle>(null);
-  const viewer3dRef = useRef<Smile3DHandle>(null);
   const gesture = useRef<GestureStart | null>(null);
   const zoomStart = useRef(zoom);
   const pendingDetect = useRef<Photo | null>(null);
@@ -674,28 +670,6 @@ export default function Smile() {
 
   // ----- Tela com foto: canvas fixo + passos + comandos rolando -----
   const showTeeth = step !== 'boca' && !hidden;
-  const arch = params.arch ? ARCH_CATALOG.find((a) => a.id === params.arch) : undefined;
-  const a3 = { ...DEFAULT_ARCH3D, ...(params.arch3d ?? {}) };
-  const viewer3d: Viewer3DParams = {
-    midlineX: params.midlineX,
-    // borda incisal = linha da gengiva + comprimento do central (em fração da altura)
-    incisalY: params.gumY + (params.heightRatio * params.centralWidth * (area.width || 1)) / (area.height || 1),
-    centralWidth: params.centralWidth,
-    rotX: a3.rotX,
-    rotY: a3.rotY,
-    rotZ: a3.rotZ,
-    color: params.tint,
-    opacity: params.opacity,
-    gloss: a3.gloss,
-    showLower: a3.showLower,
-    lowerGap: a3.lowerGap,
-    lipShadow: a3.lipShadow,
-    lipShadowSize: 0.3,
-    crownMm: 10.5,
-    gumFadeMm: 1.5,
-    mouth: params.mouth ?? null,
-  };
-  const set3d = (patch: Partial<typeof a3>) => set({ arch3d: { ...a3, ...patch } });
   const selectedForOverlay = step === 'ajustar' && !exporting && selectedTooth ? selectedTooth : undefined;
   const archHandles = step === 'ajustar' && selection.kind === 'arch' && !exporting && !!t11 && !!t23;
 
@@ -724,11 +698,7 @@ export default function Smile() {
             onLayout={(e) => setArea({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
           >
             <Image source={{ uri: photo.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-            {arch ? (
-              showTeeth && area.width > 0 && <Smile3D ref={viewer3dRef} arch={arch} params={viewer3d} onError={(m) => setDetectNote(`3D: ${m}`)} />
-            ) : (
-              <SmileOverlay params={params} width={area.width} height={area.height} hidden={!showTeeth} selected={selectedForOverlay} />
-            )}
+            <SmileOverlay params={params} width={area.width} height={area.height} hidden={!showTeeth} selected={selectedForOverlay} />
             {face && showFace && step === 'ajustar' && !hidden && area.width > 0 && (
               <FaceFrame face={face} width={area.width} height={area.height} teeth={teeth} dentalMidlineX={params.midlineX * area.width} onChange={setFace} readOnly={exporting} />
             )}
@@ -776,7 +746,7 @@ export default function Smile() {
       </View>
       {!exporting && step !== 'foto' && area.width > 0 && (
         <Text style={styles.diag}>
-          {`${BUILD_TAG} · central ${(params.centralWidth * 100).toFixed(1)}% da foto${mouthWPx ? ` = ${Math.round(centralOfMouth * 100)}% da boca (boca ${Math.round((mouthWPx / area.width) * 100)}% da foto)` : ' · sem boca'} · área ${Math.round(area.width)}×${Math.round(area.height)} · zoom ${zoom.scale.toFixed(1)} · ${arch ? `3D ${arch.name}` : 'contorno'} · encaixe ${fittedMouth === mouthSignature(params.mouth) ? 'ok' : 'pendente'}`}
+          {`${BUILD_TAG} · central ${(params.centralWidth * 100).toFixed(1)}% da foto${mouthWPx ? ` = ${Math.round(centralOfMouth * 100)}% da boca (boca ${Math.round((mouthWPx / area.width) * 100)}% da foto)` : ' · sem boca'} · área ${Math.round(area.width)}×${Math.round(area.height)} · zoom ${zoom.scale.toFixed(1)} · encaixe ${fittedMouth === mouthSignature(params.mouth) ? 'ok' : 'pendente'}`}
         </Text>
       )}
 
@@ -849,16 +819,6 @@ export default function Smile() {
                   <Chip key={s.id} label={s.id} selected={targetShade === s.id} onPress={() => chooseShade(s.id)} />
                 ))}
               </ScrollView>
-              <SectionTitle>Modelo</SectionTitle>
-              <View style={styles.chips}>
-                <Chip label="Contorno" selected={!params.arch} onPress={() => set({ arch: undefined })} />
-                {ARCH_CATALOG.map((a) => (
-                  <Chip key={a.id} label={`3D ${a.name}`} selected={params.arch === a.id} onPress={() => set({ arch: a.id })} />
-                ))}
-              </View>
-              {arch && <Muted>Anatomia 3D ao vivo: arco completo (superior e inferior) da biblioteca {arch.name}. A forma vem da biblioteca; ajuste posição, tamanho e inclinação no passo 4.</Muted>}
-              {!arch && (
-                <>
               <SectionTitle>Forma</SectionTitle>
                   <View style={styles.chips}>
                     <Chip label="Quadrada" selected={shapeFromMix(shapeMix) === 'square'} onPress={() => set({ shape: 'square', shapeMix: SHAPE_MIX.square })} />
@@ -866,8 +826,6 @@ export default function Smile() {
                     <Chip label="Triangular" selected={shapeFromMix(shapeMix) === 'triangular'} onPress={() => set({ shape: 'triangular', shapeMix: SHAPE_MIX.triangular })} />
                   </View>
                   <Control label="Transição da forma (quadrada → oval → triangular)" value={shapeMix} min={0} max={1} onChange={(v) => set({ shapeMix: v, shape: shapeFromMix(v) })} />
-                </>
-              )}
               <SectionTitle>Proporção</SectionTitle>
               <View style={styles.chips}>
                 <Chip label="Natural" selected={params.proportion === 'natural'} onPress={() => set({ proportion: 'natural' })} />
@@ -951,20 +909,6 @@ export default function Smile() {
                 {params.edits && <Chip label="Zerar ajustes individuais" onPress={() => setParams((p) => ({ ...p, edits: undefined }))} />}
               </View>
             </Card>
-            {arch && (
-              <Card>
-                <SectionTitle>Ajustes 3D</SectionTitle>
-                <Control label="Inclinação (para cima / para baixo)" value={a3.rotX} min={-20} max={20} onChange={(v) => set3d({ rotX: v })} />
-                <Control label="Giro (esquerda / direita)" value={a3.rotY} min={-25} max={25} onChange={(v) => set3d({ rotY: v })} />
-                <Control label="Plano oclusal" value={a3.rotZ} min={-10} max={10} onChange={(v) => set3d({ rotZ: v })} />
-                <Control label="Sombra do lábio superior" value={a3.lipShadow} min={0} max={1} onChange={(v) => set3d({ lipShadow: v })} />
-                <Control label="Brilho" value={a3.gloss} min={0} max={1} onChange={(v) => set3d({ gloss: v })} />
-                <View style={styles.chips}>
-                  <Chip label="Dentes inferiores" selected={a3.showLower} onPress={() => set3d({ showLower: !a3.showLower })} />
-                </View>
-                {a3.showLower && <Control label="Abertura do inferior (mm)" value={a3.lowerGap} min={0} max={8} onChange={(v) => set3d({ lowerGap: v })} />}
-              </Card>
-            )}
             <Button title="Ajuste fino" variant="ghost" onPress={() => setFine(!fine)} />
             {fine && (
               <Card>
