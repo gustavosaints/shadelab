@@ -35,6 +35,19 @@ ferramentas (pode ser apagado em "…" → Eliminar).
    Dentes** (slider contínuo, branco → quente), **repor**, e **Contornos dos dentes** (liga/desliga as linhas).
 7. Apresentação: antes/depois com cursor, lado a lado e vídeo.
 
+## Teste do "Gerar HD" (feito com autorização do Gustavo, projeto Giza)
+
+- Com os contornos automáticos sem nenhuma edição, "Gerar HD" levou ~20 s e virou "Revelar HD"; ao clicar, a
+  renderização aparece com uma varredura animada sobre os dentes.
+- Resultado: dentes fotorrealistas DENTRO dos contornos, com a luz e o grão da própria foto, gengiva e lábios
+  intactos, inferiores originais mantidos. Não parece recorte colado: é geração/inpainting guiado pelos contornos.
+- Depois do render, a barra inferior ganha: cursor de visibilidade (mistura original/design), "Cor dos Dentes"
+  (slider contínuo; para a direita aquece/amarela os dentes em tempo real, sem gerar de novo), repor e
+  contornos on/off.
+- A guia do arco, quando selecionada, vira uma caixa de transformação amarela com alças nos cantos, no meio de
+  cada lado (largura/altura) e em cima/embaixo (curva); a roda do mouse dá zoom na boca.
+- Peso: a geração é feita no servidor (créditos da assinatura), não no aparelho.
+
 ## Observações para o ShadeLab
 
 - O que o Gustavo chama de "nítido e bonito" no SmileFy e aqui é: (a) contornos finos e editáveis sobre a foto,
