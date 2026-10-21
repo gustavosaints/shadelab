@@ -17,11 +17,13 @@ import {
 import { Button } from '@/components/Button';
 import { Card, Muted, SectionTitle } from '@/components/Card';
 import { Chip } from '@/components/Chip';
+import { FaceLandmarker, type FaceLandmarkerHandle } from '@/components/FaceLandmarker';
 import { Marker } from '@/components/Marker';
 import { ShadeRow } from '@/components/ShadeRow';
 import { correctedLab, type ReferenceSpec } from '@/lib/color/calibrate';
 import { labToHex, roundLab, type Lab } from '@/lib/color/convert';
 import { matchGingiva, type GingivaMatch } from '@/lib/color/gingiva';
+import { findCentralIncisor } from '@/lib/face/findTooth';
 import { matchShadeProfile, type MatchResult, type ThirdsProfile } from '@/lib/color/match';
 import { findShade, getSystem, NEUTRAL_REFERENCES } from '@/lib/color/shades';
 import { cropToFile } from '@/lib/image/crop';
@@ -94,6 +96,10 @@ export default function Analyze() {
     gingivaMatches?: GingivaMatch[];
   } | null>(null);
   const calibratingGingiva = mode === 'calibrate-gingiva';
+  const landmarker = useRef<FaceLandmarkerHandle>(null);
+  const [placing, setPlacing] = useState(false);
+  const [placeNote, setPlaceNote] = useState<string | null>(null);
+  const placedOnce = useRef(false);
   const [patientName, setPatientName] = useState(patient && patient !== 'Sem nome' ? patient : '');
   const [toothNumber, setToothNumber] = useState(toothParam ?? '');
   const [notes, setNotes] = useState(notesParam ?? '');
@@ -105,6 +111,35 @@ export default function Analyze() {
       setRefTab(s.referenceTab);
     });
   }, []);
+
+  /** Acha um central na foto e põe os quadros do dente e da gengiva já no tamanho certo. */
+  const placeOnTooth = async () => {
+    if (placing) return;
+    setPlacing(true);
+    setPlaceNote(null);
+    try {
+      const found = await findCentralIncisor({ uri, width: imgW, height: imgH }, landmarker.current);
+      if (!found) {
+        setPlaceNote('Não achei o dente sozinho. Arraste o quadro azul para a coroa e puxe a alça para o tamanho.');
+        return;
+      }
+      setTooth(found.tooth);
+      setGingiva(found.gingiva);
+      setPlaceNote(`Quadro colocado no dente ${found.fdi}${found.source === 'face' ? ' (boca detectada)' : ''}. Confira e ajuste se precisar.`);
+    } catch (e) {
+      setPlaceNote(`Não consegui localizar o dente (${String((e as Error).message ?? e)}).`);
+    } finally {
+      setPlacing(false);
+    }
+  };
+  // ao abrir a foto (só na tomada de cor), tenta colocar o quadro no dente uma vez
+  useEffect(() => {
+    if (mode !== 'shade' || placedOnce.current || !layout.width) return;
+    placedOnce.current = true;
+    const t = setTimeout(() => placeOnTooth(), 400); // dá tempo do detector (WebView) carregar
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layout.width, mode]);
 
   // Geometria: imagem com "contain" dentro da vista ampliada (layout × zoom)
   const inner = { width: layout.width * zoom.scale, height: layout.height * zoom.scale };
@@ -311,6 +346,7 @@ export default function Analyze() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <FaceLandmarker ref={landmarker} />
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
         <View
           style={styles.imageArea}
@@ -371,11 +407,14 @@ export default function Analyze() {
             <View style={styles.chips}>
               <Chip label="Superior (colo em cima)" selected={!lowerTooth} onPress={() => setLowerTooth(false)} />
               <Chip label="Inferior (colo embaixo)" selected={lowerTooth} onPress={() => setLowerTooth(true)} />
+              {mode === 'shade' && <Chip label={placing ? 'Procurando o dente…' : 'Achar o dente de novo'} onPress={placeOnTooth} />}
             </View>
+            {placeNote && <Muted>{placeNote}</Muted>}
             <Muted>
-              Pinça na foto para aproximar. Arraste o quadro azul para cobrir a coroa inteira, do colo à borda incisal, e puxe o canto
-              inferior direito para redimensionar: ele é lido em três terços (cervical, médio e incisal) e comparado com o tab inteiro da
-              escala. O quadro verde vai sobre a referência, que corrige balanço de branco e exposição.
+              O quadro azul é colocado sozinho num incisivo central; se precisar, arraste-o e mude o tamanho pela alça redonda do
+              canto ou com dois dedos (pinça) em cima do quadro. Pinça fora dos quadros aproxima a foto. O dente é lido em três
+              terços (cervical, médio e incisal) e comparado com o tab inteiro da escala. O quadro verde vai sobre a referência,
+              que corrige balanço de branco e exposição.
             </Muted>
             {mode === 'shade' && (
               <View style={styles.switchRow}>

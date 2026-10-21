@@ -45,6 +45,15 @@ export type TeethFit = { params: SmileParams; fit: AutoFit };
  * alinhados aos dentes reais. `midlineX` é a linha média facial (fração da largura).
  */
 export async function fitTeethToPhoto(photo: Photo, mouth: MouthPoint[], midlineX: number, base: SmileParams): Promise<TeethFit | null> {
+  const r = await fitInRegion(photo, mouth, midlineX);
+  if (!r) return null;
+  return { params: autoFitToParams(r.fit, r.crop, photo.width, photo.height, base), fit: r.fit };
+}
+
+export type RegionFit = { fit: AutoFit; crop: { x: number; y: number; scale: number } };
+
+/** Recorta a boca, analisa os pixels e devolve o ajuste em px do recorte + a transformação do recorte. */
+export async function fitInRegion(photo: Photo, mouth: MouthPoint[], midlineX: number): Promise<RegionFit | null> {
   const xs = mouth.map((p) => p.x * photo.width);
   const ys = mouth.map((p) => p.y * photo.height);
   const pad = 0.15;
@@ -67,5 +76,5 @@ export async function fitTeethToPhoto(photo: Photo, mouth: MouthPoint[], midline
   const mouthPx = mouth.map((p) => ({ x: (p.x * photo.width - x0) * scale, y: (p.y * photo.height - y0) * scale }));
   const fit = autoFitTeeth({ data: img.data, width: img.width, height: img.height }, mouthPx, (midlineX * photo.width - x0) * scale);
   if (!fit) return null;
-  return { params: autoFitToParams(fit, { x: x0, y: y0, scale }, photo.width, photo.height, base), fit };
+  return { fit, crop: { x: x0, y: y0, scale } };
 }

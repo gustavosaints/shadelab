@@ -35,6 +35,10 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   escala `lib/color/gingiva.ts` (IPS Gingiva G1–G5, Lab APROXIMADO — sem valores publicados), calibrável em
   Configurações (`mode=calibrate-gingiva`, grava Lab + foto em `gingivaCalibrations`/`gingivaTabImages`); o
   caso guarda `toothRect`, `lowerTooth`, `thirds`, `gingivaRect`, `gingivaMatches`.
+  Quadro automático (2026-10-21): ao abrir a análise, `lib/face/findTooth.ts#findCentralIncisor` acha o 11 (ou 21)
+  — MediaPipe acha a boca e `fitInRegion` (pixels) acha os espaços; sem rosto (close da boca) usa a imagem inteira
+  — e põe o quadro do dente dentro da coroa e o da gengiva logo acima; chip "Achar o dente de novo". `Marker`:
+  alça redonda meio para fora do canto com toque de 44 px e pinça com dois dedos sobre o quadro para redimensionar.
 - `src/lib/image/` leitura de pixels (expo-image-manipulator + jpeg-js) e média robusta (descarta 15% extremos).
 - `src/lib/smile/` `teeth.ts` (contornos dos 6 anteriores traçados em quadrado unitário, spline Catmull-Rom, layout por
   proporção natural/áurea), `shading.ts` (gradientes derivados da cor-alvo), `anatomy.ts` (layout com sprites de
