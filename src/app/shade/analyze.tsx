@@ -83,6 +83,8 @@ export default function Analyze() {
   const [gingiva, setGingiva] = useState<Rect>({ x: imgW * 0.46, y: imgH * 0.27, width: imgW * 0.08, height: imgW * 0.06 });
   const [useGingiva, setUseGingiva] = useState(false);
   const [lowerTooth, setLowerTooth] = useState(false);
+  /** O que o arrasto no quadro faz: mover ou redimensionar (modo explícito, pedido do Gustavo). */
+  const [markerMode, setMarkerMode] = useState<'move' | 'resize'>('move');
   const [refMode, setRefMode] = useState<ReferenceMode>('gray18');
   const [refTab, setRefTab] = useState('A2');
   const [busy, setBusy] = useState(false);
@@ -370,12 +372,13 @@ export default function Analyze() {
                   onMove={moveBy(setTooth)}
                   onResize={resizeBy(setTooth)}
                   thirds={!calibratingGingiva}
+                  resizeMode={markerMode === 'resize'}
                 />
                 {refMode !== 'none' && (
-                  <Marker {...toScreen(ref)} color={colors.accent} label="Referência" onMove={moveBy(setRef)} onResize={resizeBy(setRef)} />
+                  <Marker {...toScreen(ref)} color={colors.accent} label="Referência" onMove={moveBy(setRef)} onResize={resizeBy(setRef)} resizeMode={markerMode === 'resize'} />
                 )}
                 {useGingiva && (
-                  <Marker {...toScreen(gingiva)} color="#E05C8A" label="Gengiva" onMove={moveBy(setGingiva)} onResize={resizeBy(setGingiva)} />
+                  <Marker {...toScreen(gingiva)} color="#E05C8A" label="Gengiva" onMove={moveBy(setGingiva)} onResize={resizeBy(setGingiva)} resizeMode={markerMode === 'resize'} />
                 )}
               </>
             )}
@@ -387,7 +390,12 @@ export default function Analyze() {
           )}
         </View>
 
-        <View style={{ padding: spacing.md }}>
+        <View style={styles.modeBar}>
+          <Chip label="Mover quadros" selected={markerMode === 'move'} onPress={() => setMarkerMode('move')} />
+          <Chip label="Redimensionar quadros" selected={markerMode === 'resize'} onPress={() => setMarkerMode('resize')} />
+          <Text style={styles.modeHint}>{markerMode === 'move' ? 'arraste o quadro' : 'arraste em qualquer ponto do quadro: direita alarga, baixo alonga'}</Text>
+        </View>
+        <View style={{ padding: spacing.md, paddingTop: 0 }}>
           <Card>
             <SectionTitle>Referência na foto</SectionTitle>
             <View style={styles.chips}>
@@ -535,6 +543,8 @@ const styles = StyleSheet.create({
   zoomBadge: { position: 'absolute', right: 8, top: 8, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.sm },
   zoomBadgeText: { color: '#fff', fontSize: 12, fontWeight: '600' },
   chips: { flexDirection: 'row', flexWrap: 'wrap' },
+  modeBar: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', paddingHorizontal: spacing.md, paddingTop: 8, gap: 4 },
+  modeHint: { color: colors.muted, fontSize: 12, width: '100%' },
   switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
   switchLabel: { color: colors.text, fontWeight: '600' },
   measuredRow: { flexDirection: 'row', gap: 12, alignItems: 'center', marginBottom: 10 },

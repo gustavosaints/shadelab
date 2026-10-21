@@ -14,6 +14,8 @@ type Props = {
   onRelease?: () => void;
   /** Linhas que dividem o quadro em terços (dente inteiro: cervical / médio / incisal). */
   thirds?: boolean;
+  /** Modo explícito: arrastar em qualquer ponto do quadro redimensiona (sem precisar acertar a alça). */
+  resizeMode?: boolean;
 };
 
 /** Alça redonda no canto inferior direito, meio para fora do quadro, com área de toque generosa. */
@@ -25,7 +27,7 @@ const touchesOf = (e: GestureResponderEvent): Touch[] => (e.nativeEvent.touches 
 const dist = (t: Touch[]) => (t.length >= 2 ? Math.hypot(t[0].pageX - t[1].pageX, t[0].pageY - t[1].pageY) : 0);
 
 /** Retângulo de amostragem arrastável e redimensionável sobre a foto. */
-export function Marker({ x, y, width, height, color, label, onMove, onResize, onRelease, thirds }: Props) {
+export function Marker({ x, y, width, height, color, label, onMove, onResize, onRelease, thirds, resizeMode }: Props) {
   const last = useRef({ x: 0, y: 0 });
   const mode = useRef<'move' | 'resize' | 'pinch'>('move');
   const pinch = useRef({ dist: 0, w: 0, h: 0 });
@@ -48,7 +50,7 @@ export function Marker({ x, y, width, height, color, label, onMove, onResize, on
       pinch.current = { dist: dist(t), w: width, h: height };
       return;
     }
-    mode.current = 'move';
+    mode.current = resizeMode && onResize ? 'resize' : 'move';
   };
   const grantHandle = (e: GestureResponderEvent) => {
     last.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
@@ -85,7 +87,7 @@ export function Marker({ x, y, width, height, color, label, onMove, onResize, on
       onResponderTerminate={() => onRelease?.()}
       style={[styles.hit, { left: x - hitW / 2, top: y - hitH / 2, width: hitW, height: hitH }]}
     >
-      <View style={[styles.box, { left: boxLeft, top: boxTop, width, height, borderColor: color }]}>
+      <View style={[styles.box, { left: boxLeft, top: boxTop, width, height, borderColor: color }, resizeMode && styles.boxResize]}>
         {thirds && (
           <>
             <View style={[styles.third, { top: '33.3%', borderColor: color }]} />
@@ -118,6 +120,7 @@ export function Marker({ x, y, width, height, color, label, onMove, onResize, on
 const styles = StyleSheet.create({
   hit: { position: 'absolute' },
   box: { position: 'absolute', borderWidth: 2.5, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.08)', overflow: 'hidden' },
+  boxResize: { borderStyle: 'dashed', backgroundColor: 'rgba(255,255,255,0.18)' },
   third: { position: 'absolute', left: 0, right: 0, borderTopWidth: 1, borderStyle: 'dashed', opacity: 0.8 },
   handle: {
     position: 'absolute',
