@@ -37,8 +37,10 @@ export function Marker({ x, y, width, height, color, label, onMove, onResize, on
   const boxLeft = (hitW - width) / 2;
   const boxTop = (hitH - height) / 2;
 
+  // A alça é um responder próprio (abaixo): o toque que começa nela redimensiona; no resto do quadro, move.
+  // (locationX/Y não servem para distinguir: vêm relativos ao filho tocado, e com zoom o quadro cresce.)
   const grant = (e: GestureResponderEvent) => {
-    const { pageX, pageY, locationX, locationY } = e.nativeEvent;
+    const { pageX, pageY } = e.nativeEvent;
     last.current = { x: pageX, y: pageY };
     const t = touchesOf(e);
     if (t.length >= 2 && onResize) {
@@ -46,10 +48,11 @@ export function Marker({ x, y, width, height, color, label, onMove, onResize, on
       pinch.current = { dist: dist(t), w: width, h: height };
       return;
     }
-    // toque perto do canto inferior direito = redimensionar
-    const cx = boxLeft + width;
-    const cy = boxTop + height;
-    mode.current = !!onResize && Math.abs(locationX - cx) <= HANDLE_HIT / 2 + 4 && Math.abs(locationY - cy) <= HANDLE_HIT / 2 + 4 ? 'resize' : 'move';
+    mode.current = 'move';
+  };
+  const grantHandle = (e: GestureResponderEvent) => {
+    last.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
+    mode.current = 'resize';
   };
   const move = (e: GestureResponderEvent) => {
     const t = touchesOf(e);
@@ -74,7 +77,6 @@ export function Marker({ x, y, width, height, color, label, onMove, onResize, on
   return (
     <View
       onStartShouldSetResponder={() => true}
-      onStartShouldSetResponderCapture={() => true}
       onMoveShouldSetResponder={() => true}
       onResponderTerminationRequest={() => false}
       onResponderGrant={grant}
@@ -92,7 +94,17 @@ export function Marker({ x, y, width, height, color, label, onMove, onResize, on
         )}
       </View>
       {onResize && (
-        <View style={[styles.handle, { left: boxLeft + width - HANDLE / 2, top: boxTop + height - HANDLE / 2, backgroundColor: color }]}>
+        <View
+          hitSlop={12}
+          onStartShouldSetResponder={() => true}
+          onMoveShouldSetResponder={() => true}
+          onResponderTerminationRequest={() => false}
+          onResponderGrant={grantHandle}
+          onResponderMove={move}
+          onResponderRelease={() => onRelease?.()}
+          onResponderTerminate={() => onRelease?.()}
+          style={[styles.handle, { left: boxLeft + width - HANDLE / 2, top: boxTop + height - HANDLE / 2, backgroundColor: color }]}
+        >
           <Text style={styles.handleGlyph}>⤡</Text>
         </View>
       )}
