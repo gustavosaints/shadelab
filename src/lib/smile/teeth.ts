@@ -35,8 +35,6 @@ export type SmileParams = {
   opacity: number;
   /** Cor de preenchimento (hex), normalmente a cor-alvo da escala. */
   tint: string;
-  /** Id da anatomia (catálogo de sprites). Ausente = contornos SVG com `shape`. */
-  anatomy?: string;
   /**
    * Contorno da boca (abertura entre os lábios), frações da imagem, sentido horário a partir da
    * comissura direita do paciente. Quando presente, os dentes são recortados por ele.

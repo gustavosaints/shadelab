@@ -29,8 +29,6 @@ import { SmilePanes, type Pane } from '@/components/SmilePanes';
 import { labToHex } from '@/lib/color/convert';
 import { getSystem } from '@/lib/color/shades';
 import { detectFace, fitTeethToPhoto, flipPhoto } from '@/lib/face/detect';
-import { layoutAnatomy } from '@/lib/smile/anatomy';
-import { ANATOMY_CATALOG } from '@/lib/smile/anatomyCatalog';
 import {
   alignMidlineToFace,
   analyzeFrame,
@@ -85,7 +83,6 @@ const STEPS: { id: Step; label: string }[] = [
 ];
 
 /** Anatomia usada pelos cenários que trocam a forma (facetas etc.). */
-const SCENARIO_ANATOMY = 'jan-hajto-f1';
 
 /**
  * Smile Design em passos, com a foto fixa no alto e os comandos rolando embaixo:
@@ -142,8 +139,6 @@ export default function Smile() {
 
   const system = getSystem(settings.shadeSystem);
   const set = (patch: Partial<SmileParams>) => setParams((p) => clampParams({ ...p, ...patch }));
-  const anatomyOf = (id?: string) => (id ? ANATOMY_CATALOG.find((a) => a.id === id) : undefined);
-  const anatomy = anatomyOf(params.anatomy);
   // tamanho do canvas: largura da tela, altura no máximo metade da tela, mantendo a proporção da foto
   const aspect = photo ? photo.width / photo.height : 4 / 3;
   const canvasW = Math.min(winW, winH * 0.5 * aspect);
@@ -262,8 +257,7 @@ export default function Smile() {
   /** Parâmetros com o arco encaixado na boca (72% entre as comissuras, gengiva sob o lábio). */
   const archFittedParams = (base: SmileParams): SmileParams => {
     if (!base.mouth || !area.width) return base;
-    const def = anatomyOf(base.anatomy);
-    const cur = def ? layoutAnatomy(base, def, area.width, area.height) : layoutTeeth(base, area.width, area.height);
+    const cur = layoutTeeth(base, area.width, area.height);
     const t23 = cur.find((t) => t.fdi === '23');
     const t11 = cur.find((t) => t.fdi === '11');
     if (!t23 || !t11) return base;
@@ -417,7 +411,7 @@ export default function Smile() {
   };
 
   // ----- Layout atual -----
-  const teeth = !area.width ? [] : anatomy ? layoutAnatomy(params, anatomy, area.width, area.height) : layoutTeeth(params, area.width, area.height);
+  const teeth = !area.width ? [] : layoutTeeth(params, area.width, area.height);
   const t11 = teeth.find((t) => t.fdi === '11');
   const t23 = teeth.find((t) => t.fdi === '23');
   const cwPx = params.centralWidth * area.width;
@@ -534,7 +528,7 @@ export default function Smile() {
 
   const runScenario = (id: (typeof SCENARIOS)[number]['id']) => {
     if (!area.width) return;
-    const r = applyScenario(id, params, { system: settings.shadeSystem, defaultAnatomy: anatomy?.id ?? SCENARIO_ANATOMY, aspect: area.width / area.height });
+    const r = applyScenario(id, params, { system: settings.shadeSystem, aspect: area.width / area.height });
     setParams(clampParams(r.params));
     if (r.shade) chooseShade(r.shade);
   };
@@ -704,7 +698,7 @@ export default function Smile() {
             onLayout={(e) => setArea({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
           >
             <Image source={{ uri: photo.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-            <SmileOverlay params={params} width={area.width} height={area.height} hidden={!showTeeth} anatomy={anatomy} selected={selectedForOverlay} />
+            <SmileOverlay params={params} width={area.width} height={area.height} hidden={!showTeeth} selected={selectedForOverlay} />
             {face && showFace && step === 'ajustar' && !hidden && area.width > 0 && (
               <FaceFrame face={face} width={area.width} height={area.height} teeth={teeth} dentalMidlineX={params.midlineX * area.width} onChange={setFace} readOnly={exporting} />
             )}
@@ -752,7 +746,7 @@ export default function Smile() {
       </View>
       {!exporting && step !== 'foto' && area.width > 0 && (
         <Text style={styles.diag}>
-          {`${BUILD_TAG} · central ${(params.centralWidth * 100).toFixed(1)}% da foto${mouthWPx ? ` = ${Math.round(centralOfMouth * 100)}% da boca (boca ${Math.round((mouthWPx / area.width) * 100)}% da foto)` : ' · sem boca'} · área ${Math.round(area.width)}×${Math.round(area.height)} · zoom ${zoom.scale.toFixed(1)} · ${anatomy ? anatomy.name : 'contorno'} · encaixe ${fittedMouth === mouthSignature(params.mouth) ? 'ok' : 'pendente'}`}
+          {`${BUILD_TAG} · central ${(params.centralWidth * 100).toFixed(1)}% da foto${mouthWPx ? ` = ${Math.round(centralOfMouth * 100)}% da boca (boca ${Math.round((mouthWPx / area.width) * 100)}% da foto)` : ' · sem boca'} · área ${Math.round(area.width)}×${Math.round(area.height)} · zoom ${zoom.scale.toFixed(1)} · encaixe ${fittedMouth === mouthSignature(params.mouth) ? 'ok' : 'pendente'}`}
         </Text>
       )}
 
@@ -825,34 +819,13 @@ export default function Smile() {
                   <Chip key={s.id} label={s.id} selected={targetShade === s.id} onPress={() => chooseShade(s.id)} />
                 ))}
               </ScrollView>
-              <SectionTitle>Anatomia</SectionTitle>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <Pressable onPress={() => setParams(archFittedParams({ ...params, anatomy: undefined, edits: undefined }))} style={[styles.anatomyCard, !anatomy && styles.anatomyCardSelected]}>
-                  <View style={styles.anatomyThumbPlaceholder}>
-                    <Text style={styles.anatomyGlyph}>◠◠</Text>
-                  </View>
-                  <Text style={styles.anatomyName}>Contorno</Text>
-                </Pressable>
-                {ANATOMY_CATALOG.map((a) => (
-                  <Pressable key={a.id} onPress={() => setParams(archFittedParams({ ...params, anatomy: a.id, edits: undefined }))} style={[styles.anatomyCard, anatomy?.id === a.id && styles.anatomyCardSelected]}>
-                    <Image source={a.thumb} style={styles.anatomyThumb} resizeMode="contain" />
-                    <Text style={styles.anatomyName} numberOfLines={1}>
-                      {a.name}
-                    </Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-              {!anatomy && (
-                <>
-                  <SectionTitle>Forma</SectionTitle>
+              <SectionTitle>Forma</SectionTitle>
                   <View style={styles.chips}>
                     <Chip label="Quadrada" selected={shapeFromMix(shapeMix) === 'square'} onPress={() => set({ shape: 'square', shapeMix: SHAPE_MIX.square })} />
                     <Chip label="Oval" selected={shapeFromMix(shapeMix) === 'oval'} onPress={() => set({ shape: 'oval', shapeMix: SHAPE_MIX.oval })} />
                     <Chip label="Triangular" selected={shapeFromMix(shapeMix) === 'triangular'} onPress={() => set({ shape: 'triangular', shapeMix: SHAPE_MIX.triangular })} />
                   </View>
                   <Control label="Transição da forma (quadrada → oval → triangular)" value={shapeMix} min={0} max={1} onChange={(v) => set({ shapeMix: v, shape: shapeFromMix(v) })} />
-                </>
-              )}
               <SectionTitle>Proporção</SectionTitle>
               <View style={styles.chips}>
                 <Chip label="Natural" selected={params.proportion === 'natural'} onPress={() => set({ proportion: 'natural' })} />
@@ -1017,8 +990,8 @@ export default function Smile() {
                   aspect={aspect}
                   panes={
                     compareMode === 'side'
-                      ? ([{ label: 'ANTES' }, { label: 'DEPOIS', params, anatomy }] as Pane[])
-                      : ([...variants.map((v) => ({ label: v.name, params: v.params, anatomy: anatomyOf(v.params.anatomy) })), { label: 'ATUAL', params, anatomy }] as Pane[])
+                      ? ([{ label: 'ANTES' }, { label: 'DEPOIS', params }] as Pane[])
+                      : ([...variants.map((v) => ({ label: v.name, params: v.params })), { label: 'ATUAL', params }] as Pane[])
                   }
                 />
               </View>
@@ -1102,12 +1075,6 @@ const styles = StyleSheet.create({
   zoomBadge: { position: 'absolute', right: 8, top: 8, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.sm },
   zoomBadgeText: { color: '#fff', fontWeight: '700', fontSize: 12 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 },
-  anatomyCard: { width: 118, marginRight: 8, marginBottom: 8, borderRadius: radius.md, borderWidth: 2, borderColor: colors.border, backgroundColor: '#2A2224', overflow: 'hidden' },
-  anatomyCardSelected: { borderColor: colors.primary },
-  anatomyThumb: { width: 114, height: 44 },
-  anatomyThumbPlaceholder: { width: 114, height: 44, alignItems: 'center', justifyContent: 'center' },
-  anatomyGlyph: { color: '#EEE3CD', fontSize: 22, letterSpacing: 2 },
-  anatomyName: { color: '#fff', fontSize: 12, fontWeight: '600', textAlign: 'center', paddingVertical: 4, paddingHorizontal: 4, backgroundColor: colors.navy },
   controlLabel: { color: colors.text, fontWeight: '600', fontSize: 13 },
   inlineRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' },
   inputSmall: { width: 80, marginBottom: 0, paddingVertical: 8, textAlign: 'center' },

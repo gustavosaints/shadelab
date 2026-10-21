@@ -1,8 +1,4 @@
-import MaskedView from '@react-native-masked-view/masked-view';
-import { Platform, StyleSheet, View } from 'react-native';
 import Svg, { ClipPath, Defs, Ellipse, G, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
-import { AnatomyLayer } from '@/components/AnatomyOverlay';
-import { layoutAnatomy, type AnatomyDef } from '@/lib/smile/anatomy';
 import { mouthPath } from '@/lib/smile/mouth';
 import { toothShading } from '@/lib/smile/shading';
 import { layoutTeeth, type SmileParams } from '@/lib/smile/teeth';
@@ -12,58 +8,18 @@ type Props = {
   width: number;
   height: number;
   hidden?: boolean;
-  anatomy?: AnatomyDef;
   /** FDI do dente selecionado para edição individual (desenha a caixa). */
   selected?: string;
 };
 
 /**
- * Desenha os seis anteriores sobre a foto, na área de `width` x `height` pixels.
- * Com `anatomy`, usa os sprites renderizados dos STLs (imagens nativas, recortadas pela
- * boca com MaskedView); sem, os contornos SVG (recortados com ClipPath). Se
- * `params.mouth` existir, tudo fica dentro do contorno da boca.
+ * Desenha os seis anteriores (modo contorno, SVG) sobre a foto, na área de `width` x `height` pixels.
+ * Se `params.mouth` existir, tudo fica dentro do contorno da boca (ClipPath).
+ * A anatomia 3D ao vivo (WebView + three.js) é um componente à parte.
  */
-export function SmileOverlay({ params, width, height, hidden, anatomy, selected }: Props) {
+export function SmileOverlay({ params, width, height, hidden, selected }: Props) {
   if (hidden || width <= 0 || height <= 0) return null;
   const clip = params.mouth && params.mouth.length >= 3 ? mouthPath(params.mouth, width, height) : null;
-
-  if (anatomy) {
-    const layer = <AnatomyLayer params={params} anatomy={anatomy} width={width} height={height} />;
-    const sel = selected ? layoutAnatomy(params, anatomy, width, height).find((t) => t.fdi === selected) : undefined;
-    return (
-      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-        {clip && Platform.OS !== 'web' ? (
-          <MaskedView
-            style={StyleSheet.absoluteFill}
-            maskElement={
-              <Svg width={width} height={height}>
-                <Path d={clip} fill="#000" />
-              </Svg>
-            }
-          >
-            {layer}
-          </MaskedView>
-        ) : (
-          layer
-        )}
-        {sel && (
-          <Svg width={width} height={height} style={StyleSheet.absoluteFill}>
-            <Rect
-              x={sel.x}
-              y={sel.y}
-              width={sel.w}
-              height={sel.h}
-              fill="none"
-              stroke="#00E5FF"
-              strokeWidth={1.5}
-              strokeDasharray="4 3"
-              transform={sel.rot ? `rotate(${sel.rot.toFixed(2)} ${(sel.x + sel.w / 2).toFixed(2)} ${(sel.y + sel.h / 2).toFixed(2)})` : undefined}
-            />
-          </Svg>
-        )}
-      </View>
-    );
-  }
 
   return (
     <Svg width={width} height={height} pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0 }}>

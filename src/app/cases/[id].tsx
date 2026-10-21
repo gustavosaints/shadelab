@@ -7,7 +7,6 @@ import { Button } from '@/components/Button';
 import { Card, Muted, SectionTitle } from '@/components/Card';
 import { ShadeRow } from '@/components/ShadeRow';
 import { findShade, getSystem } from '@/lib/color/shades';
-import { ANATOMY_CATALOG } from '@/lib/smile/anatomyCatalog';
 import { deleteCase, getCase, isSmileCase, type AnyCase, type ShadeCase, type SmileCase } from '@/lib/storage/cases';
 import { loadSettings } from '@/lib/storage/settings';
 import { colors, qualityLabel, radius, spacing } from '@/theme';
@@ -45,8 +44,7 @@ function SmileDetail({ c }: { c: SmileCase }) {
         },
       },
     ]);
-  const anatomyName = c.params.anatomy ? ANATOMY_CATALOG.find((a) => a.id === c.params.anatomy)?.name : undefined;
-  const shapeLabel = anatomyName ?? { oval: 'Oval', square: 'Quadrada', triangular: 'Triangular' }[c.params.shape];
+  const shapeLabel = { oval: 'Oval', square: 'Quadrada', triangular: 'Triangular' }[c.params.shape];
   const propLabel = { natural: 'Natural', golden: 'Áurea', red: 'RED (70% / 50%)' }[c.params.proportion];
   const frame = c.frame;
   return (

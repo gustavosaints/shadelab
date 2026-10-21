@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { applyScenario, SCENARIOS } from '@/lib/smile/scenarios';
 import { DEFAULT_SMILE_PARAMS, NO_EDIT } from '@/lib/smile/teeth';
 
-const ctx = { system: 'vita-classical' as const, defaultAnatomy: 'jan-hajto-f1', aspect: 4 / 3 };
+const ctx = { system: 'vita-classical' as const, aspect: 4 / 3 };
 
 describe('cenários de tratamento', () => {
   it('todos preservam linha média e largura e devolvem parâmetros válidos', () => {
@@ -18,7 +18,6 @@ describe('cenários de tratamento', () => {
     const r = applyScenario('veneers', DEFAULT_SMILE_PARAMS, ctx);
     expect(r.params.spacing).toBe(0);
     expect(r.params.proportion).toBe('red');
-    expect(r.params.anatomy).toBe('jan-hajto-f1');
     expect(r.shade).toBe('B1');
   });
 

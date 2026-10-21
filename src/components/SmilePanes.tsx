@@ -1,11 +1,10 @@
 import { forwardRef, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { SmileOverlay } from '@/components/SmileOverlay';
-import type { AnatomyDef } from '@/lib/smile/anatomy';
 import type { SmileParams } from '@/lib/smile/teeth';
 import { radius } from '@/theme';
 
-export type Pane = { label: string; params?: SmileParams; anatomy?: AnatomyDef };
+export type Pane = { label: string; params?: SmileParams };
 
 type Props = {
   photoUri: string;
@@ -28,7 +27,7 @@ export const SmilePanes = forwardRef<View, Props>(function SmilePanes({ photoUri
         <View key={i} style={[styles.pane, { aspectRatio: aspect }]} onLayout={i === 0 ? (e) => setPaneSize(e.nativeEvent.layout) : undefined}>
           <Image source={{ uri: photoUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
           {p.params && paneSize.width > 0 && (
-            <SmileOverlay params={p.params} width={paneSize.width} height={paneSize.height} anatomy={p.anatomy} />
+            <SmileOverlay params={p.params} width={paneSize.width} height={paneSize.height} />
           )}
           <View style={styles.tag}>
             <Text style={styles.tagText}>{p.label}</Text>

@@ -12,7 +12,6 @@ export type ScenarioContext = {
   /** Escala ativa, para sugerir a cor certa. */
   system: ShadeSystemId;
   /** Id da anatomia padrão para cenários que trocam a forma (undefined = contorno). */
-  defaultAnatomy?: string;
   /** Largura/altura da área da foto, para converter altura do dente em fração da altura. */
   aspect: number;
 };
@@ -43,7 +42,7 @@ export const SCENARIOS: Scenario[] = [
     name: 'Natural',
     description: 'Proporções naturais, leve espaçamento, bordas suaves. Boa base para começar.',
     apply: (p, ctx) => ({
-      params: { ...p, anatomy: ctx.defaultAnatomy ?? p.anatomy, proportion: 'natural', spacing: 0.02, heightRatio: 1.2, curve: 0.08, opacity: 0.92, edits: undefined },
+      params: { ...p, proportion: 'natural', spacing: 0.02, heightRatio: 1.2, curve: 0.08, opacity: 0.92, edits: undefined },
     }),
   },
   {
@@ -51,7 +50,7 @@ export const SCENARIOS: Scenario[] = [
     name: 'Facetas',
     description: 'Dentes um pouco mais longos e cheios, sem espaços, proporção RED, cor clara.',
     apply: (p, ctx) => ({
-      params: { ...p, anatomy: ctx.defaultAnatomy ?? p.anatomy, proportion: 'red', spacing: 0, heightRatio: 1.28, curve: 0.1, opacity: 0.96, edits: undefined },
+      params: { ...p, proportion: 'red', spacing: 0, heightRatio: 1.28, curve: 0.1, opacity: 0.96, edits: undefined },
       shade: lightShade(ctx.system, 'bright'),
     }),
   },
