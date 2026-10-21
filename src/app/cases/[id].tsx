@@ -10,6 +10,7 @@ import { findShade, getSystem } from '@/lib/color/shades';
 import { deleteCase, getCase, isSmileCase, type AnyCase, type ShadeCase, type SmileCase } from '@/lib/storage/cases';
 import { findGingiva } from '@/lib/color/gingiva';
 import { buildShadeReportHtml } from '@/lib/report/shadeReport';
+import { SMILE_LIBRARY } from '@/lib/smile/smileLibrary';
 import { loadSettings } from '@/lib/storage/settings';
 import { colors, radius, spacing } from '@/theme';
 
@@ -46,7 +47,7 @@ function SmileDetail({ c }: { c: SmileCase }) {
         },
       },
     ]);
-  const shapeLabel = { oval: 'Oval', square: 'Quadrada', triangular: 'Triangular' }[c.params.shape];
+  const shapeLabel = (c.params.library ? SMILE_LIBRARY.find((l) => l.id === c.params.library)?.name : undefined) ?? { oval: 'Oval', square: 'Quadrada', triangular: 'Triangular' }[c.params.shape];
   const propLabel = { natural: 'Natural', golden: 'Áurea', red: 'RED (70% / 50%)' }[c.params.proportion];
   const frame = c.frame;
   return (

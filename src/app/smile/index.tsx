@@ -26,6 +26,7 @@ import { Handle } from '@/components/Handle';
 import { MouthOutline } from '@/components/MouthOutline';
 import { SmileOverlay } from '@/components/SmileOverlay';
 import { SmilePanes, type Pane } from '@/components/SmilePanes';
+import { SMILE_LIBRARY } from '@/lib/smile/smileLibrary';
 import { labToHex } from '@/lib/color/convert';
 import { getSystem } from '@/lib/color/shades';
 import { detectFace, fitTeethToPhoto, flipPhoto } from '@/lib/face/detect';
@@ -99,6 +100,8 @@ export default function Smile() {
   const [targetShade, setTargetShade] = useState('B1');
   const [step, setStep] = useState<Step>('foto');
   const [moveMode, setMoveMode] = useState<MoveMode>('arch');
+  /** "Par": todo ajuste num dente vai espelhado para o homólogo (como no Smilecloud). */
+  const [pairMode, setPairMode] = useState(true);
   const [selection, setSelection] = useState<Selection>({ kind: 'none' });
   const [hidden, setHidden] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -145,7 +148,14 @@ export default function Smile() {
   const canvasH = canvasW / aspect;
   const editOf = (fdi: string): ToothEdit => params.edits?.[fdi] ?? NO_EDIT;
   const setEdit = (fdi: string, patch: Partial<ToothEdit>) =>
-    setParams((p) => ({ ...p, edits: { ...p.edits, [fdi]: clampEdit({ ...(p.edits?.[fdi] ?? NO_EDIT), ...patch }) } }));
+    setParams((p) => {
+      const mine = clampEdit({ ...(p.edits?.[fdi] ?? NO_EDIT), ...patch });
+      const edits = { ...p.edits, [fdi]: mine };
+      if (pairMode) edits[mirrorFdi(fdi)] = mirrorEdit(mine);
+      return { ...p, edits };
+    });
+  const library = params.library ? SMILE_LIBRARY.find((l) => l.id === params.library) : undefined;
+  const TOOTH_ORDER = ['13', '12', '11', '21', '22', '23'];
   const selectedTooth = selection.kind === 'tooth' ? selection.fdi : null;
 
   const chooseShade = (id: string) => {
@@ -508,8 +518,20 @@ export default function Smile() {
       const py = g.start.y - zoom.ty;
       const hit = teeth.find((t) => px >= t.x && px <= t.x + t.w && py >= t.y && py <= t.y + t.h);
       if (!hit) setSelection({ kind: 'none' });
-      else setSelection(moveMode === 'one' ? { kind: 'tooth', fdi: hit.fdi } : { kind: 'arch' });
+      else {
+        setSelection(moveMode === 'one' ? { kind: 'tooth', fdi: hit.fdi } : { kind: 'arch' });
+        if (moveMode === 'one' && zoom.scale <= 1) zoomToMouth();
+      }
     }
+  };
+  /** Aproxima a vista na boca (2,2x), como o Smilecloud faz ao selecionar um dente. */
+  const zoomToMouth = () => {
+    if (!params.mouth || !area.width) return;
+    const b = mouthBounds(params.mouth, area.width, area.height);
+    const scale = 2.2;
+    const cx = b.centerX * scale;
+    const cy = ((b.upperMidY + b.lowerMidY) / 2) * scale;
+    setZoom(clampZoom({ scale, tx: canvasW / 2 - cx, ty: canvasH / 2 - cy }));
   };
 
   const onLengthHandle = (_dx: number, dy: number) => {
@@ -698,7 +720,7 @@ export default function Smile() {
             onLayout={(e) => setArea({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
           >
             <Image source={{ uri: photo.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-            <SmileOverlay params={params} width={area.width} height={area.height} hidden={!showTeeth} selected={selectedForOverlay} />
+            <SmileOverlay params={params} width={area.width} height={area.height} hidden={!showTeeth} selected={selectedForOverlay} library={library} />
             {face && showFace && step === 'ajustar' && !hidden && area.width > 0 && (
               <FaceFrame face={face} width={area.width} height={area.height} teeth={teeth} dentalMidlineX={params.midlineX * area.width} onChange={setFace} readOnly={exporting} />
             )}
@@ -819,6 +841,26 @@ export default function Smile() {
                   <Chip key={s.id} label={s.id} selected={targetShade === s.id} onPress={() => chooseShade(s.id)} />
                 ))}
               </ScrollView>
+              <SectionTitle>Modelo</SectionTitle>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <Pressable onPress={() => set({ library: undefined })} style={[styles.modelCard, !params.library && styles.modelCardSelected]}>
+                  <View style={styles.modelThumbBox}>
+                    <Text style={styles.modelGlyph}>◠◠◠</Text>
+                  </View>
+                  <Text style={styles.modelName}>Contorno</Text>
+                </Pressable>
+                {SMILE_LIBRARY.map((l) => (
+                  <Pressable key={l.id} onPress={() => set({ library: l.id })} style={[styles.modelCard, params.library === l.id && styles.modelCardSelected]}>
+                    <View style={styles.modelThumbBox}>
+                      <Image source={l.image} style={styles.modelThumb} resizeMode="contain" />
+                    </View>
+                    <Text style={styles.modelName}>{l.name}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+              {library && <Muted>Arco fotográfico {library.name}: posição, largura e comprimento seguem os mesmos controles; a forma vem do modelo.</Muted>}
+              {!library && (
+              <>
               <SectionTitle>Forma</SectionTitle>
                   <View style={styles.chips}>
                     <Chip label="Quadrada" selected={shapeFromMix(shapeMix) === 'square'} onPress={() => set({ shape: 'square', shapeMix: SHAPE_MIX.square })} />
@@ -826,6 +868,8 @@ export default function Smile() {
                     <Chip label="Triangular" selected={shapeFromMix(shapeMix) === 'triangular'} onPress={() => set({ shape: 'triangular', shapeMix: SHAPE_MIX.triangular })} />
                   </View>
                   <Control label="Transição da forma (quadrada → oval → triangular)" value={shapeMix} min={0} max={1} onChange={(v) => set({ shapeMix: v, shape: shapeFromMix(v) })} />
+              </>
+              )}
               <SectionTitle>Proporção</SectionTitle>
               <View style={styles.chips}>
                 <Chip label="Natural" selected={params.proportion === 'natural'} onPress={() => set({ proportion: 'natural' })} />
@@ -881,20 +925,50 @@ export default function Smile() {
                     : 'Toque num dente na foto para selecioná-lo. Sem seleção, pinça e arraste mexem na foto.'}
               </Muted>
               {moveMode === 'one' && (
-                <View style={styles.chips}>
-                  {['13', '12', '11', '21', '22', '23'].map((fdi) => (
-                    <Chip
-                      key={fdi}
-                      label={fdi}
-                      selected={selectedTooth === fdi}
-                      color={params.edits?.[fdi] ? colors.navy : undefined}
-                      onPress={() => setSelection(selectedTooth === fdi ? { kind: 'none' } : { kind: 'tooth', fdi })}
-                    />
-                  ))}
+                <View style={styles.toothNav}>
+                  <Pressable
+                    onPress={() => {
+                      const i = selectedTooth ? TOOTH_ORDER.indexOf(selectedTooth) : 3;
+                      setSelection({ kind: 'tooth', fdi: TOOTH_ORDER[(i + TOOTH_ORDER.length - 1) % TOOTH_ORDER.length] });
+                      if (zoom.scale <= 1) zoomToMouth();
+                    }}
+                    hitSlop={8}
+                    style={styles.navBtn}
+                  >
+                    <Text style={styles.navText}>‹</Text>
+                  </Pressable>
+                  <View style={{ alignItems: 'center', minWidth: 90 }}>
+                    <Text style={styles.navFdi}>{selectedTooth ?? '—'}</Text>
+                    <Text style={styles.navHint}>{selectedTooth ? 'dente selecionado' : 'toque num dente'}</Text>
+                  </View>
+                  <Pressable
+                    onPress={() => {
+                      const i = selectedTooth ? TOOTH_ORDER.indexOf(selectedTooth) : 2;
+                      setSelection({ kind: 'tooth', fdi: TOOTH_ORDER[(i + 1) % TOOTH_ORDER.length] });
+                      if (zoom.scale <= 1) zoomToMouth();
+                    }}
+                    hitSlop={8}
+                    style={styles.navBtn}
+                  >
+                    <Text style={styles.navText}>›</Text>
+                  </Pressable>
+                  <Chip label="Par" selected={pairMode} onPress={() => setPairMode(!pairMode)} />
+                  <Chip label={hidden ? 'Mostrar' : 'Ocultar'} selected={hidden} onPress={() => setHidden(!hidden)} />
                 </View>
               )}
-              {selectedTooth && (
+              {selectedTooth && !library && (
                 <>
+                  <View style={styles.chips}>
+                    {(['square', 'oval', 'triangular'] as const).map((sh) => (
+                      <Chip
+                        key={sh}
+                        label={sh === 'square' ? 'Quadrada' : sh === 'oval' ? 'Oval' : 'Triangular'}
+                        selected={(editOf(selectedTooth).shape ?? shapeMix) === SHAPE_MIX[sh]}
+                        onPress={() => setEdit(selectedTooth, { shape: SHAPE_MIX[sh] })}
+                      />
+                    ))}
+                    {editOf(selectedTooth).shape !== undefined && <Chip label="Forma do conjunto" onPress={() => setEdit(selectedTooth, { shape: undefined })} />}
+                  </View>
                   <Control label="Rotação (°)" value={editOf(selectedTooth).rot} min={-25} max={25} onChange={(v) => setEdit(selectedTooth, { rot: v })} />
                   <Control label="Largura" value={editOf(selectedTooth).sw} min={0.6} max={1.4} onChange={(v) => setEdit(selectedTooth, { sw: v })} />
                   <Control label="Comprimento" value={editOf(selectedTooth).sh} min={0.6} max={1.4} onChange={(v) => setEdit(selectedTooth, { sh: v })} />
@@ -990,8 +1064,8 @@ export default function Smile() {
                   aspect={aspect}
                   panes={
                     compareMode === 'side'
-                      ? ([{ label: 'ANTES' }, { label: 'DEPOIS', params }] as Pane[])
-                      : ([...variants.map((v) => ({ label: v.name, params: v.params })), { label: 'ATUAL', params }] as Pane[])
+                      ? ([{ label: 'ANTES' }, { label: 'DEPOIS', params, library }] as Pane[])
+                      : ([...variants.map((v) => ({ label: v.name, params: v.params, library: SMILE_LIBRARY.find((l) => l.id === v.params.library) })), { label: 'ATUAL', params, library }] as Pane[])
                   }
                 />
               </View>
@@ -1060,6 +1134,17 @@ function Control({ label, value, min, max, onChange }: { label: string; value: n
 
 const styles = StyleSheet.create({
   canvas: { backgroundColor: '#000', overflow: 'hidden' },
+  modelCard: { width: 128, marginRight: 8, marginBottom: 8, borderRadius: radius.md, borderWidth: 2, borderColor: colors.border, backgroundColor: '#1E1A1C', overflow: 'hidden' },
+  modelCardSelected: { borderColor: colors.primary },
+  modelThumbBox: { width: 124, height: 48, alignItems: 'center', justifyContent: 'center' },
+  modelThumb: { width: 118, height: 42 },
+  modelGlyph: { color: '#EEE3CD', fontSize: 20, letterSpacing: 2 },
+  modelName: { color: '#fff', fontSize: 12, fontWeight: '600', textAlign: 'center', paddingVertical: 4, paddingHorizontal: 4, backgroundColor: colors.navy },
+  toothNav: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, flexWrap: 'wrap' },
+  navBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  navText: { fontSize: 26, color: colors.text, marginTop: -3 },
+  navFdi: { fontSize: 24, fontWeight: '700', color: colors.text },
+  navHint: { fontSize: 11, color: colors.muted },
   stepBar: { flexGrow: 0, paddingVertical: 8, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
   histBtn: { width: 36, height: 34, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', marginRight: 6, backgroundColor: '#fff' },
   histText: { fontSize: 20, color: colors.text, fontWeight: '700', lineHeight: 24 },

@@ -1,5 +1,7 @@
 import Svg, { ClipPath, Defs, Ellipse, G, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
+import { SmileLibraryLayer } from '@/components/SmileLibraryLayer';
 import { mouthPath } from '@/lib/smile/mouth';
+import type { SmileLibraryEntry } from '@/lib/smile/smileLibrary';
 import { toothShading } from '@/lib/smile/shading';
 import { layoutTeeth, type SmileParams } from '@/lib/smile/teeth';
 
@@ -10,6 +12,8 @@ type Props = {
   hidden?: boolean;
   /** FDI do dente selecionado para edição individual (desenha a caixa). */
   selected?: string;
+  /** Arco 2D da biblioteca no lugar dos contornos. */
+  library?: SmileLibraryEntry;
 };
 
 /**
@@ -17,8 +21,9 @@ type Props = {
  * Se `params.mouth` existir, tudo fica dentro do contorno da boca (ClipPath).
  * A anatomia 3D ao vivo (WebView + three.js) é um componente à parte.
  */
-export function SmileOverlay({ params, width, height, hidden, selected }: Props) {
+export function SmileOverlay({ params, width, height, hidden, selected, library }: Props) {
   if (hidden || width <= 0 || height <= 0) return null;
+  if (library) return <SmileLibraryLayer params={params} entry={library} width={width} height={height} />;
   const clip = params.mouth && params.mouth.length >= 3 ? mouthPath(params.mouth, width, height) : null;
 
   return (

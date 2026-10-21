@@ -97,7 +97,18 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   parâmetros: `midlineX`, `incisalY` (= gumY + comprimento do central), `centralWidth`, `rotX/Y/Z`, `color`,
   `opacity`, `gloss`, `showLower`, `lowerGap`, `lipShadow`, `mouth`. `SmileParams.arch` (id do arco) liga o modo 3D
   e `SmileParams.arch3d` guarda os ajustes 3D; sem `arch` fica o modo contorno (SVG).
-- Edição dente a dente: `SmileParams.edits[fdi] = { dx, dy, sw, sh, rot }` aplicado por `applyToothEdit` nos dois
+- BIBLIOTECA 2D DE SORRISOS (2026-10-21, depois de descartar o 3D): `reference/sorrisos/tipos-de-sorriso.png`
+  (imagem que o Gustavo mandou: retangular, triangular, arredondado, quadrado, renderizados) →
+  `scripts/sorrisos/extract.mjs` recorta cada arco com alfa pelo brilho (fundo preto), mede linha média, colo,
+  incisal e largura do central em px e gera `assets/sorrisos/<id>.png` + `src/lib/smile/smileLibrary.ts` (GERADO).
+  `lib/smile/library.ts#libraryPlacement` encaixa o PNG pelos mesmos parâmetros do contorno (midlineX, gumY,
+  centralWidth, heightRatio; escala vertical independente). `components/SmileLibraryLayer.tsx`: Image com
+  tamanho explícito + cópia tingida pela cor-alvo (35 %) + sombra do lábio superior (gradiente SVG) dentro de um
+  MaskedView com o contorno da boca. `SmileParams.library` liga o modo (cards "Modelo" no passo Forma; sem
+  library = contorno). Editor no estilo Smilecloud (ver `docs/smilecloud-estudo.md`): no Unitário há `‹ 11 ›`
+  para navegar entre dentes, forma por dente (`ToothEdit.shape`), chip "Par" (`pairMode`, espelha cada ajuste
+  no homólogo), "Ocultar/Mostrar" e zoom automático na boca (2,2x) ao selecionar um dente.
+- Edição dente a dente: `SmileParams.edits[fdi] = { dx, dy, sw, sh, rot, shape? }` aplicado por `applyToothEdit` nos dois
   layouts; rotação desenhada com `rotate()` em torno do centro da caixa; com um dente selecionado, arrastar na foto
   move só ele.
 - `scripts/anatomia/` `import.mjs` (copia da biblioteca do exocad para `reference/anatomia`, só consulta),

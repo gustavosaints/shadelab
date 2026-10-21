@@ -42,12 +42,14 @@ export type SmileParams = {
   mouth?: MouthPoint[];
   /** Ajustes dente a dente (por FDI "11".."23"), por cima do layout automático. */
   edits?: Partial<Record<string, ToothEdit>>;
+  /** Arco 2D da biblioteca (`smileLibrary.ts`): render fotográfico no lugar dos contornos. */
+  library?: string;
 };
 
 export type MouthPoint = { x: number; y: number };
 
 /** Ajuste individual de um dente: deslocamento (frações da largura/altura do central), escala e rotação (graus, horário). */
-export type ToothEdit = { dx: number; dy: number; sw: number; sh: number; rot: number };
+export type ToothEdit = { dx: number; dy: number; sw: number; sh: number; rot: number; /** forma só deste dente (0 quadrada … 1 triangular) */ shape?: number };
 export const NO_EDIT: ToothEdit = { dx: 0, dy: 0, sw: 1, sh: 1, rot: 0 };
 
 export type ToothBox = { x: number; y: number; w: number; h: number };
@@ -76,7 +78,7 @@ export function mirrorFdi(fdi: string): string {
 
 export function clampEdit(e: ToothEdit): ToothEdit {
   const c = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
-  return { dx: c(e.dx, -1, 1), dy: c(e.dy, -1, 1), sw: c(e.sw, 0.5, 1.6), sh: c(e.sh, 0.5, 1.6), rot: c(e.rot, -30, 30) };
+  return { ...e, dx: c(e.dx, -1, 1), dy: c(e.dy, -1, 1), sw: c(e.sw, 0.5, 1.6), sh: c(e.sh, 0.5, 1.6), rot: c(e.rot, -30, 30), shape: e.shape === undefined ? undefined : c(e.shape, 0, 1) };
 }
 
 export const DEFAULT_SMILE_PARAMS: SmileParams = {
@@ -257,7 +259,7 @@ export function layoutTeeth(p: SmileParams, width: number, height: number): Toot
       const y0 = gumY + ZENITH_OFFSET[t.kind] * ch - p.curve * ch * t.k * t.k * 0.5;
       const fdi = dir < 0 ? `1${t.k + 1}` : `2${t.k + 1}`;
       const { x, y, w: ew, h: eh, rot } = applyToothEdit({ x: x0, y: y0, w, h }, p.edits?.[fdi], cw, ch);
-      const shape = p.shapeMix ?? SHAPE_MIX[p.shape];
+      const shape = p.edits?.[fdi]?.shape ?? p.shapeMix ?? SHAPE_MIX[p.shape];
       out.push({ fdi, kind: t.kind, side, x, y, w: ew, h: eh, rot, d: toothPath(x, y, ew, eh, shape, t.kind, side) });
       edge = dir > 0 ? x0 + w + gap : x0 - gap;
     }
