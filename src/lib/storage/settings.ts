@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Lab } from '@/lib/color/convert';
+import type { ThirdsProfile } from '@/lib/color/match';
 import type { NeutralReferenceId, ShadeSystemId } from '@/lib/color/shades';
 
 export type ReferenceMode = 'none' | NeutralReferenceId | 'tab';
@@ -11,6 +12,8 @@ export type Settings = {
   referenceTab: string;
   /** Lab medido de cada tab, por escala, no aparelho do usuário. */
   calibrations: Partial<Record<ShadeSystemId, Record<string, Lab>>>;
+  /** Lab por terços (cervical, médio, incisal) de cada tab medido no aparelho — comparação do dente inteiro. */
+  calibrationThirds: Partial<Record<ShadeSystemId, Record<string, ThirdsProfile>>>;
   clinicName: string;
   dentistName: string;
   /** Chave da API do Google (Gemini) para "Gerar sorriso por IA"; fica só neste aparelho. */
@@ -24,6 +27,7 @@ export const DEFAULT_SETTINGS: Settings = {
   referenceMode: 'gray18',
   referenceTab: 'A2',
   calibrations: {},
+  calibrationThirds: {},
   clinicName: '',
   dentistName: '',
   aiApiKey: '',
@@ -49,15 +53,22 @@ export async function saveSettings(patch: Partial<Settings>): Promise<Settings> 
   return next;
 }
 
-export async function saveCalibration(system: ShadeSystemId, shadeId: string, lab: Lab): Promise<Settings> {
+export async function saveCalibration(system: ShadeSystemId, shadeId: string, lab: Lab, thirds?: ThirdsProfile): Promise<Settings> {
   const current = await loadSettings();
   const forSystem = { ...(current.calibrations[system] ?? {}), [shadeId]: lab };
-  return saveSettings({ calibrations: { ...current.calibrations, [system]: forSystem } });
+  const thirdsForSystem = { ...(current.calibrationThirds[system] ?? {}) };
+  if (thirds) thirdsForSystem[shadeId] = thirds;
+  return saveSettings({
+    calibrations: { ...current.calibrations, [system]: forSystem },
+    calibrationThirds: { ...current.calibrationThirds, [system]: thirdsForSystem },
+  });
 }
 
 export async function clearCalibration(system: ShadeSystemId): Promise<Settings> {
   const current = await loadSettings();
   const next = { ...current.calibrations };
   delete next[system];
-  return saveSettings({ calibrations: next });
+  const nextThirds = { ...current.calibrationThirds };
+  delete nextThirds[system];
+  return saveSettings({ calibrations: next, calibrationThirds: nextThirds });
 }

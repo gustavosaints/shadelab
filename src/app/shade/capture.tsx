@@ -1,4 +1,4 @@
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView, useCameraPermissions, type CameraType } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
@@ -9,11 +9,15 @@ import { colors, spacing } from '@/theme';
 
 type Params = { mode?: 'shade' | 'calibrate'; shade?: string };
 
+const ZOOM_STEPS = [0, 0.25, 0.5];
+
 export default function Capture() {
   const { mode = 'shade', shade } = useLocalSearchParams<Params>();
   const [permission, requestPermission] = useCameraPermissions();
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [facing, setFacing] = useState<CameraType>('back');
+  const [zoom, setZoom] = useState(0);
   const cameraRef = useRef<CameraView>(null);
   const insets = useSafeAreaInsets();
 
@@ -43,6 +47,12 @@ export default function Capture() {
     goAnalyze(a.uri, a.width, a.height);
   };
 
+  const flip = () => {
+    setReady(false);
+    setFacing((f) => (f === 'back' ? 'front' : 'back'));
+  };
+  const nextZoom = () => setZoom((z) => ZOOM_STEPS[(ZOOM_STEPS.indexOf(z) + 1) % ZOOM_STEPS.length]);
+
   if (!permission) return <View style={styles.center} />;
 
   if (!permission.granted) {
@@ -59,10 +69,13 @@ export default function Capture() {
 
   return (
     <View style={styles.root}>
+      {/* mirror: a foto da câmera frontal sai igual ao que se vê na tela (não invertida) */}
       <CameraView
         ref={cameraRef}
         style={StyleSheet.absoluteFill}
-        facing="back"
+        facing={facing}
+        mirror={facing === 'front'}
+        zoom={zoom}
         flash="off"
         animateShutter={false}
         onCameraReady={() => setReady(true)}
@@ -83,12 +96,15 @@ export default function Capture() {
           <Text style={styles.topBtn}>Fechar</Text>
         </Pressable>
         <Text style={styles.topTitle}>{mode === 'calibrate' ? `Calibrar ${shade}` : 'Tirar cor'}</Text>
-        <View style={{ width: 50 }} />
+        <Pressable onPress={nextZoom} hitSlop={12}>
+          <Text style={[styles.topBtn, { textAlign: 'right' }]}>{`${(1 + zoom * 4).toFixed(zoom ? 1 : 0)}x`}</Text>
+        </Pressable>
       </View>
 
       <View style={[styles.bottom, { paddingBottom: insets.bottom + 16 }]}>
         <Text style={styles.tip}>
           Luz natural indireta, sem flash. Dente limpo e úmido. Referência encostada ao dente, no mesmo plano.
+          {facing === 'front' ? ' Câmera frontal: a foto sai como você vê na tela.' : ''}
         </Text>
         <View style={styles.controls}>
           <Pressable onPress={pickPhoto} style={styles.sideBtn}>
@@ -97,7 +113,9 @@ export default function Capture() {
           <Pressable onPress={takePhoto} disabled={!ready || busy} style={styles.shutterOuter}>
             <View style={[styles.shutterInner, (!ready || busy) && { opacity: 0.4 }]} />
           </Pressable>
-          <View style={styles.sideBtn} />
+          <Pressable onPress={flip} style={styles.sideBtn}>
+            <Text style={styles.sideText}>{facing === 'back' ? 'Frontal' : 'Traseira'}</Text>
+          </Pressable>
         </View>
       </View>
     </View>

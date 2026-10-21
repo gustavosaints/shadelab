@@ -20,6 +20,14 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
 - `src/app/` telas (Expo Router): `index` (início), `shade/capture` (câmera), `shade/analyze` (marcadores, análise, salvar
   caso ou calibração), `cases/` (lista e detalhe), `settings` (escala, calibração), `smile/index` (Smile Design).
 - `src/lib/color/` sRGB↔CIELAB, CIEDE2000, escalas VITA Classical e 3D-Master, correção por referência, matching.
+  Tomada de cor (redesenho de 2026-10-21, pedido do Gustavo): o quadro do dente é um RETÂNGULO redimensionável
+  (alça no canto inferior direito, `components/Marker.tsx`) que cobre a coroa inteira; `sampleThirds` lê colo /
+  médio / incisal e `matchShadeProfile` compara o perfil com o tab inteiro (terços medidos na calibração —
+  `Settings.calibrationThirds` — ou os offsets típicos `THIRD_OFFSETS`), pesos 0,3/0,5/0,2. Resultado: só o
+  "mais provável" e a "alternativa mais próxima" (topN 2), SEM rótulo de qualidade ("diferença visível" foi
+  retirado da UI; `quality` continua gravado no caso por compatibilidade). Pinça dá zoom na foto da análise;
+  chip Superior/Inferior inverte a ordem dos terços. Câmera de cor: botão Frontal/Traseira, `mirror` ligado na
+  frontal (a foto sai como se vê na tela) e zoom 1x/2x/3x no canto.
 - `src/lib/image/` leitura de pixels (expo-image-manipulator + jpeg-js) e média robusta (descarta 15% extremos).
 - `src/lib/smile/` `teeth.ts` (contornos dos 6 anteriores traçados em quadrado unitário, spline Catmull-Rom, layout por
   proporção natural/áurea), `shading.ts` (gradientes derivados da cor-alvo), `anatomy.ts` (layout com sprites de

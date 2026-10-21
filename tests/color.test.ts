@@ -123,3 +123,34 @@ describe('correção por referência', () => {
     expect(dE).toBeLessThan(1.5);
   });
 });
+
+describe('matchShadeProfile (dente inteiro por terços)', () => {
+  it('um dente com o perfil típico do tab acerta o tab e devolve 2 opções', async () => {
+    const { matchShadeProfile, tabProfile } = await import('@/lib/color/match');
+    const { getSystem } = await import('@/lib/color/shades');
+    for (const shade of getSystem('vita-classical').shades) {
+      const r = matchShadeProfile(tabProfile(shade.lab), 'vita-classical');
+      expect(r.matches).toHaveLength(2);
+      expect(r.matches[0].shade.id).toBe(shade.id);
+      expect(r.matches[0].deltaE).toBeCloseTo(0, 6);
+    }
+  });
+  it('usa os terços calibrados do tab quando existem', async () => {
+    const { matchShadeProfile } = await import('@/lib/color/match');
+    const odd = { cervical: { L: 60, a: 5, b: 30 }, middle: { L: 70, a: 2, b: 20 }, incisal: { L: 75, a: 0, b: 10 } };
+    const r = matchShadeProfile(odd, 'vita-classical', { calibrationThirds: { C4: odd } });
+    expect(r.matches[0].shade.id).toBe('C4');
+  });
+});
+
+describe('splitThirds', () => {
+  it('divide em três faixas e inverte para dente inferior', async () => {
+    const { splitThirds } = await import('@/lib/image/stats');
+    const up = splitThirds({ x: 10, y: 20, width: 30, height: 90 });
+    expect(up.cervical.y).toBe(20);
+    expect(up.incisal.y).toBe(80);
+    const low = splitThirds({ x: 10, y: 20, width: 30, height: 90 }, false);
+    expect(low.cervical.y).toBe(80);
+    expect(low.incisal.y).toBe(20);
+  });
+});

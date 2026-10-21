@@ -28,6 +28,15 @@ export function clampRect(rect: Rect, imageWidth: number, imageHeight: number): 
   return { x: Math.round(x), y: Math.round(y), width: Math.round(width), height: Math.round(height) };
 }
 
+/** Divide um retângulo em três faixas horizontais iguais: cervical, média e incisal (colo em cima ou embaixo). */
+export function splitThirds(rect: Rect, cervicalAtTop = true): { cervical: Rect; middle: Rect; incisal: Rect } {
+  const h = rect.height / 3;
+  const band = (i: number): Rect => ({ x: rect.x, y: rect.y + i * h, width: rect.width, height: h });
+  return cervicalAtTop
+    ? { cervical: band(0), middle: band(1), incisal: band(2) }
+    : { cervical: band(2), middle: band(1), incisal: band(0) };
+}
+
 /**
  * Calcula a cor média robusta de uma região da imagem.
  * A média é feita em RGB linear (fisicamente correto), descartando os

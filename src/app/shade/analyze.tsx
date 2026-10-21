@@ -1,16 +1,18 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Switch,
   Text,
   TextInput,
   View,
+  type GestureResponderEvent,
 } from 'react-native';
 import { Button } from '@/components/Button';
 import { Card, Muted, SectionTitle } from '@/components/Card';
@@ -19,9 +21,9 @@ import { Marker } from '@/components/Marker';
 import { ShadeRow } from '@/components/ShadeRow';
 import { correctedLab, type ReferenceSpec } from '@/lib/color/calibrate';
 import { labToHex, roundLab, type Lab } from '@/lib/color/convert';
-import { matchShade, type MatchResult } from '@/lib/color/match';
+import { matchShadeProfile, type MatchResult, type ThirdsProfile } from '@/lib/color/match';
 import { findShade, getSystem, NEUTRAL_REFERENCES } from '@/lib/color/shades';
-import { sampleRegion, type Sample } from '@/lib/image/sample';
+import { sampleRegion, sampleThirds, type Rect, type Sample } from '@/lib/image/sample';
 import { newCaseId, persistPhoto, saveCase } from '@/lib/storage/cases';
 import { loadSettings, saveCalibration, saveSettings, type ReferenceMode, type Settings } from '@/lib/storage/settings';
 import { colors, radius, spacing } from '@/theme';
@@ -39,11 +41,17 @@ type Params = {
   notes?: string;
   createdAt?: string;
 };
-type Pt = { x: number; y: number };
+type Touch = { pageX: number; pageY: number };
+type Zoom = { scale: number; tx: number; ty: number };
 
-const MARKER_SCREEN = 40; // tamanho do quadrado na tela, em px
 /** Variação relativa de luminância acima da qual a região é considerada heterogênea. */
 const HETEROGENEOUS_CV = 0.2;
+const MIN_RECT_PX = 12;
+const MAX_ZOOM = 5;
+
+const touchesOf = (e: GestureResponderEvent): Touch[] => (e.nativeEvent.touches ?? []).map((t) => ({ pageX: t.pageX, pageY: t.pageY }));
+const centroid = (t: Touch[]) => ({ x: t.reduce((s, p) => s + p.pageX, 0) / t.length, y: t.reduce((s, p) => s + p.pageY, 0) / t.length });
+const dist = (t: Touch[]) => (t.length >= 2 ? Math.hypot(t[0].pageX - t[1].pageX, t[0].pageY - t[1].pageY) : 0);
 
 export default function Analyze() {
   const {
@@ -63,17 +71,21 @@ export default function Analyze() {
 
   const [settings, setSettings] = useState<Settings | null>(null);
   const [layout, setLayout] = useState({ width: 0, height: 0 });
-  const [tooth, setTooth] = useState<Pt>({ x: imgW * 0.5, y: imgH * 0.45 });
-  const [ref, setRef] = useState<Pt>({ x: imgW * 0.5, y: imgH * 0.6 });
-  const [gingiva, setGingiva] = useState<Pt>({ x: imgW * 0.5, y: imgH * 0.3 });
+  const [zoom, setZoom] = useState<Zoom>({ scale: 1, tx: 0, ty: 0 });
+  // retângulos em pixels da imagem: o do dente cobre a coroa inteira (colo → borda incisal)
+  const [tooth, setTooth] = useState<Rect>({ x: imgW * 0.46, y: imgH * 0.37, width: imgW * 0.08, height: imgH * 0.12 });
+  const [ref, setRef] = useState<Rect>({ x: imgW * 0.46, y: imgH * 0.57, width: imgW * 0.08, height: imgW * 0.08 });
+  const [gingiva, setGingiva] = useState<Rect>({ x: imgW * 0.46, y: imgH * 0.27, width: imgW * 0.08, height: imgW * 0.06 });
   const [useGingiva, setUseGingiva] = useState(false);
+  const [lowerTooth, setLowerTooth] = useState(false);
   const [refMode, setRefMode] = useState<ReferenceMode>('gray18');
   const [refTab, setRefTab] = useState('A2');
   const [busy, setBusy] = useState(false);
   const [warning, setWarning] = useState<string | null>(null);
   const [result, setResult] = useState<{
     match: MatchResult;
-    toothSample: Sample;
+    profile: ThirdsProfile;
+    whole: Sample;
     refSample?: Sample;
     gingivaLab?: Lab;
   } | null>(null);
@@ -89,35 +101,74 @@ export default function Analyze() {
     });
   }, []);
 
-  // Geometria: imagem com "contain" dentro da área
+  // Geometria: imagem com "contain" dentro da vista ampliada (layout × zoom)
+  const inner = { width: layout.width * zoom.scale, height: layout.height * zoom.scale };
   const geo = useMemo(() => {
-    if (!layout.width || !layout.height) return { scale: 1, ox: 0, oy: 0 };
-    const scale = Math.min(layout.width / imgW, layout.height / imgH);
-    return { scale, ox: (layout.width - imgW * scale) / 2, oy: (layout.height - imgH * scale) / 2 };
-  }, [layout, imgW, imgH]);
+    if (!inner.width || !inner.height) return { scale: 1, ox: 0, oy: 0 };
+    const scale = Math.min(inner.width / imgW, inner.height / imgH);
+    return { scale, ox: (inner.width - imgW * scale) / 2, oy: (inner.height - imgH * scale) / 2 };
+  }, [inner.width, inner.height, imgW, imgH]);
 
-  const toScreen = (p: Pt) => ({ x: geo.ox + p.x * geo.scale, y: geo.oy + p.y * geo.scale });
-  const moveBy = (set: (f: (p: Pt) => Pt) => void) => (dx: number, dy: number) =>
-    set((p) => ({
-      x: Math.max(0, Math.min(imgW, p.x + dx / geo.scale)),
-      y: Math.max(0, Math.min(imgH, p.y + dy / geo.scale)),
+  const toScreen = (r: Rect) => ({
+    x: geo.ox + (r.x + r.width / 2) * geo.scale,
+    y: geo.oy + (r.y + r.height / 2) * geo.scale,
+    width: r.width * geo.scale,
+    height: r.height * geo.scale,
+  });
+  const moveBy = (set: (f: (r: Rect) => Rect) => void) => (dx: number, dy: number) =>
+    set((r) => ({
+      ...r,
+      x: Math.max(0, Math.min(imgW - r.width, r.x + dx / geo.scale)),
+      y: Math.max(0, Math.min(imgH - r.height, r.y + dy / geo.scale)),
+    }));
+  const resizeBy = (set: (f: (r: Rect) => Rect) => void) => (dw: number, dh: number) =>
+    set((r) => ({
+      ...r,
+      width: Math.max(MIN_RECT_PX, Math.min(imgW - r.x, r.width + dw / geo.scale)),
+      height: Math.max(MIN_RECT_PX, Math.min(imgH - r.y, r.height + dh / geo.scale)),
     }));
 
-  const markerImgSize = MARKER_SCREEN / geo.scale;
-  const rectFor = (p: Pt) => ({
-    x: p.x - markerImgSize / 2,
-    y: p.y - markerImgSize / 2,
-    width: markerImgSize,
-    height: markerImgSize,
-  });
+  // ----- zoom por pinça e arrasto da vista (os quadros capturam o próprio toque antes) -----
+  const gesture = useRef<{ touches: Touch[]; dist: number; start: { x: number; y: number }; zoom: Zoom } | null>(null);
+  const clampZoom = (z: Zoom): Zoom => {
+    const scale = Math.min(MAX_ZOOM, Math.max(1, z.scale));
+    const W = layout.width * scale;
+    const H = layout.height * scale;
+    return { scale, tx: Math.min(0, Math.max(layout.width - W, z.tx)), ty: Math.min(0, Math.max(layout.height - H, z.ty)) };
+  };
+  const onGrant = (e: GestureResponderEvent) => {
+    const t = touchesOf(e);
+    const now = t.length ? t : [{ pageX: e.nativeEvent.pageX, pageY: e.nativeEvent.pageY }];
+    gesture.current = { touches: now, dist: dist(now), start: { x: e.nativeEvent.locationX, y: e.nativeEvent.locationY }, zoom };
+  };
+  const onMove = (e: GestureResponderEvent) => {
+    const g = gesture.current;
+    if (!g) return;
+    const t = touchesOf(e);
+    const now = t.length ? t : [{ pageX: e.nativeEvent.pageX, pageY: e.nativeEvent.pageY }];
+    if (now.length !== g.touches.length) {
+      gesture.current = { ...g, touches: now, dist: dist(now), zoom };
+      return;
+    }
+    const c0 = centroid(g.touches);
+    const c1 = centroid(now);
+    let scale = g.zoom.scale;
+    let tx = g.zoom.tx + (c1.x - c0.x);
+    let ty = g.zoom.ty + (c1.y - c0.y);
+    if (now.length >= 2 && g.dist > 10) {
+      scale = g.zoom.scale * (dist(now) / g.dist);
+      const k = scale / g.zoom.scale;
+      tx = g.start.x - (g.start.x - g.zoom.tx) * k + (c1.x - c0.x);
+      ty = g.start.y - (g.start.y - g.zoom.ty) * k + (c1.y - c0.y);
+    } else if (g.zoom.scale <= 1) return;
+    setZoom(clampZoom({ scale, tx, ty }));
+  };
+  const onEnd = () => {
+    gesture.current = null;
+  };
 
   const system = settings ? getSystem(settings.shadeSystem) : null;
-  const refLabel =
-    refMode === 'none'
-      ? 'Sem referência'
-      : refMode === 'tab'
-        ? `Tab ${refTab}`
-        : NEUTRAL_REFERENCES[refMode].name;
+  const refLabel = refMode === 'none' ? 'Sem referência' : refMode === 'tab' ? `Tab ${refTab}` : NEUTRAL_REFERENCES[refMode].name;
 
   const analyze = async () => {
     if (!settings || !system) return;
@@ -125,11 +176,10 @@ export default function Analyze() {
     setResult(null);
     setWarning(null);
     try {
-      const toothSample = await sampleRegion(uri, rectFor(tooth), imgW, imgH);
       let refSample: Sample | undefined;
       let refSpec: ReferenceSpec | undefined;
       if (refMode !== 'none') {
-        refSample = await sampleRegion(uri, rectFor(ref), imgW, imgH);
+        refSample = await sampleRegion(uri, ref, imgW, imgH);
         let known: Lab | undefined;
         if (refMode === 'tab') {
           const calib = settings.calibrations[settings.shadeSystem]?.[refTab];
@@ -139,25 +189,30 @@ export default function Analyze() {
         }
         if (known) refSpec = { measured: refSample.rgb, known };
       }
-      const lab = correctedLab(toothSample.rgb, refSpec);
-      const match = matchShade(lab, settings.shadeSystem, {
-        topN: 3,
+      // dente inteiro: três terços (colo → incisal) comparados com o tab inteiro
+      const thirds = await sampleThirds(uri, tooth, imgW, imgH, !lowerTooth);
+      const profile: ThirdsProfile = {
+        cervical: correctedLab(thirds.cervical.rgb, refSpec),
+        middle: correctedLab(thirds.middle.rgb, refSpec),
+        incisal: correctedLab(thirds.incisal.rgb, refSpec),
+      };
+      const match = matchShadeProfile(profile, settings.shadeSystem, {
+        topN: 2,
         calibration: settings.calibrations[settings.shadeSystem],
+        calibrationThirds: settings.calibrationThirds[settings.shadeSystem],
       });
       let gingivaLab: Lab | undefined;
       if (useGingiva) {
-        const g = await sampleRegion(uri, rectFor(gingiva), imgW, imgH);
+        const g = await sampleRegion(uri, gingiva, imgW, imgH);
         gingivaLab = correctedLab(g.rgb, refSpec);
       }
-      setResult({ match, toothSample, refSample, gingivaLab });
-      if (toothSample.cv > HETEROGENEOUS_CV) {
+      setResult({ match, profile, whole: thirds.whole, refSample, gingivaLab });
+      if (thirds.middle.cv > HETEROGENEOUS_CV) {
         setWarning(
-          `Variação de ${Math.round(toothSample.cv * 100)}% dentro do quadrado do dente. Se houver reflexo, borda ou mancha na área, mova o quadrado para uma região lisa do terço médio e repita.`,
+          `Variação de ${Math.round(thirds.middle.cv * 100)}% no terço médio do dente. Se houver reflexo, borda ou mancha dentro do quadro, ajuste o quadro para cobrir só a coroa e repita.`,
         );
       } else if (refSample && refSample.cv > HETEROGENEOUS_CV) {
-        setWarning(
-          `Variação de ${Math.round(refSample.cv * 100)}% dentro do quadrado da referência. Centralize o quadrado na referência, longe das bordas.`,
-        );
+        setWarning(`Variação de ${Math.round(refSample.cv * 100)}% dentro do quadro da referência. Centralize o quadro na referência, longe das bordas.`);
       }
       await saveSettings({ referenceMode: refMode, referenceTab: refTab });
     } catch (e) {
@@ -169,8 +224,13 @@ export default function Analyze() {
 
   const saveAsCalibration = async () => {
     if (!result || !settings || !calibShade) return;
-    await saveCalibration(settings.shadeSystem, calibShade, roundLab(result.match.measured, 2));
-    Alert.alert('Calibração salva', `${calibShade} registrado com L*a*b* ${fmtLab(result.match.measured)}.`, [
+    const p = result.profile;
+    await saveCalibration(settings.shadeSystem, calibShade, roundLab(p.middle, 2), {
+      cervical: roundLab(p.cervical, 2),
+      middle: roundLab(p.middle, 2),
+      incisal: roundLab(p.incisal, 2),
+    });
+    Alert.alert('Calibração salva', `${calibShade} registrado por terços (médio L*a*b* ${fmtLab(p.middle)}).`, [
       { text: 'OK', onPress: () => router.dismissTo('/settings') },
     ]);
   };
@@ -208,39 +268,50 @@ export default function Analyze() {
     }
   };
 
+  const thirdsRow = (p: ThirdsProfile) => (
+    <View style={styles.thirdsRow}>
+      {(['cervical', 'middle', 'incisal'] as const).map((k) => (
+        <View key={k} style={styles.thirdItem}>
+          <View style={[styles.thirdSwatch, { backgroundColor: labToHex(p[k]) }]} />
+          <Text style={styles.thirdLabel}>{k === 'cervical' ? 'Cervical' : k === 'middle' ? 'Médio' : 'Incisal'}</Text>
+          <Text style={styles.thirdLab}>{fmtLab(p[k])}</Text>
+        </View>
+      ))}
+    </View>
+  );
+
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
-        <View style={styles.imageArea} onLayout={(e) => setLayout(e.nativeEvent.layout)}>
-          <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="contain" />
-          {layout.width > 0 && (
-            <>
-              <Marker
-                {...toScreen(tooth)}
-                size={MARKER_SCREEN}
-                color={colors.primary}
-                label="Dente"
-                onMove={moveBy(setTooth)}
-              />
-              {refMode !== 'none' && (
-                <Marker
-                  {...toScreen(ref)}
-                  size={MARKER_SCREEN}
-                  color={colors.accent}
-                  label="Referência"
-                  onMove={moveBy(setRef)}
-                />
-              )}
-              {useGingiva && (
-                <Marker
-                  {...toScreen(gingiva)}
-                  size={MARKER_SCREEN}
-                  color="#E05C8A"
-                  label="Gengiva"
-                  onMove={moveBy(setGingiva)}
-                />
-              )}
-            </>
+      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled" scrollEnabled={zoom.scale <= 1}>
+        <View
+          style={styles.imageArea}
+          onLayout={(e) => setLayout({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
+          onStartShouldSetResponder={() => true}
+          onMoveShouldSetResponder={() => true}
+          onResponderTerminationRequest={() => false}
+          onResponderGrant={onGrant}
+          onResponderMove={onMove}
+          onResponderRelease={onEnd}
+          onResponderTerminate={onEnd}
+        >
+          <View style={{ position: 'absolute', left: zoom.tx, top: zoom.ty, width: inner.width, height: inner.height }}>
+            <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="contain" />
+            {layout.width > 0 && (
+              <>
+                <Marker {...toScreen(tooth)} color={colors.primary} label="Dente" onMove={moveBy(setTooth)} onResize={resizeBy(setTooth)} thirds />
+                {refMode !== 'none' && (
+                  <Marker {...toScreen(ref)} color={colors.accent} label="Referência" onMove={moveBy(setRef)} onResize={resizeBy(setRef)} />
+                )}
+                {useGingiva && (
+                  <Marker {...toScreen(gingiva)} color="#E05C8A" label="Gengiva" onMove={moveBy(setGingiva)} onResize={resizeBy(setGingiva)} />
+                )}
+              </>
+            )}
+          </View>
+          {zoom.scale > 1 && (
+            <Pressable onPress={() => setZoom({ scale: 1, tx: 0, ty: 0 })} style={styles.zoomBadge}>
+              <Text style={styles.zoomBadgeText}>{`${zoom.scale.toFixed(1)}x · tocar para 1x`}</Text>
+            </Pressable>
           )}
         </View>
 
@@ -260,9 +331,15 @@ export default function Analyze() {
                 ))}
               </ScrollView>
             )}
+            <SectionTitle>{mode === 'calibrate' ? 'Quadro do tab' : 'Quadro do dente'}</SectionTitle>
+            <View style={styles.chips}>
+              <Chip label="Superior (colo em cima)" selected={!lowerTooth} onPress={() => setLowerTooth(false)} />
+              <Chip label="Inferior (colo embaixo)" selected={lowerTooth} onPress={() => setLowerTooth(true)} />
+            </View>
             <Muted>
-              Arraste os quadrados: azul no terço médio do dente, verde sobre a referência. A referência
-              corrige balanço de branco e exposição.
+              Pinça na foto para aproximar. Arraste o quadro azul para cobrir a coroa inteira, do colo à borda incisal, e puxe o canto
+              inferior direito para redimensionar: ele é lido em três terços (cervical, médio e incisal) e comparado com o tab inteiro da
+              escala. O quadro verde vai sobre a referência, que corrige balanço de branco e exposição.
             </Muted>
             {mode === 'shade' && (
               <View style={styles.switchRow}>
@@ -272,19 +349,14 @@ export default function Analyze() {
             )}
           </Card>
 
-          <Button
-            title={mode === 'calibrate' ? `Medir tab ${calibShade}` : 'Analisar cor'}
-            onPress={analyze}
-            loading={busy}
-            disabled={!settings}
-          />
+          <Button title={mode === 'calibrate' ? `Medir tab ${calibShade}` : 'Analisar cor'} onPress={analyze} loading={busy} disabled={!settings} />
 
           {result && (
             <Card style={{ marginTop: spacing.md }}>
               <View style={styles.measuredRow}>
                 <View style={[styles.bigSwatch, { backgroundColor: labToHex(result.match.measured) }]} />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.measuredTitle}>Cor medida do dente</Text>
+                  <Text style={styles.measuredTitle}>Cor medida (terço médio)</Text>
                   <Text style={styles.labText}>L*a*b* {fmtLab(result.match.measured)}</Text>
                   <Muted>
                     {refLabel}
@@ -292,6 +364,7 @@ export default function Analyze() {
                   </Muted>
                 </View>
               </View>
+              {thirdsRow(result.profile)}
 
               {warning && (
                 <View style={styles.warnBox}>
@@ -302,27 +375,21 @@ export default function Analyze() {
               {mode === 'calibrate' ? (
                 <>
                   <Muted>
-                    Este valor será salvo como a cor do tab {calibShade} no seu aparelho. Meça todos os tabs
-                    nas mesmas condições de luz.
+                    Os três terços serão salvos como a cor do tab {calibShade} no seu aparelho. Meça todos os tabs nas mesmas condições de
+                    luz, com o quadro cobrindo o tab inteiro.
                   </Muted>
                   <Button title={`Salvar como ${calibShade}`} onPress={saveAsCalibration} style={{ marginTop: 12 }} />
                 </>
               ) : (
                 <>
-                  <SectionTitle>{`Melhores correspondências · ${system?.name ?? ''}`}</SectionTitle>
+                  <SectionTitle>{`Resultado · ${system?.name ?? ''}`}</SectionTitle>
                   {result.match.matches.map((m, i) => (
-                    <ShadeRow
-                      key={m.shade.id}
-                      rank={i + 1}
-                      shadeId={m.shade.id}
-                      lab={m.shade.lab}
-                      deltaE={m.deltaE}
-                      quality={m.quality}
-                    />
+                    <ShadeRow key={m.shade.id} rank={i + 1} shadeId={m.shade.id} lab={m.shade.lab} deltaE={m.deltaE} />
                   ))}
                   <Muted>
-                    Confiança {Math.round(result.match.confidence * 100)}%. ΔE00 ≤ 0,8 imperceptível; ≤ 1,8
-                    clinicamente aceitável (Paravina et al., 2015).
+                    {result.match.confidence >= 0.5
+                      ? 'O mais provável está bem separado da alternativa.'
+                      : 'As duas opções estão próximas: confira na boca com os dois tabs lado a lado.'}
                   </Muted>
                   {result.gingivaLab && (
                     <View style={[styles.measuredRow, { marginTop: 12 }]}>
@@ -341,13 +408,7 @@ export default function Analyze() {
           {result && mode === 'shade' && (
             <Card>
               <SectionTitle>Salvar caso</SectionTitle>
-              <TextInput
-                placeholder="Nome do paciente"
-                value={patientName}
-                onChangeText={setPatientName}
-                style={styles.input}
-                placeholderTextColor={colors.muted}
-              />
+              <TextInput placeholder="Nome do paciente" value={patientName} onChangeText={setPatientName} style={styles.input} placeholderTextColor={colors.muted} />
               <TextInput
                 placeholder="Dente (FDI, ex.: 11)"
                 value={toothNumber}
@@ -378,11 +439,18 @@ function fmtLab(l: Lab) {
 }
 
 const styles = StyleSheet.create({
-  imageArea: { width: '100%', aspectRatio: 3 / 4, backgroundColor: '#000' },
+  imageArea: { width: '100%', aspectRatio: 3 / 4, backgroundColor: '#000', overflow: 'hidden' },
+  zoomBadge: { position: 'absolute', right: 8, top: 8, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.sm },
+  zoomBadgeText: { color: '#fff', fontSize: 12, fontWeight: '600' },
   chips: { flexDirection: 'row', flexWrap: 'wrap' },
   switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
   switchLabel: { color: colors.text, fontWeight: '600' },
   measuredRow: { flexDirection: 'row', gap: 12, alignItems: 'center', marginBottom: 10 },
+  thirdsRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+  thirdItem: { flex: 1, alignItems: 'center' },
+  thirdSwatch: { width: '100%', height: 28, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border },
+  thirdLabel: { color: colors.text, fontSize: 12, fontWeight: '600', marginTop: 4 },
+  thirdLab: { color: colors.muted, fontSize: 10, fontVariant: ['tabular-nums'] },
   warnBox: {
     backgroundColor: '#FFF7E0',
     borderColor: '#F0D48A',

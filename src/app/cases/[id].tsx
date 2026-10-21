@@ -9,7 +9,7 @@ import { ShadeRow } from '@/components/ShadeRow';
 import { findShade, getSystem } from '@/lib/color/shades';
 import { deleteCase, getCase, isSmileCase, type AnyCase, type ShadeCase, type SmileCase } from '@/lib/storage/cases';
 import { loadSettings } from '@/lib/storage/settings';
-import { colors, qualityLabel, radius, spacing } from '@/theme';
+import { colors, radius, spacing } from '@/theme';
 
 export default function CaseDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -102,7 +102,7 @@ function ShadeDetail({ c }: { c: ShadeCase }) {
       const rows = c.matches
         .map(
           (m, i) =>
-            `<tr><td>${i + 1}</td><td><b>${m.shadeId}</b></td><td>${m.deltaE.toFixed(2)}</td><td>${qualityLabel[m.quality] ?? m.quality}</td></tr>`,
+            `<tr><td>${i === 0 ? 'Mais provável' : i === 1 ? 'Alternativa' : i + 1}</td><td><b>${m.shadeId}</b></td><td>${m.deltaE.toFixed(1)}</td></tr>`,
         )
         .join('');
       const html = `
@@ -124,7 +124,7 @@ table{border-collapse:collapse;margin-top:10px;width:100%} td,th{border:1px soli
 <div class="box">
 <span class="sw" style="background:${c.toothHex}"></span><b>Cor sugerida: ${best?.shadeId ?? '—'}</b>
 <div class="muted">Dente medido L*a*b* = ${c.toothLab.L} / ${c.toothLab.a} / ${c.toothLab.b}</div>
-<table><tr><th>#</th><th>Tab</th><th>ΔE00</th><th>Classificação</th></tr>${rows}</table>
+<table><tr><th>Resultado</th><th>Tab</th><th>ΔE00</th></tr>${rows}</table>
 </div>
 ${
   c.gingivaLab
@@ -188,7 +188,6 @@ ${c.notes ? `<div class="box"><b>Observações</b><br/>${esc(c.notes).replace(/\
             shadeId={m.shadeId}
             lab={findShade(c.shadeSystem, m.shadeId)?.lab ?? c.toothLab}
             deltaE={m.deltaE}
-            quality={m.quality}
           />
         ))}
       </Card>
