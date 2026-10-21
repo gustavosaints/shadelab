@@ -9,6 +9,8 @@ type Props = {
   color: string;
   label: string;
   onMove: (dx: number, dy: number) => void;
+  /** Começo do toque no quadro (a tela usa para travar a rolagem e o zoom enquanto arrasta). */
+  onGrant?: () => void;
   /** Mudança de largura/altura em px de tela (alça do canto ou pinça com dois dedos sobre o quadro). */
   onResize?: (dw: number, dh: number) => void;
   onRelease?: () => void;
@@ -27,7 +29,7 @@ const touchesOf = (e: GestureResponderEvent): Touch[] => (e.nativeEvent.touches 
 const dist = (t: Touch[]) => (t.length >= 2 ? Math.hypot(t[0].pageX - t[1].pageX, t[0].pageY - t[1].pageY) : 0);
 
 /** Retângulo de amostragem arrastável e redimensionável sobre a foto. */
-export function Marker({ x, y, width, height, color, label, onMove, onResize, onRelease, thirds, resizeMode }: Props) {
+export function Marker({ x, y, width, height, color, label, onMove, onGrant, onResize, onRelease, thirds, resizeMode }: Props) {
   const last = useRef({ x: 0, y: 0 });
   const mode = useRef<'move' | 'resize' | 'pinch'>('move');
   const pinch = useRef({ dist: 0, w: 0, h: 0 });
@@ -44,6 +46,7 @@ export function Marker({ x, y, width, height, color, label, onMove, onResize, on
   const grant = (e: GestureResponderEvent) => {
     const { pageX, pageY } = e.nativeEvent;
     last.current = { x: pageX, y: pageY };
+    onGrant?.();
     const t = touchesOf(e);
     if (t.length >= 2 && onResize) {
       mode.current = 'pinch';
@@ -55,6 +58,7 @@ export function Marker({ x, y, width, height, color, label, onMove, onResize, on
   const grantHandle = (e: GestureResponderEvent) => {
     last.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
     mode.current = 'resize';
+    onGrant?.();
   };
   const move = (e: GestureResponderEvent) => {
     const t = touchesOf(e);
@@ -79,7 +83,9 @@ export function Marker({ x, y, width, height, color, label, onMove, onResize, on
   return (
     <View
       onStartShouldSetResponder={() => true}
+      onStartShouldSetResponderCapture={() => true}
       onMoveShouldSetResponder={() => true}
+      onMoveShouldSetResponderCapture={() => true}
       onResponderTerminationRequest={() => false}
       onResponderGrant={grant}
       onResponderMove={move}

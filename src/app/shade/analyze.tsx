@@ -85,6 +85,8 @@ export default function Analyze() {
   const [lowerTooth, setLowerTooth] = useState(false);
   /** O que o arrasto no quadro faz: mover ou redimensionar (modo explícito, pedido do Gustavo). */
   const [markerMode, setMarkerMode] = useState<'move' | 'resize'>('move');
+  /** Enquanto um quadro (ou a foto ampliada) está sendo arrastado, a rolagem da tela fica travada. */
+  const [dragging, setDragging] = useState(false);
   const [refMode, setRefMode] = useState<ReferenceMode>('gray18');
   const [refTab, setRefTab] = useState('A2');
   const [busy, setBusy] = useState(false);
@@ -179,6 +181,7 @@ export default function Analyze() {
     return { scale, tx: Math.min(0, Math.max(layout.width - W, z.tx)), ty: Math.min(0, Math.max(layout.height - H, z.ty)) };
   };
   const onGrant = (e: GestureResponderEvent) => {
+    if (zoom.scale > 1) setDragging(true);
     const t = touchesOf(e);
     const now = t.length ? t : [{ pageX: e.nativeEvent.pageX, pageY: e.nativeEvent.pageY }];
     gesture.current = { touches: now, dist: dist(now), start: { x: e.nativeEvent.locationX, y: e.nativeEvent.locationY }, zoom };
@@ -207,7 +210,10 @@ export default function Analyze() {
   };
   const onEnd = () => {
     gesture.current = null;
+    setDragging(false);
   };
+  const markerStart = () => setDragging(true);
+  const markerEnd = () => setDragging(false);
 
   const system = settings ? getSystem(settings.shadeSystem) : null;
   const refLabel = refMode === 'none' ? 'Sem referência' : refMode === 'tab' ? `Tab ${refTab}` : NEUTRAL_REFERENCES[refMode].name;
@@ -349,7 +355,7 @@ export default function Analyze() {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <FaceLandmarker ref={landmarker} />
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled" scrollEnabled={!dragging}>
         <View
           style={styles.imageArea}
           onLayout={(e) => setLayout({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
@@ -370,15 +376,17 @@ export default function Analyze() {
                   color={calibratingGingiva ? '#E05C8A' : colors.primary}
                   label={mode === 'shade' ? 'Dente' : `Tab ${calibShade}`}
                   onMove={moveBy(setTooth)}
+                  onGrant={markerStart}
+                  onRelease={markerEnd}
                   onResize={resizeBy(setTooth)}
                   thirds={!calibratingGingiva}
                   resizeMode={markerMode === 'resize'}
                 />
                 {refMode !== 'none' && (
-                  <Marker {...toScreen(ref)} color={colors.accent} label="Referência" onMove={moveBy(setRef)} onResize={resizeBy(setRef)} resizeMode={markerMode === 'resize'} />
+                  <Marker {...toScreen(ref)} color={colors.accent} label="Referência" onMove={moveBy(setRef)} onGrant={markerStart} onRelease={markerEnd} onResize={resizeBy(setRef)} resizeMode={markerMode === 'resize'} />
                 )}
                 {useGingiva && (
-                  <Marker {...toScreen(gingiva)} color="#E05C8A" label="Gengiva" onMove={moveBy(setGingiva)} onResize={resizeBy(setGingiva)} resizeMode={markerMode === 'resize'} />
+                  <Marker {...toScreen(gingiva)} color="#E05C8A" label="Gengiva" onMove={moveBy(setGingiva)} onGrant={markerStart} onRelease={markerEnd} onResize={resizeBy(setGingiva)} resizeMode={markerMode === 'resize'} />
                 )}
               </>
             )}
