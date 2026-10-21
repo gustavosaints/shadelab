@@ -63,22 +63,25 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   foto reduzida a 1536 px e o prompt de `prompt.ts` (cor descrita em palavras + sRGB). A chave fica em
   `Settings.aiApiKey`, só no aparelho; a tela avisa que a foto sai do aparelho. Resultado gravado no cache e salvo
   como `SmileCase` com `aiStyle`. Ainda não testado com chave real.
-- `assets/anatomia/<id>/` sprites por anatomia: `{central,lateral,canine}-{fill,shade,gloss}.png` + `thumb.png`.
-  Desenho (`components/AnatomyOverlay.tsx` → `AnatomyLayer`): imagens NATIVAS (`Image` com `tintColor` para o
-  `fill`, mais `shade` e `gloss` por cima), porque `Mask` com `Image` do react-native-svg NÃO renderizou no iPhone
-  (Gustavo viu a biblioteca sumir). O recorte pela boca da camada nativa é feito com `@react-native-masked-view`
-  no `SmileOverlay`; o modo contorno continua em SVG com `ClipPath`. Dentes 21–23 = `scaleX: -1`.
-  ARMADILHA (2026-10-15): `Image` de asset local com só `StyleSheet.absoluteFill` é desenhado no tamanho ORIGINAL
-  do PNG no iOS (o RN injeta width/height do asset e largura explícita vence left/right) → um central cobria a boca
-  inteira. As camadas usam `width/height: '100%'` (`styles.layer`). A linha cinza de diagnóstico sob a foto
-  (`BUILD_TAG`, % do central na boca, área, zoom, anatomia, encaixe ok/pendente) serve para conferir versão e encaixe.
-  Cada dente é renderizado no seu próprio referencial (vista vestibular com giro leve: lateral 8°, canino 18°) e com
-  a fatia distal levemente esmaecida (lateral 4%, canino 16%); o layout põe os dentes lado a lado por contato
-  (`offsetX` do catálogo não é usado). Visual (2026-10-15, referência: renders do SmileFy que o Gustavo mandou):
-  normais suavizadas (`blurNormals`), luz principal lateral alta, brilho frontal nítido, curva de contraste que
-  deixa o corpo na cor cheia e concentra sombra nas proximais/colo (`SHADE_DEPTH` 0,62). Ele achou as anatomias
-  anteriores "sem forma"; a seleção atual em `libraries.json` é a série Jan Hajto (F31 = a mesma do SmileFy) e ele
-  quer escolher as demais pela folha de contato `reference/renders/_folha-de-contato.png` + `.txt`.
+- ANATOMIA 3D AO VIVO (2026-10-21, substitui os sprites — Gustavo pediu arco inteiro, nítido, como o SmileFy):
+  `scripts/anatomia/export3d.mjs` lê os 7 dentes de cada lado das duas arcadas da biblioteca do exocad (malhas 1..7 do
+  lado direito + espelho para o esquerdo, posições/eixos dos `upperjaw.xml`/`lowerjaw.xml`, que estão em
+  `library/metadata/<nome>/` quando faltam na biblioteca), simplifica com `meshoptimizer` (~2 500 triângulos/dente,
+  borda cervical travada) e grava `assets/arcos/<id>.bin` (~0,65 MB por arco: "SL3D" + JSON + int16 + uint16; ver
+  cabeçalho do script). Referencial: x = esquerda do paciente, y = cabeça, z = frente; origem na borda incisal dos
+  centrais superiores; inferior com 2 mm de sobremordida. Lista do app em `scripts/anatomia/arcos.json` →
+  `src/lib/smile/archCatalog.ts` (GERADO). `metro.config.js` adiciona `bin` aos assets.
+  Visualizador: `viewer/src/main.js` (three.js, câmera ortográfica em mm, luz de estúdio SEM tone mapping para a cor
+  da escala chegar fiel, MeshPhysicalMaterial com clearcoat; recorte pela boca via CSS `clip-path`, esmaecimento acima
+  da linha da gengiva via `mask-image` (coroa 10,5 mm + 1,5 mm de transição) e sombra do lábio superior como SVG
+  borrado ao longo da borda do lábio). `node scripts/viewer/build.mjs` empacota com esbuild em
+  `assets/viewer/smile3d.html` (único arquivo, offline) e `viewer/dev/smile3d.js`. Página de teste no PC:
+  `viewer/dev/index.html` (servida por `.claude/launch.json` → `viewer-dev`, porta 8099, `?zoom=3` aproxima a boca;
+  `face.jpg` é foto do Gustavo, fora do git). No app, `components/Smile3D.tsx` = WebView transparente, sem toques
+  (gestos ficam no canvas do app), que recebe `loadArch(base64)` e `setParams({...})` por `injectJavaScript`;
+  parâmetros: `midlineX`, `incisalY` (= gumY + comprimento do central), `centralWidth`, `rotX/Y/Z`, `color`,
+  `opacity`, `gloss`, `showLower`, `lowerGap`, `lipShadow`, `mouth`. `SmileParams.arch` (id do arco) liga o modo 3D
+  e `SmileParams.arch3d` guarda os ajustes 3D; sem `arch` fica o modo contorno (SVG).
 - Edição dente a dente: `SmileParams.edits[fdi] = { dx, dy, sw, sh, rot }` aplicado por `applyToothEdit` nos dois
   layouts; rotação desenhada com `rotate()` em torno do centro da caixa; com um dente selecionado, arrastar na foto
   move só ele.
@@ -104,11 +107,12 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
 
 ## Próximos passos combinados
 
-1. Smile Design realista (feito em 2026-10-14, falta validar no iPhone): sprites dos `.eoff`/STL com luz de estúdio,
-   12 anatomias em `libraries.json` (escolher mais pela `reference/renders/_folha-de-contato.png`). Pendências:
-   conferir o `tintColor` do `Image` no Expo Go; os sprites ficam um pouco grandes se a gengiva não cobrir o colo;
-   algumas bibliotecas (robtoly, Nondas) mostram uma linha fina onde a margem cervical recortada foi remendada.
-   Licença: as anatomias são do exocad/autores — confirmar redistribuição antes de publicar na loja.
+1. Anatomia 3D ao vivo (feita em 2026-10-21, falta validar no iPhone): 4 arcos (Avelar X1, JO 2026, DA507, Shorodok
+   G013). Pendências: snapshot do WebView para compartilhar/salvar (hoje a captura do canvas pega o WebView?
+   conferir), miniaturas dos arcos, edição dente a dente no 3D, curva do sorriso/plano oclusal deformando o arco,
+   translucidez incisal. Depois: app centrado no paciente (lista de pacientes → linha do tempo → projetos) e editor
+   no estilo SmileFy (arame antes dos dentes, modos Posicionar/Girar/Tamanho, abas Quadro/Ajustes/Luz/Modelos) —
+   ver `docs/smilefy-estudo.md` §6. Licença: as anatomias são do exocad/autores — confirmar antes de publicar.
 2. Continuação do DSD (ver `docs/dsd-estudo.md`, seção 8): régua digital em mm sobre a foto, camada de gengiva
    com cor/opacidade e carimbo para esconder os dentes originais, blur para casar com a foto, antes/depois com
    cortina, PDF do smile frame para o laboratório, marcos faciais automáticos (MediaPipe), vídeo.
