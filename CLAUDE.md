@@ -103,6 +103,17 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   serve para compartilhar a imagem com a comparação. O caso (`SmileCase`) guarda `renderedUri`, `targetShade`,
   `aiStyle` (resumo) e `ai` (forma/textura/gengiva/modelo); `params` recebe `DEFAULT_SMILE_PARAMS` só por
   compatibilidade. A tela do caso mostra o mesmo antes e depois e "Gerar outra versão" (`/smile?caseId=`).
+  PLANEJAMENTO NA FOTO (2026-10-22, pedido do Gustavo): forma (só Quadrado, Arredondado, Triangular — a retangular
+  saiu; o id fica no tipo para casos antigos) e textura começam SEM escolha e são obrigatórias para gerar. Ao abrir a
+  foto, `runMapping` acha a boca (MediaPipe, `FaceLandmarker` invisível na tela) e encaixa os dentes 15–25
+  (`lib/smile/mapping.ts`: `fitTeethToPhoto`/autofit quando confiável e plausível, senão só pela largura da boca;
+  foto espelhada troca os números). `components/SmileMap.tsx` mostra um recorte ampliado da boca com os números;
+  com forma escolhida, a silhueta dela em cada dente (contornos de `teeth.ts`, pré-molares com o do canino); com
+  textura escolhida, prévia transparente nos 12/11/21/22 (lisa = brilho; natural = periquimácias, sulcos, incisal
+  translúcida; caracterizada = + mamelos, halo, colo saturado, manchas, trinca). "Tamanho": Todos ou um dente
+  (chip ou toque na foto), Incisal/Cervical ± 0,5 mm (até ±3 mm, escala px/mm pelo central = 8,5 mm);
+  `describeLengths` põe os ajustes na instrução da IA. Com resultado, chips "Planejamento" / "Antes e depois".
+  Próximo passo possível: mandar também a imagem com as silhuetas como guia para a IA (testar quando houver crédito).
   REMOVIDOS nessa data: editor manual (contorno, boca, ajustar, face-bow na tela, biblioteca 2D de sorrisos,
   cenários, rascunho automático) e a tela separada "Sorriso por IA". Ficaram só bibliotecas usadas por outras
   partes ou por testes: `lib/smile/teeth.ts` (tipos de `SmileParams`), `mouth.ts` (a análise de cor usa a boca

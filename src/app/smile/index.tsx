@@ -7,13 +7,15 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Image, Platform, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 import { AiConfig } from '@/components/AiConfig';
 import { BeforeAfter, type CompareMode } from '@/components/BeforeAfter';
 import { Button } from '@/components/Button';
 import { Card, Muted, SectionTitle } from '@/components/Card';
 import { Chip } from '@/components/Chip';
+import { FaceLandmarker, type FaceLandmarkerHandle } from '@/components/FaceLandmarker';
+import { SmileMap } from '@/components/SmileMap';
 import { SmileGenerating } from '@/components/SmileGenerating';
 import {
   buildDesignPrompt,
@@ -28,15 +30,37 @@ import {
   type ToothShapeId,
 } from '@/lib/ai/smileGen';
 import { getSystem } from '@/lib/color/shades';
+import { detectFace, fitTeethToPhoto } from '@/lib/face/detect';
+import {
+  bumpLength,
+  commonLength,
+  describeLengths,
+  LENGTH_STEP_MM,
+  mapFromMouth,
+  mapFromParams,
+  MAPPED_TEETH,
+  mirrorLabels,
+  plausibleFit,
+  type Fdi,
+  type LengthEdit,
+  type LengthEdits,
+  type ToothMap,
+} from '@/lib/smile/mapping';
 import { takePendingPhoto } from '@/lib/smile/pendingPhoto';
 import { DEFAULT_SMILE_PARAMS } from '@/lib/smile/teeth';
 import { getCase, isSmileCase, newCaseId, persistPhoto, saveCase } from '@/lib/storage/cases';
 import { useSettings } from '@/lib/useSettings';
-import { colors, radius, spacing } from '@/theme';
+import { colors, fonts, radius, spacing } from '@/theme';
 
 type Photo = { uri: string; width: number; height: number };
-type Choice = { shape: ToothShapeId; texture: TextureId; gum: GumId; shadeId: string };
-type Result = { uri: string; choice: Choice; model: string; ms: number };
+/** Forma e textura começam sem escolha (pedido do Gustavo): a pessoa escolhe antes de gerar. */
+type Choice = { shape: ToothShapeId | null; texture: TextureId | null; gum: GumId; shadeId: string };
+type ReadyChoice = Choice & { shape: ToothShapeId; texture: TextureId };
+type Result = { uri: string; choice: ReadyChoice; model: string; ms: number };
+type MapStatus = 'detecting' | 'ok' | 'failed';
+
+const fmtMm = (v: number | null) =>
+  v === null ? 'vários' : v === 0 ? '0' : `${v > 0 ? '+' : '−'}${Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 1 })} mm`;
 
 export default function SmileDesign() {
   const { caseId } = useLocalSearchParams<{ caseId?: string }>();
@@ -44,7 +68,15 @@ export default function SmileDesign() {
   const system = getSystem(settings.shadeSystem);
 
   const [photo, setPhoto] = useState<Photo | null>(null);
-  const [choice, setChoice] = useState<Choice>({ shape: 'retangular', texture: 'natural', gum: 'manter', shadeId: 'B1' });
+  const [choice, setChoice] = useState<Choice>({ shape: null, texture: null, gum: 'manter', shadeId: 'B1' });
+  // mapeamento dos dentes 15–25 na foto, ajustes de comprimento (mm) e dente selecionado
+  const landmarker = useRef<FaceLandmarkerHandle>(null);
+  const mapToken = useRef(0);
+  const [map, setMap] = useState<ToothMap | null>(null);
+  const [mapStatus, setMapStatus] = useState<MapStatus>('detecting');
+  const [lengths, setLengths] = useState<LengthEdits>({});
+  const [target, setTarget] = useState<Fdi | 'all'>('all');
+  const [view, setView] = useState<'plan' | 'compare'>('plan');
   const [results, setResults] = useState<Result[]>([]);
   const [current, setCurrent] = useState(0);
   const [mode, setMode] = useState<CompareMode>('cortina');
@@ -67,12 +99,45 @@ export default function SmileDesign() {
   const shadeIds = system.shades.map((s) => s.id);
   const shadeId = shadeIds.includes(choice.shadeId) ? choice.shadeId : shadeIds[0];
 
+  /** Acha a boca (MediaPipe) e encaixa os 10 dentes; sem encaixe confiável, usa só a largura da boca. */
+  const runMapping = async (p: Photo) => {
+    const token = ++mapToken.current;
+    setMap(null);
+    setMapStatus('detecting');
+    setLengths({});
+    setTarget('all');
+    try {
+      if (!landmarker.current) throw new Error('sem detector');
+      const det = await detectFace(landmarker.current, p.uri);
+      if (token !== mapToken.current) return;
+      if (!det) {
+        setMapStatus('failed');
+        return;
+      }
+      let m: ToothMap | null = null;
+      try {
+        const fit = await fitTeethToPhoto(p, det.mouth, det.face.philtrum.x, DEFAULT_SMILE_PARAMS);
+        if (fit && fit.fit.confidence >= 0.4 && plausibleFit(fit.params, det.mouth, p.width, p.height)) m = mapFromParams(fit.params, p.width, p.height);
+      } catch {
+        m = null;
+      }
+      m = m ?? mapFromMouth(det.mouth, p.width, p.height, det.face.philtrum.x * p.width);
+      if (token !== mapToken.current) return;
+      setMap(det.mirrored ? mirrorLabels(m) : m);
+      setMapStatus('ok');
+    } catch {
+      if (token === mapToken.current) setMapStatus('failed');
+    }
+  };
+
   const startWithPhoto = (p: Photo) => {
     setPhoto(p);
     setResults([]);
     setCurrent(0);
     setEditingId(null);
     setCreatedAt(null);
+    setView('plan');
+    runMapping(p);
   };
 
   // foto vinda da câmera guiada
@@ -80,6 +145,8 @@ export default function SmileDesign() {
     useCallback(() => {
       const p = takePendingPhoto();
       if (p) startWithPhoto({ uri: p.uri, width: p.width, height: p.height });
+      // só ao ganhar foco: a foto pendente é consumida uma vez
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []),
   );
 
@@ -96,15 +163,19 @@ export default function SmileDesign() {
           () => res({ w: 3, h: 4 }),
         ),
       );
-      setPhoto({ uri: c.photoUri, width: size.w, height: size.h });
-      const ch: Choice = {
-        shape: (c.ai?.shape as ToothShapeId) ?? 'retangular',
+      const p = { uri: c.photoUri, width: size.w, height: size.h };
+      setPhoto(p);
+      runMapping(p);
+      const saved: ReadyChoice = {
+        shape: (c.ai?.shape as ToothShapeId) ?? 'arredondado',
         texture: (c.ai?.texture as TextureId) ?? 'natural',
         gum: (c.ai?.gum as GumId) ?? 'manter',
         shadeId: c.targetShade,
       };
-      setChoice(ch);
-      setResults(c.renderedUri ? [{ uri: c.renderedUri, choice: ch, model: c.ai?.model ?? '', ms: 0 }] : []);
+      // a forma retangular saiu do app: o caso antigo abre sem forma escolhida
+      setChoice({ ...saved, shape: TOOTH_SHAPES.some((sh) => sh.id === saved.shape) ? saved.shape : null });
+      setResults(c.renderedUri ? [{ uri: c.renderedUri, choice: saved, model: c.ai?.model ?? '', ms: 0 }] : []);
+      setView(c.renderedUri ? 'compare' : 'plan');
       setCurrent(0);
       setPatientName(c.patientName === 'Sem nome' ? '' : c.patientName);
       setNotes(c.notes);
@@ -127,7 +198,11 @@ export default function SmileDesign() {
       Alert.alert('Falta a chave da IA', 'Cole a chave da API do Google em "Configurar IA", no fim da tela.');
       return;
     }
-    const ch = { ...choice, shadeId };
+    if (!choice.shape || !choice.texture) {
+      Alert.alert('Escolha a forma e a textura', 'Antes de gerar, toque numa forma e numa textura dos dentes.');
+      return;
+    }
+    const ch: ReadyChoice = { ...choice, shape: choice.shape, texture: choice.texture, shadeId };
     const shade = system.shades.find((s) => s.id === ch.shadeId) ?? system.shades[0];
     const shadeLab = settings.calibrations[settings.shadeSystem]?.[shade.id] ?? shade.lab;
     const nameOf = (list: { id: string; name: string }[], id: string) => (list.find((o) => o.id === id)?.name ?? id).toLowerCase();
@@ -144,7 +219,7 @@ export default function SmileDesign() {
     try {
       const r = await generateDesign({
         photoUri: photo.uri,
-        prompt: buildDesignPrompt({ ...ch, shadeLab }),
+        prompt: buildDesignPrompt({ ...ch, shadeLab, lengths: describeLengths(lengths) }),
         apiKey: settings.aiApiKey,
         model: settings.aiModel || DEFAULT_AI_MODEL,
       });
@@ -165,7 +240,19 @@ export default function SmileDesign() {
       });
     setPending(null);
     setGenerating(false);
+    setView('compare');
   }, [pending]);
+
+  // ajustes de comprimento: todos os dentes ou o selecionado
+  const targets: readonly Fdi[] = target === 'all' ? MAPPED_TEETH : [target];
+  const bump = (which: keyof LengthEdit, sign: 1 | -1) => {
+    setLengths((cur) => bumpLength(cur, targets, which, sign * LENGTH_STEP_MM));
+    setView('plan');
+  };
+  const pick = (next: Partial<Choice>) => {
+    setChoice({ ...choice, ...next });
+    setView('plan');
+  };
 
   const share = async (what: 'compare' | 'result') => {
     try {
@@ -228,8 +315,15 @@ export default function SmileDesign() {
   return (
     <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: 48 }} keyboardShouldPersistTaps="handled" scrollEnabled={!dragging}>
       {/* foto ou antes/depois */}
+      <FaceLandmarker ref={landmarker} />
+      {result && (
+        <View style={styles.chips}>
+          <Chip label="Planejamento" selected={view === 'plan'} onPress={() => setView('plan')} />
+          <Chip label="Antes e depois" selected={view === 'compare'} onPress={() => setView('compare')} />
+        </View>
+      )}
       <View>
-        {result ? (
+        {result && view === 'compare' ? (
           <BeforeAfter
             ref={compareRef}
             beforeUri={photo.uri}
@@ -240,14 +334,21 @@ export default function SmileDesign() {
             onDragEnd={() => setDragging(false)}
           />
         ) : (
-          <View style={[styles.photoBox, { aspectRatio: aspect }]}>
-            <Image source={{ uri: photo.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-          </View>
+          <SmileMap
+            photo={photo}
+            map={map}
+            status={mapStatus}
+            shapeMix={TOOTH_SHAPES.find((sh) => sh.id === choice.shape)?.mix ?? null}
+            texture={choice.texture}
+            lengths={lengths}
+            selected={target}
+            onSelect={(fdi) => setTarget(target === fdi ? 'all' : fdi)}
+          />
         )}
         {generating && <SmileGenerating photoUri={photo.uri} aspect={aspect} steps={genSteps} resultUri={pending?.uri} onDone={finishReveal} />}
       </View>
 
-      {result && (
+      {result && view === 'compare' && (
         <Card style={{ marginTop: spacing.md }}>
           <View style={styles.chips}>
             <Chip label="Cortina" selected={mode === 'cortina'} onPress={() => setMode('cortina')} />
@@ -276,29 +377,62 @@ export default function SmileDesign() {
         </Card>
       )}
 
-      <Card style={{ marginTop: result ? 0 : spacing.md }}>
+      <Card style={{ marginTop: result && view === 'compare' ? 0 : spacing.md }}>
         <SectionTitle>Forma dos dentes</SectionTitle>
         <View style={styles.chips}>
           {TOOTH_SHAPES.map((s) => (
-            <Chip key={s.id} label={s.name} selected={choice.shape === s.id} onPress={() => setChoice({ ...choice, shape: s.id })} />
+            <Chip key={s.id} label={s.name} selected={choice.shape === s.id} onPress={() => pick({ shape: s.id })} />
           ))}
         </View>
+        <Muted>
+          {choice.shape ? 'A silhueta aparece sobre os dentes 15 a 25 na foto.' : 'Toque numa forma para ver a silhueta dela sobre os dentes do paciente.'}
+        </Muted>
+
+        {map && (
+          <>
+            <Text style={styles.subTitle}>Tamanho</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <Chip label="Todos" selected={target === 'all'} onPress={() => setTarget('all')} />
+              {MAPPED_TEETH.map((fdi) => (
+                <Chip key={fdi} label={fdi} selected={target === fdi} onPress={() => setTarget(fdi)} />
+              ))}
+            </ScrollView>
+            {(['incisal', 'cervical'] as const).map((which) => (
+              <View key={which} style={styles.stepRow}>
+                <Text style={styles.stepLabel}>{which === 'incisal' ? 'Incisal' : 'Cervical'}</Text>
+                <Pressable onPress={() => bump(which, -1)} style={styles.stepBtn} accessibilityRole="button" accessibilityLabel={`Encurtar pela ${which}`}>
+                  <Text style={styles.stepBtnText}>−</Text>
+                </Pressable>
+                <Text style={styles.stepValue}>{fmtMm(commonLength(lengths, targets, which))}</Text>
+                <Pressable onPress={() => bump(which, 1)} style={styles.stepBtn} accessibilityRole="button" accessibilityLabel={`Alongar pela ${which}`}>
+                  <Text style={styles.stepBtnText}>+</Text>
+                </Pressable>
+              </View>
+            ))}
+            <Muted>
+              {`${target === 'all' ? 'Todos os dentes' : `Dente ${target}`} · + alonga, − encurta (0,5 mm por toque). Toque num dente na foto para ajustar só ele.`}
+            </Muted>
+            {Object.keys(lengths).length > 0 && <Button title="Zerar tamanhos" variant="ghost" onPress={() => setLengths({})} />}
+          </>
+        )}
+
         <SectionTitle>Textura</SectionTitle>
         <View style={styles.chips}>
           {TEXTURES.map((t) => (
-            <Chip key={t.id} label={t.name} selected={choice.texture === t.id} onPress={() => setChoice({ ...choice, texture: t.id })} />
+            <Chip key={t.id} label={t.name} selected={choice.texture === t.id} onPress={() => pick({ texture: t.id })} />
           ))}
         </View>
+        {choice.texture && <Muted>Prévia da textura nos dentes 12, 11, 21 e 22.</Muted>}
         <SectionTitle>{`Cor · ${system.name}`}</SectionTitle>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           {shadeIds.map((id) => (
-            <Chip key={id} label={id} selected={shadeId === id} onPress={() => setChoice({ ...choice, shadeId: id })} />
+            <Chip key={id} label={id} selected={shadeId === id} onPress={() => pick({ shadeId: id })} />
           ))}
         </ScrollView>
         <SectionTitle>Gengiva</SectionTitle>
         <View style={styles.chips}>
           {GUM_OPTIONS.map((g) => (
-            <Chip key={g.id} label={g.name} selected={choice.gum === g.id} onPress={() => setChoice({ ...choice, gum: g.id })} />
+            <Chip key={g.id} label={g.name} selected={choice.gum === g.id} onPress={() => pick({ gum: g.id })} />
           ))}
         </View>
         <Button
@@ -335,7 +469,21 @@ export default function SmileDesign() {
 }
 
 const styles = StyleSheet.create({
-  photoBox: { width: '100%', backgroundColor: '#000', borderRadius: radius.md, overflow: 'hidden' },
+  subTitle: { fontFamily: fonts.medium, fontSize: 14, color: colors.text, marginTop: 14, marginBottom: 8 },
+  stepRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 6 },
+  stepLabel: { width: 72, color: colors.text, fontSize: 15 },
+  stepBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepBtnText: { fontSize: 22, color: colors.primary, marginTop: -2 },
+  stepValue: { minWidth: 76, textAlign: 'center', color: colors.text, fontFamily: fonts.medium, fontSize: 15 },
   chips: { flexDirection: 'row', flexWrap: 'wrap' },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   input: {

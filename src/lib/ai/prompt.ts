@@ -1,7 +1,7 @@
 /**
  * Smile Design por IA: opções que o dentista escolhe (forma, textura, cor da escala, gengiva) e a montagem da
- * instrução para o modelo de imagem (parte pura, testável). A forma segue a imagem de referência do Gustavo
- * (retangular, triangular, arredondado, quadrado).
+ * instrução para o modelo de imagem (parte pura, testável). Formas: quadrado, arredondado e triangular (a
+ * retangular saiu em 2026-10-22, a pedido do Gustavo; o id continua no tipo para abrir casos antigos).
  */
 import { labToHex, type Lab } from '@/lib/color/convert';
 
@@ -9,28 +9,25 @@ export type ToothShapeId = 'retangular' | 'triangular' | 'arredondado' | 'quadra
 export type TextureId = 'lisa' | 'natural' | 'caracterizada';
 export type GumId = 'manter' | 'plastia';
 
-export const TOOTH_SHAPES: { id: ToothShapeId; name: string; prompt: string }[] = [
+export const TOOTH_SHAPES: { id: ToothShapeId; name: string; prompt: string; /** posição no contorno (0 quadrada … 1 triangular) */ mix: number }[] = [
   {
-    id: 'retangular',
-    name: 'Retangular',
-    prompt:
-      'RECTANGULAR teeth: clearly longer than wide, nearly parallel mesial and distal outlines, straight incisal edges and slightly rounded incisal angles',
+    id: 'quadrado',
+    name: 'Quadrado',
+    prompt: 'SQUARE teeth: width close to height, broad and flat incisal edges, square incisal angles and closed embrasures',
+    mix: 0,
+  },
+  {
+    id: 'arredondado',
+    name: 'Arredondado',
+    prompt: 'ROUNDED (oval) teeth: convex mesial and distal outlines, softly rounded incisal angles and gently open incisal embrasures',
+    mix: 0.5,
   },
   {
     id: 'triangular',
     name: 'Triangular',
     prompt:
       'TRIANGULAR (tapered) teeth: wider at the incisal third and converging toward the gum line, pointed contact areas and more open incisal embrasures',
-  },
-  {
-    id: 'arredondado',
-    name: 'Arredondado',
-    prompt: 'ROUNDED (oval) teeth: convex mesial and distal outlines, softly rounded incisal angles and gently open incisal embrasures',
-  },
-  {
-    id: 'quadrado',
-    name: 'Quadrado',
-    prompt: 'SQUARE teeth: width close to height, broad and flat incisal edges, square incisal angles and closed embrasures',
+    mix: 1,
   },
 ];
 
@@ -68,7 +65,15 @@ export function describeShade(id: string, lab: Lab): string {
   return `VITA ${id}: ${light}, ${sat}, ${hue} tooth color, approximately sRGB ${labToHex(lab)} in the lit body of the tooth`;
 }
 
-export type DesignOptions = { shape: ToothShapeId; texture: TextureId; gum: GumId; shadeId: string; shadeLab: Lab };
+export type DesignOptions = {
+  shape: ToothShapeId;
+  texture: TextureId;
+  gum: GumId;
+  shadeId: string;
+  shadeLab: Lab;
+  /** Ajustes de comprimento já descritos (`describeLengths`), quando houver. */
+  lengths?: string;
+};
 
 /** Monta a instrução do Smile Design (uma linha, em inglês, que é como o modelo responde melhor). */
 export function buildDesignPrompt(o: DesignOptions): string {
@@ -82,6 +87,7 @@ export function buildDesignPrompt(o: DesignOptions): string {
     `Surface texture: ${texture.prompt}.`,
     `Tooth shade: ${describeShade(o.shadeId, o.shadeLab)}. Slightly more saturated near the gums, slightly translucent at the incisal edges.`,
     gum.prompt,
+    ...(o.lengths ? [o.lengths] : []),
     'Keep absolutely everything else identical to the original: face, skin, beard, lips and lip line, lower teeth, tongue, lighting, shadows, background, framing, camera angle and resolution.',
     'The new teeth must sit naturally under the upper lip with realistic reflections matching the scene light. Photorealistic. No text, no watermark, no other changes.',
   ].join(' ');
@@ -89,7 +95,7 @@ export function buildDesignPrompt(o: DesignOptions): string {
 
 /** Resumo em português das opções, para o caso salvo e a tela. */
 export function designSummary(o: Pick<DesignOptions, 'shape' | 'texture' | 'gum' | 'shadeId'>): string {
-  const shape = TOOTH_SHAPES.find((s) => s.id === o.shape)?.name ?? o.shape;
+  const shape = TOOTH_SHAPES.find((s) => s.id === o.shape)?.name ?? (o.shape === 'retangular' ? 'Retangular' : o.shape);
   const texture = TEXTURES.find((t) => t.id === o.texture)?.name ?? o.texture;
   const gum = o.gum === 'plastia' ? ' · plastia gengival' : '';
   return `${shape} · textura ${texture.toLowerCase()} · ${o.shadeId}${gum}`;
