@@ -31,7 +31,7 @@ import {
   type ToothShapeId,
 } from '@/lib/ai/smileGen';
 import { getSystem } from '@/lib/color/shades';
-import { detectFace, fitTeethToPhoto } from '@/lib/face/detect';
+import { detectFace, fitTeethToPhoto, scanMouthInPhoto } from '@/lib/face/detect';
 import {
   applyLength,
   archTeeth,
@@ -135,7 +135,10 @@ export default function SmileDesign() {
     setMapStatus('ok');
   };
 
-  /** Acha a boca (MediaPipe) e encaixa os dentes. Sem rosto na foto (sorriso de perto), pede para delimitar. */
+  /**
+   * Acha a boca e encaixa os dentes: primeiro o detector de rosto (MediaPipe); sem rosto na foto (sorriso de perto),
+   * a varredura de pixels pelo lado de dentro dos lábios; se nenhum achar, pede para delimitar à mão.
+   */
   const runMapping = async (p: Photo) => {
     const token = ++mapToken.current;
     setMap(null);
@@ -145,16 +148,27 @@ export default function SmileDesign() {
     setLengths({});
     setArch(DEFAULT_ARCH);
     setTarget('all');
+    let det: Awaited<ReturnType<typeof detectFace>> = null;
     try {
-      if (!landmarker.current) throw new Error('sem detector');
-      const det = await detectFace(landmarker.current, p.uri);
+      if (landmarker.current) det = await detectFace(landmarker.current, p.uri);
+    } catch {
+      det = null; // sem internet para o detector, ou foto sem rosto
+    }
+    if (token !== mapToken.current) return;
+    try {
+      if (det) {
+        setMouth(det.mouth);
+        await mapInMouth(p, det.mouth, det.face.philtrum.x, det.mirrored, token);
+        return;
+      }
+      const scanned = await scanMouthInPhoto(p);
       if (token !== mapToken.current) return;
-      if (!det) {
+      if (!scanned) {
         setMapStatus('failed');
         return;
       }
-      setMouth(det.mouth);
-      await mapInMouth(p, det.mouth, det.face.philtrum.x, det.mirrored, token);
+      setMouth(scanned);
+      await mapInMouth(p, scanned, mouthBounds(scanned, p.width, p.height).centerX / p.width, false, token);
     } catch {
       if (token === mapToken.current) setMapStatus('failed');
     }
@@ -438,6 +452,7 @@ export default function SmileDesign() {
               selected={target}
               onSelect={(fdi) => setTarget(target === fdi ? 'all' : fdi)}
               onArchDrag={map ? onArchDrag : undefined}
+              mouth={mouth}
               hint={dragHint}
             />
           )}

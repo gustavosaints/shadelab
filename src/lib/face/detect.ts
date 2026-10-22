@@ -7,6 +7,7 @@ import { decode } from 'jpeg-js';
 import type { FaceLandmarkerHandle } from '@/components/FaceLandmarker';
 import { base64ToBytes } from '@/lib/image/base64';
 import { autoFitTeeth, autoFitToParams, type AutoFit } from '@/lib/smile/autofit';
+import { scanMouth } from '@/lib/smile/mouthScan';
 import type { FacePoints } from '@/lib/smile/frame';
 import type { MouthPoint, SmileParams } from '@/lib/smile/teeth';
 import { facePointsFromLandmarks, faceBoxFromLandmarks, isMirrored, mouthFromLandmarks, type FaceBox, type Landmark } from './landmarks';
@@ -77,4 +78,17 @@ export async function fitInRegion(photo: Photo, mouth: MouthPoint[], midlineX: n
   const fit = autoFitTeeth({ data: img.data, width: img.width, height: img.height }, mouthPx, (midlineX * photo.width - x0) * scale);
   if (!fit) return null;
   return { fit, crop: { x: x0, y: y0, scale } };
+}
+
+/**
+ * Sem rosto na foto (sorriso de perto): varre os pixels de uma versão reduzida (360 px) e acha a abertura da boca
+ * pelo lado de dentro dos lábios (`scanMouth`). Devolve o contorno em frações da foto, ou null.
+ */
+export async function scanMouthInPhoto(photo: Photo): Promise<MouthPoint[] | null> {
+  const targetW = 360;
+  const ref = await ImageManipulator.manipulate(photo.uri).resize({ width: targetW }).renderAsync();
+  const out = await ref.saveAsync({ format: SaveFormat.JPEG, compress: 0.92, base64: true });
+  if (!out.base64) return null;
+  const img = decode(base64ToBytes(out.base64), { useTArray: true, formatAsRGBA: true, colorTransform: true });
+  return scanMouth({ data: img.data, width: img.width, height: img.height })?.mouth ?? null;
 }

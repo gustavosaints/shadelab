@@ -134,6 +134,13 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   (para os lados abre/fecha o arco — `open`, largura aparente de canino/pré-molares, corredor bucal; para cima/baixo
   muda a curva do sorriso — `curveMm`), barras brancas embaixo nas pontas = largura (`centralMm`). Lógica pura em
   `dragArch` (mapping.ts); texto no canto enquanto arrasta. Ficaram os chips Natural/Áurea e "Zerar arco".
+  VARREDURA DA BOCA (2026-10-22): sem rosto na foto, `runMapping` usa `scanMouthInPhoto` (detect.ts) →
+  `lib/smile/mouthScan.ts#scanMouth` (foto a 360 px, Lab): dentes = claros e pouco croma; junta os dentes
+  (dilatação) e escolhe o grupo largo com vermelho em volta e escuro entre os dentes (evita brilho do nariz);
+  cresce pelos dentes e pelo escuro, e nas laterais pelo corredor bucal (menos vermelho que o lábio); sobe sobre a
+  gengiva à mostra até o lábio; contorno pelo lado de dentro dos lábios, cantos nas pontas (8 pontos). Testado nas
+  fotos de perto do Gustavo e no quadro do vídeo do SmileCloud (fixtures fora do git em `reference/scan-test/`);
+  teste sintético em `tests/mouthScan.test.ts`. O contorno aparece tracejado sobre a foto (`SmileMap` prop `mouth`).
   Próximo passo possível: mandar também a imagem com as silhuetas como guia para a IA (testar quando houver crédito).
   REMOVIDOS nessa data: editor manual (contorno, boca, ajustar, face-bow na tela, biblioteca 2D de sorrisos,
   cenários, rascunho automático) e a tela separada "Sorriso por IA". Ficaram só bibliotecas usadas por outras

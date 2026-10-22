@@ -3,6 +3,8 @@ import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View, type Gestu
 import Svg, { ClipPath, Defs, Ellipse, G, Line, LinearGradient, Path, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import type { TextureId } from '@/lib/ai/prompt';
 import { silhouette, TEXTURE_TEETH, type ArchHandle, type Fdi, type MappedTooth } from '@/lib/smile/mapping';
+import { mouthPath } from '@/lib/smile/mouth';
+import type { MouthPoint } from '@/lib/smile/teeth';
 import { fonts, radius } from '@/theme';
 
 type Photo = { uri: string; width: number; height: number };
@@ -25,6 +27,8 @@ type Props = {
   onArchDrag?: (handle: ArchHandle, dx: number, dy: number, phase: 'start' | 'move' | 'end') => void;
   /** Texto mostrado no canto enquanto arrasta uma alça (ex.: "abertura +40 %"). */
   hint?: string | null;
+  /** Contorno da boca (lado de dentro dos lábios), desenhado de leve para conferir a delimitação automática. */
+  mouth?: MouthPoint[] | null;
 };
 
 const CYAN = '#4FD1C5';
@@ -37,7 +41,7 @@ const GLOW = '#F3C9BE';
  * com uma textura escolhida, uma prévia transparente dela aparece nos incisivos 12, 11, 21 e 22. Tocar num dente
  * seleciona para ajustar só ele. Pinça aproxima (até 5x) e, aproximada, um dedo arrasta a vista.
  */
-export function SmileMap({ photo, height, teeth, frame, status, shapeMix, texture, selected, onSelect, onArchDrag, hint }: Props) {
+export function SmileMap({ photo, height, teeth, frame, status, shapeMix, texture, selected, onSelect, onArchDrag, hint, mouth }: Props) {
   const [width, setWidth] = useState(0);
   const [zoom, setZoom] = useState({ scale: 1, tx: 0, ty: 0 });
   const gesture = useRef<{ x: number; y: number; dist: number; scale: number; tx: number; ty: number; pinch: boolean } | null>(null);
@@ -127,6 +131,22 @@ export function SmileMap({ photo, height, teeth, frame, status, shapeMix, textur
             style={{ position: 'absolute', left: -crop.x * s, top: -crop.y * s, width: photo.width * s, height: photo.height * s }}
             resizeMode="cover"
           />
+          {mouth && mouth.length >= 3 && (
+            <Svg width={width} height={height} style={StyleSheet.absoluteFill} pointerEvents="none">
+              <Path
+                d={mouthPath(
+                  mouth.map((p) => ({ x: ((p.x * photo.width - crop.x) * s) / width, y: ((p.y * photo.height - crop.y) * s) / height })),
+                  width,
+                  height,
+                )}
+                fill="none"
+                stroke={GLOW}
+                strokeOpacity={0.8}
+                strokeWidth={1.4}
+                strokeDasharray="5 4"
+              />
+            </Svg>
+          )}
           {view.length > 0 && (
             <Svg width={width} height={height} style={StyleSheet.absoluteFill}>
               <Defs>
