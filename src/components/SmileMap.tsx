@@ -340,15 +340,13 @@ function ArchBody({
   const x1 = Math.max(...view.map((t) => t.x + t.w)) + pad;
   const y0 = Math.min(...view.map((t) => t.y)) - pad;
   const y1 = Math.max(...view.map((t) => t.y + t.h)) + pad;
-  const delta = (e: GestureResponderEvent) => {
-    const st = start.current!;
-    return [(e.nativeEvent.pageX - st.x) / scale, (e.nativeEvent.pageY - st.y) / scale] as const;
-  };
+  const delta = (e: GestureResponderEvent, st: { x: number; y: number }) =>
+    [(e.nativeEvent.pageX - st.x) / scale, (e.nativeEvent.pageY - st.y) / scale] as const;
   const finish = (e: GestureResponderEvent, cancelled: boolean) => {
     const st = start.current;
     start.current = null;
     if (!st) return;
-    if (st.moving) onDrag?.('move', ...delta(e), 'end');
+    if (st.moving) onDrag?.('move', ...delta(e, st), 'end');
     else if (!cancelled) {
       // toque: o dente debaixo do dedo (ou o mais próximo na horizontal)
       const x = x0 + st.lx;
@@ -368,7 +366,7 @@ function ArchBody({
       onResponderMove={(e) => {
         const st = start.current;
         if (!st || !onDrag) return;
-        const [dx, dy] = delta(e);
+        const [dx, dy] = delta(e, st);
         if (!st.moving) {
           if (Math.hypot(dx * scale, dy * scale) < 6) return;
           st.moving = true;
