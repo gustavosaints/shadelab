@@ -19,6 +19,16 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
 
 ## Estrutura
 
+- VISUAL E ACESSO (2026-10-22): tema pastel em `src/theme` (`colors` grafite/rosé, `pastel` para os cartões,
+  `fonts` Italiana + Jost via @expo-google-fonts carregadas em `app/_layout.tsx`). Logomarca = proposta D
+  (`components/Logo.tsx`: "Cypris" Italiana, arco rosé, "SMILE" Jost Light; quadro de propostas no Artifact
+  https://claude.ai/artifact/PCjwG41S4vEWrirg4LyBGh). Abertura `components/Intro.tsx` (logo em fade) por cima das
+  rotas; depois `components/LoginScreen.tsx`: no 1º uso cria usuário e senha, depois pede login a cada abertura e
+  quando o app volta de 5 min em segundo plano (`lib/AuthContext.tsx`, regras puras em `lib/authRules.ts`). Acesso
+  LOCAL: `lib/auth.ts` grava usuário, sal e SHA-256 da senha no expo-secure-store (sem servidor, sem recuperação de
+  senha; trocar senha e Sair em Configurações). As rotas ficam sempre montadas e a tela de acesso é uma camada por
+  cima, para não perder o que estava aberto ao bloquear. Tela inicial sem cabeçalho: logo no topo e cartões pastel.
+
 - `src/app/` telas (Expo Router): `index` (início), `shade/capture` (câmera), `shade/analyze` (marcadores, análise, salvar
   caso ou calibração), `cases/` (lista e detalhe), `settings` (escala, calibração), `smile/index` (Smile Design por IA).
 - `src/lib/color/` sRGB↔CIELAB, CIEDE2000, escalas VITA Classical e 3D-Master, correção por referência, matching.

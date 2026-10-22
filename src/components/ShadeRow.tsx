@@ -28,7 +28,7 @@ export function ShadeRow({ shadeId, lab, deltaE, rank }: Props) {
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 12 },
-  rowFirst: { backgroundColor: '#F3F6FB', borderRadius: radius.md, paddingHorizontal: 10, marginBottom: 4 },
+  rowFirst: { backgroundColor: '#F7EFEC', borderRadius: radius.md, paddingHorizontal: 10, marginBottom: 4 },
   swatch: { width: 48, height: 48, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border },
   swatchFirst: { width: 64, height: 64 },
   role: { color: colors.muted, fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },

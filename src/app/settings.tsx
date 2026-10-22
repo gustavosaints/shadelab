@@ -7,12 +7,31 @@ import { Chip } from '@/components/Chip';
 import { labToHex } from '@/lib/color/convert';
 import { GINGIVA_SYSTEM } from '@/lib/color/gingiva';
 import { getSystem, SHADE_SYSTEMS, type ShadeSystemId } from '@/lib/color/shades';
+import { changePassword } from '@/lib/auth';
+import { useAuth } from '@/lib/AuthContext';
 import { clearCalibration, clearGingivaCalibration, saveSettings } from '@/lib/storage/settings';
 import { useSettings } from '@/lib/useSettings';
 import { colors, radius, spacing } from '@/theme';
 
 export default function Settings() {
   const [settings, reload] = useSettings();
+  const { user, lock } = useAuth();
+  const [pwCurrent, setPwCurrent] = useState('');
+  const [pwNext, setPwNext] = useState('');
+  const [pwConfirm, setPwConfirm] = useState('');
+  const [pwOpen, setPwOpen] = useState(false);
+  const savePassword = async () => {
+    try {
+      await changePassword(pwCurrent, pwNext, pwConfirm);
+      setPwCurrent('');
+      setPwNext('');
+      setPwConfirm('');
+      setPwOpen(false);
+      Alert.alert('Senha trocada', 'Use a senha nova no próximo acesso.');
+    } catch (e) {
+      Alert.alert('Não foi possível trocar', String((e as Error).message ?? e));
+    }
+  };
   const [clinic, setClinic] = useState<string | null>(null);
   const [dentist, setDentist] = useState<string | null>(null);
   const system = getSystem(settings.shadeSystem);
@@ -138,6 +157,21 @@ export default function Settings() {
           placeholderTextColor={colors.muted}
         />
         <Button title="Salvar" variant="secondary" onPress={saveIdentity} />
+      </Card>
+
+      <Card>
+        <SectionTitle>Acesso</SectionTitle>
+        <Muted>{`Usuário: ${user ?? '—'}. O app pede a senha sempre que abre e quando volta de mais de 5 minutos em segundo plano.`}</Muted>
+        {pwOpen && (
+          <View style={{ marginTop: 10 }}>
+            <TextInput placeholder="Senha atual" value={pwCurrent} onChangeText={setPwCurrent} secureTextEntry style={styles.input} placeholderTextColor={colors.muted} />
+            <TextInput placeholder="Senha nova" value={pwNext} onChangeText={setPwNext} secureTextEntry style={styles.input} placeholderTextColor={colors.muted} />
+            <TextInput placeholder="Repita a senha nova" value={pwConfirm} onChangeText={setPwConfirm} secureTextEntry style={styles.input} placeholderTextColor={colors.muted} />
+            <Button title="Salvar senha nova" variant="secondary" onPress={savePassword} />
+          </View>
+        )}
+        <Button title={pwOpen ? 'Cancelar' : 'Trocar senha'} variant="ghost" onPress={() => setPwOpen(!pwOpen)} />
+        <Button title="Sair" variant="ghost" onPress={lock} />
       </Card>
 
       <Card>
