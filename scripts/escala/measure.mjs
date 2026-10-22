@@ -7,15 +7,17 @@
  *
  * 1. Balanço de branco: a placa cinza da régua (neutra) vira cinza puro (ganhos por canal em RGB linear).
  * 2. Cada tab: acha a coroa pela cor (amarelada, clara) numa janela em volta da posição esperada.
- * 3. Lê os terços cervical/médio/incisal (média robusta: descarta 15 % mais claros e 15 % mais escuros).
+ * 3. Lê os terços (média robusta: descarta 15 % mais claros e 15 % mais escuros). O cabo entra pela cervical, então
+ *    o topo da coroa na foto é o terço INCISAL (até 2026-10-22 estava invertido).
  * 4. Exposição: escala o RGB linear para a média do L* do terço médio bater com a dos valores da literatura
  *    (a foto não tem referência de exposição; isso mantém as DIFERENÇAS reais entre os tabs).
- * Saída: scripts/escala/vita-classical.json (+ reference/escala/medicao.png para conferir).
+ * Saída: scripts/escala/vita-classical.json, src/lib/color/vitaClassicalMeasured.ts (+ reference/escala/medicao.png).
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { PNG } from 'pngjs';
+import { thirdsOf as thirdsOfImg, writeMeasuredTs } from './lib.mjs';
 
 const SRC = 'reference/escala/vita-classical-2016.png'; // 2016 px de largura = foto / 4
 const FULL = 'reference/escala/vita-classical.jpg';
@@ -91,13 +93,12 @@ const tabs = SLOTS.map((slot, i) => {
 });
 void CENTERS_1400;
 
-// ---------- 3. terços (miolo de 56 % da largura; corta 10 % em cima e embaixo por causa das bordas) ----------
-const thirdsOf = (box, gain) => {
-  const x0 = box.x + box.w * 0.22, w = box.w * 0.56;
-  const top = box.y + box.h * 0.1, h = (box.h * 0.8) / 3;
-  return ['cervical', 'middle', 'incisal'].map((_, k) => robustMean(x0, top + k * h, w, h * 0.9, gain));
-};
-const raw = tabs.map((t) => ({ ...t, lin: thirdsOf(t.box, wb) }));
+// ---------- 3. terços (lib.mjs: miolo de 56 % da largura, 10 % cortados em cima e embaixo, topo = incisal) ----------
+const img = { lin };
+const raw = tabs.map((t) => {
+  const th = thirdsOfImg(img, t.box, wb);
+  return { ...t, lin: [th.cervical, th.middle, th.incisal] };
+});
 
 // ---------- 4. exposição: k tal que a média do L* médio = média da literatura ----------
 const litMean = Object.values(LIT).reduce((s, v) => s + v.L, 0) / Object.keys(LIT).length;
@@ -154,3 +155,17 @@ if (process.argv.includes('--crops')) {
   }
   console.log(`recortes em ${dir}`);
 }
+
+writeMeasuredTs('src/lib/color/vitaClassicalMeasured.ts', {
+  header: [
+    'GERADO por scripts/escala/measure.mjs (scripts/escala/vita-classical.json) — não editar à mão.',
+    'Escala VITA Classical do Gustavo fotografada em 2026-10-22 (reference/escala/vita-classical.jpg): balanço de',
+    `branco pela placa cinza da régua, exposição normalizada para a média de L* da literatura (${litMean.toFixed(1).replace('.', ',')}), leitura por`,
+    'terços (topo do tab = incisal). O B3 não estava na régua (havia um A2 repetido no lugar): fica com o valor da',
+    'literatura e sem foto.',
+  ],
+  prefix: 'VITA_CLASSICAL',
+  tabs: result.filter((t) => !t.slot.endsWith('*')).map((t) => ({ ...t, id: t.slot, image: `${t.slot.replace('.', '_')}.jpg` })),
+  imageDir: '../../../assets/escala/vita-classical',
+});
+console.log('gravado src/lib/color/vitaClassicalMeasured.ts');

@@ -1,5 +1,6 @@
 import type { Lab } from './convert';
 import type { ThirdsProfile } from './match';
+import { VITA_3D_MASTER_IMAGES, VITA_3D_MASTER_MEASURED, VITA_3D_MASTER_THIRDS } from './vita3dMasterMeasured';
 import { VITA_CLASSICAL_IMAGES, VITA_CLASSICAL_MEASURED, VITA_CLASSICAL_THIRDS } from './vitaClassicalMeasured';
 
 export type ShadeSystemId = 'vita-classical' | 'vita-3d-master';
@@ -63,8 +64,9 @@ export const VITA_CLASSICAL: ShadeSystem = {
  * SpectroShade Micro — média de 34 leituras em 3 lotes da escala, erro do aparelho ΔE00 ≈ 0,5: Dias, Pereira,
  * Silveira, Mata, Marques et al., "Different Methods for Assessing Tooth Colour — In Vitro Study", Biomimetics
  * 2023;8(5):384 (doi 10.3390/biomimetics8050384), Tabela 4. O mesmo estudo mediu a VITA Classical na mesma
- * escala de L* que a do app (A1 L 76,5), então as duas escalas ficam comparáveis. Substituídos pelas medições da
- * escala do Gustavo quando ele fotografar a dele (como foi feito com a Classical) ou pela calibração.
+ * escala de L* que a do app (A1 L 76,5), então as duas escalas ficam comparáveis. Desde 2026-10-22 o app usa os
+ * valores MEDIDOS na escala do Gustavo (`vita3dMasterMeasured.ts`, fotos das réguas); estes ficam para o 5M1 e o
+ * 5M3, que não vieram nas fotos. A calibração em Configurações continua substituindo tudo.
  * Nome: grupo de luminosidade 0–5 (0 = clareado, 5 = mais escuro), matiz L (amarelado) / M / R (avermelhado) e croma.
  */
 const VITA_3D_MASTER_LITERATURE: Record<string, Lab> = {
@@ -102,7 +104,14 @@ const VITA_3D_MASTER_LITERATURE: Record<string, Lab> = {
 export const VITA_3D_MASTER: ShadeSystem = {
   id: 'vita-3d-master',
   name: 'VITA 3D-Master',
-  shades: Object.entries(VITA_3D_MASTER_LITERATURE).map(([id, lab]) => ({ id, system: 'vita-3d-master', lab, group: id[0] })),
+  shades: Object.entries(VITA_3D_MASTER_LITERATURE).map(([id, lab]) => ({
+    id,
+    system: 'vita-3d-master',
+    lab: VITA_3D_MASTER_MEASURED[id] ?? lab,
+    thirds: VITA_3D_MASTER_THIRDS[id],
+    image: VITA_3D_MASTER_IMAGES[id],
+    group: id[0],
+  })),
 };
 
 export const SHADE_SYSTEMS: Record<ShadeSystemId, ShadeSystem> = {

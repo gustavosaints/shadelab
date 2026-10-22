@@ -1,7 +1,7 @@
-// GERADO a partir de scripts/escala/vita-classical.json (scripts/escala/measure.mjs) — não editar à mão.
+// GERADO por scripts/escala/measure.mjs (scripts/escala/vita-classical.json) — não editar à mão.
 // Escala VITA Classical do Gustavo fotografada em 2026-10-22 (reference/escala/vita-classical.jpg): balanço de
 // branco pela placa cinza da régua, exposição normalizada para a média de L* da literatura (71,0), leitura por
-// terços (cervical, médio, incisal). O B3 não estava na régua (havia um A2 repetido no lugar): fica com o valor da
+// terços (topo do tab = incisal). O B3 não estava na régua (havia um A2 repetido no lugar): fica com o valor da
 // literatura e sem foto.
 import type { Lab } from './convert';
 import type { ThirdsProfile } from './match';
@@ -25,24 +25,24 @@ export const VITA_CLASSICAL_MEASURED: Partial<Record<string, Lab>> = {
 };
 
 export const VITA_CLASSICAL_THIRDS: Partial<Record<string, ThirdsProfile>> = {
-  A1: { cervical: { L: 83.9, a: -0.5, b: 12.2 }, middle: { L: 75.6, a: 0.7, b: 13.5 }, incisal: { L: 69.1, a: 0.7, b: 12 } },
-  A2: { cervical: { L: 79.3, a: 0.1, b: 16.1 }, middle: { L: 71.7, a: 0.6, b: 16.8 }, incisal: { L: 61.6, a: 0.9, b: 13.4 } },
-  A3: { cervical: { L: 79.6, a: -0.4, b: 19 }, middle: { L: 73.5, a: -0.1, b: 20.6 }, incisal: { L: 67.1, a: 0.4, b: 17.3 } },
-  'A3.5': { cervical: { L: 76.6, a: -0.1, b: 23.2 }, middle: { L: 70.1, a: 0.5, b: 24.8 }, incisal: { L: 63.8, a: 0.5, b: 21.4 } },
-  A4: { cervical: { L: 71.6, a: 0.2, b: 23.5 }, middle: { L: 63.4, a: 0.9, b: 24.4 }, incisal: { L: 56.2, a: 0.7, b: 21.5 } },
-  B1: { cervical: { L: 82.7, a: -2.9, b: 11.7 }, middle: { L: 77.2, a: -1.6, b: 13.1 }, incisal: { L: 69, a: -2.2, b: 11.8 } },
-  B2: { cervical: { L: 81.7, a: -3.1, b: 17.9 }, middle: { L: 76.5, a: -2.7, b: 18.4 }, incisal: { L: 66, a: -1.8, b: 14.7 } },
-  B4: { cervical: { L: 75.3, a: -1.6, b: 25.5 }, middle: { L: 68.4, a: -1.1, b: 25.9 }, incisal: { L: 61.1, a: -1.1, b: 21.9 } },
-  C1: { cervical: { L: 78.4, a: -1.9, b: 14.7 }, middle: { L: 71.9, a: -1.4, b: 15 }, incisal: { L: 65.3, a: -1, b: 12.2 } },
-  C2: { cervical: { L: 75.7, a: -1.3, b: 17.7 }, middle: { L: 68.6, a: -0.5, b: 18.7 }, incisal: { L: 60.6, a: -0.7, b: 15 } },
-  C3: { cervical: { L: 74.1, a: -0.5, b: 16.7 }, middle: { L: 67.2, a: -0.5, b: 19.2 }, incisal: { L: 58.5, a: -0.3, b: 15.1 } },
-  C4: { cervical: { L: 70.6, a: 0.1, b: 19.7 }, middle: { L: 62.2, a: 1.1, b: 20.8 }, incisal: { L: 55.1, a: 0.6, b: 18.4 } },
-  D2: { cervical: { L: 78.3, a: -0.2, b: 14.4 }, middle: { L: 73.8, a: -0.1, b: 13.2 }, incisal: { L: 67.2, a: 0.1, b: 10.9 } },
-  D3: { cervical: { L: 77.3, a: 0.2, b: 16.7 }, middle: { L: 70.5, a: 0.6, b: 17.5 }, incisal: { L: 64.3, a: 0.2, b: 14.1 } },
-  D4: { cervical: { L: 76.7, a: -0.1, b: 15 }, middle: { L: 72, a: 0.1, b: 19.4 }, incisal: { L: 66.2, a: 0.1, b: 17.6 } },
+  A1: { cervical: { L: 69.1, a: 0.7, b: 12 }, middle: { L: 75.6, a: 0.7, b: 13.5 }, incisal: { L: 83.9, a: -0.5, b: 12.2 } },
+  A2: { cervical: { L: 61.6, a: 0.9, b: 13.4 }, middle: { L: 71.7, a: 0.6, b: 16.8 }, incisal: { L: 79.3, a: 0.1, b: 16.1 } },
+  A3: { cervical: { L: 67.1, a: 0.4, b: 17.3 }, middle: { L: 73.5, a: -0.1, b: 20.6 }, incisal: { L: 79.6, a: -0.4, b: 19 } },
+  'A3.5': { cervical: { L: 63.8, a: 0.5, b: 21.4 }, middle: { L: 70.1, a: 0.5, b: 24.8 }, incisal: { L: 76.6, a: -0.1, b: 23.2 } },
+  A4: { cervical: { L: 56.2, a: 0.7, b: 21.5 }, middle: { L: 63.4, a: 0.9, b: 24.4 }, incisal: { L: 71.6, a: 0.2, b: 23.5 } },
+  B1: { cervical: { L: 69, a: -2.2, b: 11.8 }, middle: { L: 77.2, a: -1.6, b: 13.1 }, incisal: { L: 82.7, a: -2.9, b: 11.7 } },
+  B2: { cervical: { L: 66, a: -1.8, b: 14.7 }, middle: { L: 76.5, a: -2.7, b: 18.4 }, incisal: { L: 81.7, a: -3.1, b: 17.9 } },
+  B4: { cervical: { L: 61.1, a: -1.1, b: 21.9 }, middle: { L: 68.4, a: -1.1, b: 25.9 }, incisal: { L: 75.3, a: -1.6, b: 25.5 } },
+  C1: { cervical: { L: 65.3, a: -1, b: 12.2 }, middle: { L: 71.9, a: -1.4, b: 15 }, incisal: { L: 78.4, a: -1.9, b: 14.7 } },
+  C2: { cervical: { L: 60.6, a: -0.7, b: 15 }, middle: { L: 68.6, a: -0.5, b: 18.7 }, incisal: { L: 75.7, a: -1.3, b: 17.7 } },
+  C3: { cervical: { L: 58.5, a: -0.3, b: 15.1 }, middle: { L: 67.2, a: -0.5, b: 19.2 }, incisal: { L: 74.1, a: -0.5, b: 16.7 } },
+  C4: { cervical: { L: 55.1, a: 0.6, b: 18.4 }, middle: { L: 62.2, a: 1.1, b: 20.8 }, incisal: { L: 70.6, a: 0.1, b: 19.7 } },
+  D2: { cervical: { L: 67.2, a: 0.1, b: 10.9 }, middle: { L: 73.8, a: -0.1, b: 13.2 }, incisal: { L: 78.3, a: -0.2, b: 14.4 } },
+  D3: { cervical: { L: 64.3, a: 0.2, b: 14.1 }, middle: { L: 70.5, a: 0.6, b: 17.5 }, incisal: { L: 77.3, a: 0.2, b: 16.7 } },
+  D4: { cervical: { L: 66.2, a: 0.1, b: 17.6 }, middle: { L: 72, a: 0.1, b: 19.4 }, incisal: { L: 76.7, a: -0.1, b: 15 } },
 };
 
-/** Foto recortada de cada tab real (para os resultados e o PDF). */
+/** Foto recortada de cada tab da escala real (resultados, caso salvo e PDF). */
 export const VITA_CLASSICAL_IMAGES: Partial<Record<string, number>> = {
   A1: require('../../../assets/escala/vita-classical/A1.jpg'),
   A2: require('../../../assets/escala/vita-classical/A2.jpg'),

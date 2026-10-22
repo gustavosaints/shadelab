@@ -92,7 +92,7 @@ export async function buildShadeReportHtml(c: ShadeCase, s: Settings): Promise<s
     ]);
     toothBlock = `<div class="cols">
 <div class="col"><div class="cap">Dente ${esc(c.tooth) || ''} do paciente · quadro lido em três terços</div>${mouth}<div class="row3">${swatches(toothProfile)}</div></div>
-<div class="col tabcol"><div class="cap">Tab mais próximo</div>${tab.html}<div class="big">${esc(best.shadeId)}</div><div class="muted">${tab.source === 'calib' ? 'foto do seu tab, calibrado neste aparelho' : tab.source === 'escala' ? 'foto da sua escala VITA Classical' : 'ilustração a partir dos valores da escala'}</div><div class="row3">${swatches(bestProfile)}</div></div>
+<div class="col tabcol"><div class="cap">Tab mais próximo</div>${tab.html}<div class="big">${esc(best.shadeId)}</div><div class="muted">${tab.source === 'calib' ? 'foto do seu tab, calibrado neste aparelho' : tab.source === 'escala' ? `foto da sua escala ${getSystem(c.shadeSystem).name}` : 'ilustração a partir dos valores da escala'}</div><div class="row3">${swatches(bestProfile)}</div></div>
 </div>`;
   } else if (best) {
     toothBlock = `<div class="cols"><div class="col"><span class="sw" style="background:${c.toothHex}"></span><b>Dente medido</b> L*a*b* ${fmt(c.toothLab)}</div>
