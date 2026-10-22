@@ -86,9 +86,6 @@ export default function Capture() {
         <View style={styles.guideTooth}>
           <Text style={styles.guideLabel}>DENTE</Text>
         </View>
-        <View style={styles.guideRef}>
-          <Text style={styles.guideLabel}>REFERÊNCIA</Text>
-        </View>
       </View>
 
       <View style={[styles.top, { paddingTop: insets.top + 8 }]}>
@@ -103,7 +100,7 @@ export default function Capture() {
 
       <View style={[styles.bottom, { paddingBottom: insets.bottom + 16 }]}>
         <Text style={styles.tip}>
-          Luz natural indireta, sem flash. Dente limpo e úmido. Referência encostada ao dente, no mesmo plano.
+          Luz natural indireta, sem flash. Dente limpo e úmido, de frente para a câmera.
           {facing === 'front' ? ' Câmera frontal: a foto sai como você vê na tela.' : ''}
         </Text>
         <View style={styles.controls}>

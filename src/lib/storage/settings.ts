@@ -29,7 +29,7 @@ export type Settings = {
 
 export const DEFAULT_SETTINGS: Settings = {
   shadeSystem: 'vita-classical',
-  referenceMode: 'gray18',
+  referenceMode: 'none',
   referenceTab: 'A2',
   calibrations: {},
   calibrationThirds: {},

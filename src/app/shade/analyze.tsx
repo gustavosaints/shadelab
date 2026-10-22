@@ -17,19 +17,17 @@ import {
 import { Button } from '@/components/Button';
 import { Card, Muted, SectionTitle } from '@/components/Card';
 import { Chip } from '@/components/Chip';
-import { FaceLandmarker, type FaceLandmarkerHandle } from '@/components/FaceLandmarker';
 import { Marker } from '@/components/Marker';
 import { ShadeRow } from '@/components/ShadeRow';
 import { correctedLab, type ReferenceSpec } from '@/lib/color/calibrate';
 import { labToHex, roundLab, type Lab } from '@/lib/color/convert';
 import { matchGingiva, type GingivaMatch } from '@/lib/color/gingiva';
-import { findCentralIncisor } from '@/lib/face/findTooth';
 import { matchShadeProfile, type MatchResult, type ThirdsProfile } from '@/lib/color/match';
-import { findShade, getSystem, NEUTRAL_REFERENCES } from '@/lib/color/shades';
+import { getSystem } from '@/lib/color/shades';
 import { cropToFile } from '@/lib/image/crop';
 import { sampleRegion, sampleThirds, type Rect, type Sample } from '@/lib/image/sample';
 import { newCaseId, persistPhoto, saveCase } from '@/lib/storage/cases';
-import { loadSettings, saveCalibration, saveGingivaCalibration, saveSettings, type ReferenceMode, type Settings } from '@/lib/storage/settings';
+import { loadSettings, saveCalibration, saveGingivaCalibration, type Settings } from '@/lib/storage/settings';
 import { colors, radius, spacing } from '@/theme';
 
 type Params = {
@@ -79,7 +77,6 @@ export default function Analyze() {
   const [zoom, setZoom] = useState<Zoom>({ scale: 1, tx: 0, ty: 0 });
   // retângulos em pixels da imagem: o do dente cobre a coroa inteira (colo → borda incisal)
   const [tooth, setTooth] = useState<Rect>({ x: imgW * 0.46, y: imgH * 0.37, width: imgW * 0.08, height: imgH * 0.12 });
-  const [ref, setRef] = useState<Rect>({ x: imgW * 0.46, y: imgH * 0.57, width: imgW * 0.08, height: imgW * 0.08 });
   const [gingiva, setGingiva] = useState<Rect>({ x: imgW * 0.46, y: imgH * 0.27, width: imgW * 0.08, height: imgW * 0.06 });
   const [useGingiva, setUseGingiva] = useState(false);
   const [lowerTooth, setLowerTooth] = useState(false);
@@ -87,63 +84,23 @@ export default function Analyze() {
   const [markerMode, setMarkerMode] = useState<'move' | 'resize'>('move');
   /** Enquanto um quadro (ou a foto ampliada) está sendo arrastado, a rolagem da tela fica travada. */
   const [dragging, setDragging] = useState(false);
-  const [refMode, setRefMode] = useState<ReferenceMode>('gray18');
-  const [refTab, setRefTab] = useState('A2');
   const [busy, setBusy] = useState(false);
   const [warning, setWarning] = useState<string | null>(null);
   const [result, setResult] = useState<{
     match: MatchResult;
     profile: ThirdsProfile;
     whole: Sample;
-    refSample?: Sample;
     gingivaLab?: Lab;
     gingivaMatches?: GingivaMatch[];
   } | null>(null);
   const calibratingGingiva = mode === 'calibrate-gingiva';
-  const landmarker = useRef<FaceLandmarkerHandle>(null);
-  const [placing, setPlacing] = useState(false);
-  const [placeNote, setPlaceNote] = useState<string | null>(null);
-  const placedOnce = useRef(false);
   const [patientName, setPatientName] = useState(patient && patient !== 'Sem nome' ? patient : '');
   const [toothNumber, setToothNumber] = useState(toothParam ?? '');
   const [notes, setNotes] = useState(notesParam ?? '');
 
   useEffect(() => {
-    loadSettings().then((s) => {
-      setSettings(s);
-      setRefMode(s.referenceMode);
-      setRefTab(s.referenceTab);
-    });
+    loadSettings().then(setSettings);
   }, []);
-
-  /** Acha um central na foto e põe os quadros do dente e da gengiva já no tamanho certo. */
-  const placeOnTooth = async () => {
-    if (placing) return;
-    setPlacing(true);
-    setPlaceNote(null);
-    try {
-      const found = await findCentralIncisor({ uri, width: imgW, height: imgH }, landmarker.current);
-      if (!found) {
-        setPlaceNote('Não achei o dente sozinho. Arraste o quadro azul para a coroa e puxe a alça para o tamanho.');
-        return;
-      }
-      setTooth(found.tooth);
-      setGingiva(found.gingiva);
-      setPlaceNote(`Quadro colocado no dente ${found.fdi}${found.source === 'face' ? ' (boca detectada)' : ''}. Confira e ajuste se precisar.`);
-    } catch (e) {
-      setPlaceNote(`Não consegui localizar o dente (${String((e as Error).message ?? e)}).`);
-    } finally {
-      setPlacing(false);
-    }
-  };
-  // ao abrir a foto (só na tomada de cor), tenta colocar o quadro no dente uma vez
-  useEffect(() => {
-    if (mode !== 'shade' || placedOnce.current || !layout.width) return;
-    placedOnce.current = true;
-    const t = setTimeout(() => placeOnTooth(), 400); // dá tempo do detector (WebView) carregar
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layout.width, mode]);
 
   // Geometria: imagem com "contain" dentro da vista ampliada (layout × zoom)
   const inner = { width: layout.width * zoom.scale, height: layout.height * zoom.scale };
@@ -216,7 +173,8 @@ export default function Analyze() {
   const markerEnd = () => setDragging(false);
 
   const system = settings ? getSystem(settings.shadeSystem) : null;
-  const refLabel = refMode === 'none' ? 'Sem referência' : refMode === 'tab' ? `Tab ${refTab}` : NEUTRAL_REFERENCES[refMode].name;
+  // Referência na foto foi retirada da tela (pedido do Gustavo, 2026-10-22): a leitura é direta, sem correção.
+  const refLabel = 'Sem referência';
 
   const analyze = async () => {
     if (!settings || !system) return;
@@ -224,19 +182,7 @@ export default function Analyze() {
     setResult(null);
     setWarning(null);
     try {
-      let refSample: Sample | undefined;
-      let refSpec: ReferenceSpec | undefined;
-      if (refMode !== 'none') {
-        refSample = await sampleRegion(uri, ref, imgW, imgH);
-        let known: Lab | undefined;
-        if (refMode === 'tab') {
-          const calib = settings.calibrations[settings.shadeSystem]?.[refTab];
-          known = calib ?? findShade(settings.shadeSystem, refTab)?.lab;
-        } else {
-          known = NEUTRAL_REFERENCES[refMode].lab;
-        }
-        if (known) refSpec = { measured: refSample.rgb, known };
-      }
+      const refSpec: ReferenceSpec | undefined = undefined;
       // dente inteiro: três terços (colo → incisal) comparados com o tab inteiro
       const thirds = await sampleThirds(uri, tooth, imgW, imgH, !lowerTooth);
       const profile: ThirdsProfile = {
@@ -258,15 +204,12 @@ export default function Analyze() {
         gingivaLab = correctedLab(g.rgb, refSpec);
         gingivaMatches = matchGingiva(gingivaLab, settings.gingivaCalibrations).matches;
       }
-      setResult({ match, profile, whole: thirds.whole, refSample, gingivaLab, gingivaMatches });
+      setResult({ match, profile, whole: thirds.whole, gingivaLab, gingivaMatches });
       if (thirds.middle.cv > HETEROGENEOUS_CV) {
         setWarning(
           `Variação de ${Math.round(thirds.middle.cv * 100)}% no terço médio do dente. Se houver reflexo, borda ou mancha dentro do quadro, ajuste o quadro para cobrir só a coroa e repita.`,
         );
-      } else if (refSample && refSample.cv > HETEROGENEOUS_CV) {
-        setWarning(`Variação de ${Math.round(refSample.cv * 100)}% dentro do quadro da referência. Centralize o quadro na referência, longe das bordas.`);
       }
-      await saveSettings({ referenceMode: refMode, referenceTab: refTab });
     } catch (e) {
       Alert.alert('Não foi possível analisar', String(e));
     } finally {
@@ -354,7 +297,6 @@ export default function Analyze() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <FaceLandmarker ref={landmarker} />
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled" scrollEnabled={!dragging}>
         <View
           style={styles.imageArea}
@@ -382,9 +324,6 @@ export default function Analyze() {
                   thirds={!calibratingGingiva}
                   resizeMode={markerMode === 'resize'}
                 />
-                {refMode !== 'none' && (
-                  <Marker {...toScreen(ref)} color={colors.accent} label="Referência" onMove={moveBy(setRef)} onGrant={markerStart} onRelease={markerEnd} onResize={resizeBy(setRef)} resizeMode={markerMode === 'resize'} />
-                )}
                 {useGingiva && (
                   <Marker {...toScreen(gingiva)} color="#E05C8A" label="Gengiva" onMove={moveBy(setGingiva)} onGrant={markerStart} onRelease={markerEnd} onResize={resizeBy(setGingiva)} resizeMode={markerMode === 'resize'} />
                 )}
@@ -405,32 +344,14 @@ export default function Analyze() {
         </View>
         <View style={{ padding: spacing.md, paddingTop: 0 }}>
           <Card>
-            <SectionTitle>Referência na foto</SectionTitle>
-            <View style={styles.chips}>
-              <Chip label="Nenhuma" selected={refMode === 'none'} onPress={() => setRefMode('none')} />
-              <Chip label="Cinza 18%" selected={refMode === 'gray18'} onPress={() => setRefMode('gray18')} />
-              <Chip label="Branco" selected={refMode === 'white'} onPress={() => setRefMode('white')} />
-              <Chip label="Tab da escala" selected={refMode === 'tab'} onPress={() => setRefMode('tab')} />
-            </View>
-            {refMode === 'tab' && system && (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4 }}>
-                {system.shades.map((s) => (
-                  <Chip key={s.id} label={s.id} selected={refTab === s.id} onPress={() => setRefTab(s.id)} />
-                ))}
-              </ScrollView>
-            )}
             <SectionTitle>{mode === 'shade' ? 'Quadro do dente' : calibratingGingiva ? 'Quadro do tab de gengiva' : 'Quadro do tab'}</SectionTitle>
             <View style={styles.chips}>
               <Chip label="Superior (colo em cima)" selected={!lowerTooth} onPress={() => setLowerTooth(false)} />
               <Chip label="Inferior (colo embaixo)" selected={lowerTooth} onPress={() => setLowerTooth(true)} />
-              {mode === 'shade' && <Chip label={placing ? 'Procurando o dente…' : 'Achar o dente de novo'} onPress={placeOnTooth} />}
             </View>
-            {placeNote && <Muted>{placeNote}</Muted>}
             <Muted>
-              O quadro azul é colocado sozinho num incisivo central; se precisar, arraste-o e mude o tamanho pela alça redonda do
-              canto ou com dois dedos (pinça) em cima do quadro. Pinça fora dos quadros aproxima a foto. O dente é lido em três
-              terços (cervical, médio e incisal) e comparado com o tab inteiro da escala. O quadro verde vai sobre a referência,
-              que corrige balanço de branco e exposição.
+              Arraste o quadro azul para cobrir a coroa inteira, do colo à borda incisal, e mude o tamanho no modo «Redimensionar quadros». Pinça fora dos quadros aproxima a foto. O dente é lido em três terços (cervical, médio e incisal) e
+              comparado com o tab inteiro da escala.
             </Muted>
             {mode === 'shade' && (
               <View style={styles.switchRow}>
