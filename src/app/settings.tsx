@@ -16,7 +16,7 @@ import { colors, radius, spacing } from '@/theme';
 
 export default function Settings() {
   const [settings, reload] = useSettings();
-  const { user, lock } = useAuth();
+  const { user, lock, remember, setRemember } = useAuth();
   const [pwCurrent, setPwCurrent] = useState('');
   const [pwNext, setPwNext] = useState('');
   const [pwConfirm, setPwConfirm] = useState('');
@@ -185,7 +185,15 @@ export default function Settings() {
 
       <Card>
         <SectionTitle>Acesso</SectionTitle>
-        <Muted>{`Usuário: ${user ?? '—'}. O app pede a senha sempre que abre e quando volta de mais de 5 minutos em segundo plano.`}</Muted>
+        <Muted>
+          {remember
+            ? `Usuário: ${user ?? '—'}. Conectado neste aparelho: o app abre direto, sem pedir a senha. "Sair" volta a pedir.`
+            : `Usuário: ${user ?? '—'}. O app pede a senha sempre que abre e quando volta de mais de 5 minutos em segundo plano.`}
+        </Muted>
+        <View style={styles.bioRow}>
+          <Text style={styles.bioLabel}>Manter conectado neste aparelho</Text>
+          <Switch value={remember} onValueChange={setRemember} trackColor={{ true: colors.rose }} accessibilityLabel="Manter conectado neste aparelho" />
+        </View>
         {bio && (
           <View style={styles.bioRow}>
             <Text style={styles.bioLabel}>Entrar com {bio.label}</Text>

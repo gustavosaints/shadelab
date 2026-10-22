@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/Button';
 import { Logo } from '@/components/Logo';
@@ -19,6 +19,8 @@ export function LoginScreen() {
   const [show, setShow] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // manter conectado neste aparelho (ligado por padrão: ele pediu para não digitar a senha toda vez)
+  const [keep, setKeep] = useState(true);
   // Face ID / digital: `bio` só existe quando o aparelho tem biometria cadastrada; `bioOn` = a pessoa escolheu usar
   const [bio, setBio] = useState<BiometricInfo | null>(null);
   const [bioOn, setBioOn] = useState(false);
@@ -66,11 +68,11 @@ export function LoginScreen() {
     try {
       if (setup) {
         const name = await createAccount(user, password, confirm);
-        unlock(name);
-        offerBiometric();
+        unlock(name, keep);
+        if (!keep) offerBiometric();
       } else if (await checkLogin(user, password)) {
-        unlock(user.trim().toLowerCase());
-        offerBiometric();
+        unlock(user.trim().toLowerCase(), keep);
+        if (!keep) offerBiometric();
       } else {
         setError('Usuário ou senha incorretos.');
         setPassword('');
@@ -144,6 +146,10 @@ export function LoginScreen() {
               />
             </>
           )}
+          <View style={styles.keepRow}>
+            <Text style={styles.keepText}>Manter conectado neste aparelho</Text>
+            <Switch value={keep} onValueChange={setKeep} trackColor={{ true: colors.rose }} accessibilityLabel="Manter conectado neste aparelho" />
+          </View>
           {error && <Text style={styles.error}>{error}</Text>}
           <Button title={setup ? 'Criar acesso e entrar' : 'Entrar'} onPress={submit} loading={busy} style={{ marginTop: spacing.md }} />
           {!setup && bio && bioOn && (
@@ -186,6 +192,8 @@ const styles = StyleSheet.create({
   passRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   showBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 6 },
   showText: { color: colors.primary, fontFamily: fonts.medium, fontSize: 14 },
+  keepRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.md, minHeight: 44 },
+  keepText: { color: colors.text, fontSize: 15, flexShrink: 1, marginRight: 8 },
   error: { color: colors.danger, fontSize: 14, marginTop: spacing.sm },
   bioBtn: {
     marginTop: spacing.sm,
