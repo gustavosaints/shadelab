@@ -30,8 +30,10 @@ const ORDER: MapKind[] = ['central', 'lateral', 'canine', 'premolar1', 'premolar
 
 /** Largura real típica do incisivo central (mm): dá a escala px/mm da foto. */
 export const CENTRAL_WIDTH_MM = 8.5;
-/** Fração da largura da boca (comissura a comissura) ocupada de 15 a 25 num sorriso típico. */
-export const MAPPED_TO_MOUTH = 1.0;
+/** Fração da largura da boca (comissura a comissura) ocupada de 15 a 25 num sorriso típico (sobra o corredor bucal). */
+export const MAPPED_TO_MOUTH = 0.95;
+/** Espaço entre dentes, fração da largura do central. */
+const GAP = 0.02;
 
 export type MappedTooth = { fdi: Fdi; kind: MapKind; outline: ToothKind; side: Side; x: number; y: number; w: number; h: number };
 export type ToothMap = { teeth: MappedTooth[]; pxPerMm: number; source: 'autofit' | 'boca' };
@@ -48,7 +50,7 @@ export const LENGTH_LIMIT_MM = 3;
  */
 export function layoutMapped(midX: number, gumY: number, centralW: number, heightRatio: number, widthScale: Partial<Record<Fdi, number>> = {}): MappedTooth[] {
   const ch = centralW * heightRatio;
-  const gap = centralW * 0.02;
+  const gap = centralW * GAP;
   const teeth: MappedTooth[] = [];
   for (const dir of [-1, 1] as const) {
     const side: Side = dir < 0 ? 'right' : 'left';
@@ -79,7 +81,8 @@ export function mapFromParams(p: SmileParams, imgW: number, imgH: number): Tooth
 /** Mapa só pela boca: os 10 dentes ocupam a largura entre as comissuras, colo um pouco acima do lábio superior. */
 export function mapFromMouth(mouth: MouthPoint[], imgW: number, imgH: number, midX?: number): ToothMap {
   const b = mouthBounds(mouth, imgW, imgH);
-  const sum = ORDER.reduce((s, k) => s + PROFILE[k].w, 0) * 2;
+  // 10 larguras + 9 espaços (a linha média conta como um)
+  const sum = ORDER.reduce((s, k) => s + PROFILE[k].w, 0) * 2 + 9 * GAP;
   const centralW = (b.widthPx * MAPPED_TO_MOUTH) / sum;
   const heightRatio = 1.2;
   const gumY = b.upperMidY - 0.12 * centralW * heightRatio;

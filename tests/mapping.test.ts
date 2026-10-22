@@ -83,3 +83,23 @@ describe('comprimento em mm', () => {
     expect(p).not.toMatch(/\n/);
   });
 });
+
+describe('delimitar a boca à mão', () => {
+  it('contorno inicial no centro, cantos nas pontas e mapa dos dentes cabendo entre eles', async () => {
+    const { centeredMouth, mouthBounds, mouthCrop } = await import('@/lib/smile/mouth');
+    const { mapFromMouth } = await import('@/lib/smile/mapping');
+    const m = centeredMouth(4000, 3000);
+    expect(m).toHaveLength(8);
+    const b = mouthBounds(m, 4000, 3000);
+    expect(b.centerX).toBeCloseTo(2000);
+    expect(b.widthPx).toBeCloseTo(2560);
+    const map = mapFromMouth(m, 4000, 3000);
+    const x0 = Math.min(...map.teeth.map((t) => t.x));
+    const x1 = Math.max(...map.teeth.map((t) => t.x + t.w));
+    expect(x0).toBeGreaterThan(2000 - 1300);
+    expect(x1).toBeLessThan(2000 + 1300);
+    const crop = mouthCrop(m, 4000, 3000);
+    expect(crop.w).toBeGreaterThan(2560);
+    expect(crop.w / crop.h).toBeLessThanOrEqual(2.01);
+  });
+});

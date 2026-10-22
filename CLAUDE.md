@@ -113,6 +113,11 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   translúcida; caracterizada = + mamelos, halo, colo saturado, manchas, trinca). "Tamanho": Todos ou um dente
   (chip ou toque na foto), Incisal/Cervical ± 0,5 mm (até ±3 mm, escala px/mm pelo central = 8,5 mm);
   `describeLengths` põe os ajustes na instrução da IA. Com resultado, chips "Planejamento" / "Antes e depois".
+  DELIMITAR A BOCA (2026-10-22): o detector precisa do ROSTO inteiro; em foto de sorriso de perto ele falha. Aí
+  aparece "Delimitar a boca" (e, quando achou, "Ajustar a boca"): `components/MouthEditor.tsx` com 8 pontos (C
+  cantos, S lábio superior, I lábio inferior; contorno inicial `centeredMouth`), vista que se aproxima da boca a
+  cada ponto solto (`mouthCrop`); "Pronto" encaixa os dentes dentro do contorno (`mapInMouth`: autofit ou
+  largura da boca, 15–25 ocupando 95 % entre as comissuras).
   Próximo passo possível: mandar também a imagem com as silhuetas como guia para a IA (testar quando houver crédito).
   REMOVIDOS nessa data: editor manual (contorno, boca, ajustar, face-bow na tela, biblioteca 2D de sorrisos,
   cenários, rascunho automático) e a tela separada "Sorriso por IA". Ficaram só bibliotecas usadas por outras

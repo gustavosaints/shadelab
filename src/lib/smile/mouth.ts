@@ -167,3 +167,38 @@ export function fitToMouth(params: SmileParams, mouth: MouthPoint[], width: numb
     gumY: (b.upperMidY - 0.12 * newCh) / height,
   };
 }
+
+/**
+ * Contorno inicial para delimitar à mão quando o detector não achou o rosto (sorriso fotografado de perto):
+ * boca no centro da foto ocupando ~64 % da largura.
+ */
+export function centeredMouth(width: number, height: number): MouthPoint[] {
+  const cx = width / 2;
+  const cy = height / 2;
+  const w = width * 0.64;
+  const h = w * 0.3;
+  const pts = [
+    [cx - w / 2, cy],
+    [cx - 0.3 * w, cy - 0.45 * h],
+    [cx, cy - 0.5 * h],
+    [cx + 0.3 * w, cy - 0.45 * h],
+    [cx + w / 2, cy],
+    [cx + 0.3 * w, cy + 0.45 * h],
+    [cx, cy + 0.5 * h],
+    [cx - 0.3 * w, cy + 0.45 * h],
+  ];
+  return pts.map(([x, y]) => ({ x: x / width, y: y / height }));
+}
+
+/** Recorte (px) em volta do contorno, com folga, para ver a boca ampliada na tela (proporção ~2:1). */
+export function mouthCrop(mouth: MouthPoint[], width: number, height: number): Box {
+  const xs = mouth.map((p) => p.x * width);
+  const ys = mouth.map((p) => p.y * height);
+  const bw = Math.max(...xs) - Math.min(...xs);
+  const bh = Math.max(...ys) - Math.min(...ys);
+  const w = Math.min(width * 1.1, Math.max(bw * 1.7, width * 0.2));
+  const h = Math.min(height * 1.1, Math.max(bh * 2.6, w / 2));
+  const cx = (Math.max(...xs) + Math.min(...xs)) / 2;
+  const cy = (Math.max(...ys) + Math.min(...ys)) / 2;
+  return { x: cx - w / 2, y: cy - h / 2, w, h };
+}

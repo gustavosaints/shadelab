@@ -138,7 +138,7 @@ export function SmileMap({ photo, map, status, shapeMix, texture, lengths, selec
           {status !== 'ok' && (
             <View style={styles.badge}>
               {status === 'detecting' && <ActivityIndicator size="small" color="#FFFFFF" />}
-              <Text style={styles.badgeText}>{status === 'detecting' ? 'Mapeando os dentes…' : 'Não encontrei o sorriso nesta foto para mapear os dentes'}</Text>
+              <Text style={styles.badgeText}>{status === 'detecting' ? 'Mapeando os dentes…' : 'Não encontrei o sorriso automaticamente'}</Text>
             </View>
           )}
         </>

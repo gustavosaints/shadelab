@@ -15,6 +15,7 @@ import { Button } from '@/components/Button';
 import { Card, Muted, SectionTitle } from '@/components/Card';
 import { Chip } from '@/components/Chip';
 import { FaceLandmarker, type FaceLandmarkerHandle } from '@/components/FaceLandmarker';
+import { MouthEditor } from '@/components/MouthEditor';
 import { SmileMap } from '@/components/SmileMap';
 import { SmileGenerating } from '@/components/SmileGenerating';
 import {
@@ -46,6 +47,8 @@ import {
   type LengthEdits,
   type ToothMap,
 } from '@/lib/smile/mapping';
+import { centeredMouth, mouthBounds } from '@/lib/smile/mouth';
+import type { MouthPoint } from '@/lib/smile/teeth';
 import { takePendingPhoto } from '@/lib/smile/pendingPhoto';
 import { DEFAULT_SMILE_PARAMS } from '@/lib/smile/teeth';
 import { getCase, isSmileCase, newCaseId, persistPhoto, saveCase } from '@/lib/storage/cases';
@@ -77,6 +80,9 @@ export default function SmileDesign() {
   const [lengths, setLengths] = useState<LengthEdits>({});
   const [target, setTarget] = useState<Fdi | 'all'>('all');
   const [view, setView] = useState<'plan' | 'compare'>('plan');
+  // contorno da boca (do detector ou marcado à mão) e o rascunho enquanto delimita
+  const [mouth, setMouth] = useState<MouthPoint[] | null>(null);
+  const [mouthDraft, setMouthDraft] = useState<MouthPoint[] | null>(null);
   const [results, setResults] = useState<Result[]>([]);
   const [current, setCurrent] = useState(0);
   const [mode, setMode] = useState<CompareMode>('cortina');
@@ -99,10 +105,27 @@ export default function SmileDesign() {
   const shadeIds = system.shades.map((s) => s.id);
   const shadeId = shadeIds.includes(choice.shadeId) ? choice.shadeId : shadeIds[0];
 
-  /** Acha a boca (MediaPipe) e encaixa os 10 dentes; sem encaixe confiável, usa só a largura da boca. */
+  /** Encaixa os 10 dentes dentro do contorno da boca: autofit pelos pixels quando confiável, senão pela largura. */
+  const mapInMouth = async (p: Photo, m: MouthPoint[], midX: number, mirrored: boolean, token: number) => {
+    let tm: ToothMap | null = null;
+    try {
+      const fit = await fitTeethToPhoto(p, m, midX, DEFAULT_SMILE_PARAMS);
+      if (fit && fit.fit.confidence >= 0.4 && plausibleFit(fit.params, m, p.width, p.height)) tm = mapFromParams(fit.params, p.width, p.height);
+    } catch {
+      tm = null;
+    }
+    tm = tm ?? mapFromMouth(m, p.width, p.height, midX * p.width);
+    if (token !== mapToken.current) return;
+    setMap(mirrored ? mirrorLabels(tm) : tm);
+    setMapStatus('ok');
+  };
+
+  /** Acha a boca (MediaPipe) e encaixa os dentes. Sem rosto na foto (sorriso de perto), pede para delimitar. */
   const runMapping = async (p: Photo) => {
     const token = ++mapToken.current;
     setMap(null);
+    setMouth(null);
+    setMouthDraft(null);
     setMapStatus('detecting');
     setLengths({});
     setTarget('all');
@@ -114,20 +137,28 @@ export default function SmileDesign() {
         setMapStatus('failed');
         return;
       }
-      let m: ToothMap | null = null;
-      try {
-        const fit = await fitTeethToPhoto(p, det.mouth, det.face.philtrum.x, DEFAULT_SMILE_PARAMS);
-        if (fit && fit.fit.confidence >= 0.4 && plausibleFit(fit.params, det.mouth, p.width, p.height)) m = mapFromParams(fit.params, p.width, p.height);
-      } catch {
-        m = null;
-      }
-      m = m ?? mapFromMouth(det.mouth, p.width, p.height, det.face.philtrum.x * p.width);
-      if (token !== mapToken.current) return;
-      setMap(det.mirrored ? mirrorLabels(m) : m);
-      setMapStatus('ok');
+      setMouth(det.mouth);
+      await mapInMouth(p, det.mouth, det.face.philtrum.x, det.mirrored, token);
     } catch {
       if (token === mapToken.current) setMapStatus('failed');
     }
+  };
+
+  const startMouthEdit = () => {
+    if (!photo) return;
+    setMouthDraft(mouth ?? centeredMouth(photo.width, photo.height));
+    setView('plan');
+  };
+  const finishMouthEdit = () => {
+    if (!photo || !mouthDraft) return;
+    const m = mouthDraft;
+    const token = ++mapToken.current;
+    setMouth(m);
+    setMouthDraft(null);
+    setMap(null);
+    setMapStatus('detecting');
+    const midX = mouthBounds(m, photo.width, photo.height).centerX / photo.width;
+    mapInMouth(photo, m, midX, false, token).catch(() => setMapStatus('failed'));
   };
 
   const startWithPhoto = (p: Photo) => {
@@ -182,6 +213,8 @@ export default function SmileDesign() {
       setEditingId(c.id);
       setCreatedAt(c.createdAt);
     })();
+    // só quando muda o caso aberto
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [caseId]);
 
   const pickFromGallery = async () => {
@@ -333,6 +366,8 @@ export default function SmileDesign() {
             onDragStart={() => setDragging(true)}
             onDragEnd={() => setDragging(false)}
           />
+        ) : mouthDraft ? (
+          <MouthEditor photo={photo} mouth={mouthDraft} onChange={setMouthDraft} onDragStart={() => setDragging(true)} onDragEnd={() => setDragging(false)} />
         ) : (
           <SmileMap
             photo={photo}
@@ -345,8 +380,30 @@ export default function SmileDesign() {
             onSelect={(fdi) => setTarget(target === fdi ? 'all' : fdi)}
           />
         )}
-        {generating && <SmileGenerating photoUri={photo.uri} aspect={aspect} steps={genSteps} resultUri={pending?.uri} onDone={finishReveal} />}
+        {generating && !mouthDraft && <SmileGenerating photoUri={photo.uri} aspect={aspect} steps={genSteps} resultUri={pending?.uri} onDone={finishReveal} />}
       </View>
+      {view === 'plan' &&
+        (mouthDraft ? (
+          <Card style={{ marginTop: spacing.md }}>
+            <SectionTitle>Delimitar a boca</SectionTitle>
+            <Muted>
+              Arraste os pontos até a borda dos lábios: C nos cantos da boca, S no lábio de cima e I no lábio de baixo. A vista
+              se aproxima a cada ponto solto. Depois toque em Pronto para eu encontrar os dentes.
+            </Muted>
+            <Button title="Pronto, encontrar os dentes" onPress={finishMouthEdit} style={{ marginTop: 12 }} />
+            <Button title="Cancelar" variant="ghost" onPress={() => setMouthDraft(null)} />
+          </Card>
+        ) : mapStatus === 'failed' ? (
+          <Card style={{ marginTop: spacing.md }}>
+            <Muted>
+              Não encontrei o sorriso automaticamente (acontece em fotos de perto, sem o rosto inteiro). Marque a borda dos
+              lábios e eu encontro os dentes.
+            </Muted>
+            <Button title="Delimitar a boca" onPress={startMouthEdit} style={{ marginTop: 12 }} />
+          </Card>
+        ) : mapStatus === 'ok' ? (
+          <Button title="Ajustar a boca" variant="ghost" onPress={startMouthEdit} />
+        ) : null)}
 
       {result && view === 'compare' && (
         <Card style={{ marginTop: spacing.md }}>
