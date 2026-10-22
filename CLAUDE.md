@@ -124,7 +124,7 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   1 : 0,618 : 0,382, pré-molares 0,33/0,27; ignora as larguras medidas). `describeArch` vai na instrução da IA junto
   com `describeLengths`. O recorte da vista usa o encaixe original (não pula ao ajustar). `SmileMap` tem pinça (até
   5x) e, aproximado, arrasto com um dedo; selo "tocar para 1x". A tela agora é foto FIXA no topo (planejamento,
-  delimitar boca, antes e depois ou a animação de geração; foto inteira limitada a 42 % da altura) e as opções
+  delimitar boca, antes e depois ou a animação de geração) ocupando METADE da área da tela (`photoH`; SmileMap e MouthEditor recortam na proporção da caixa) e as opções
   rolam embaixo. `SmileGenerating` preenche a caixa do pai.
   Próximo passo possível: mandar também a imagem com as silhuetas como guia para a IA (testar quando houver crédito).
   REMOVIDOS nessa data: editor manual (contorno, boca, ajustar, face-bow na tela, biblioteca 2D de sorrisos,

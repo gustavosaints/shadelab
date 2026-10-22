@@ -190,14 +190,19 @@ export function centeredMouth(width: number, height: number): MouthPoint[] {
   return pts.map(([x, y]) => ({ x: x / width, y: y / height }));
 }
 
-/** Recorte (px) em volta do contorno, com folga, para ver a boca ampliada na tela (proporção ~2:1). */
-export function mouthCrop(mouth: MouthPoint[], width: number, height: number): Box {
+/**
+ * Recorte (px) em volta do contorno, com folga, para ver a boca ampliada na tela, na proporção da caixa
+ * (`aspect` = largura / altura da vista).
+ */
+export function mouthCrop(mouth: MouthPoint[], width: number, height: number, aspect = 2): Box {
   const xs = mouth.map((p) => p.x * width);
   const ys = mouth.map((p) => p.y * height);
   const bw = Math.max(...xs) - Math.min(...xs);
   const bh = Math.max(...ys) - Math.min(...ys);
-  const w = Math.min(width * 1.1, Math.max(bw * 1.7, width * 0.2));
-  const h = Math.min(height * 1.1, Math.max(bh * 2.6, w / 2));
+  let w = Math.max(bw * 1.7, width * 0.2);
+  let h = Math.max(bh * 2.6, w / aspect);
+  if (w / h < aspect) w = h * aspect;
+  else h = w / aspect;
   const cx = (Math.max(...xs) + Math.min(...xs)) / 2;
   const cy = (Math.max(...ys) + Math.min(...ys)) / 2;
   return { x: cx - w / 2, y: cy - h / 2, w, h };

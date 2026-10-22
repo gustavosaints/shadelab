@@ -9,6 +9,8 @@ type Photo = { uri: string; width: number; height: number };
 
 type Props = {
   photo: Photo;
+  /** Altura da vista (px); a largura é a do pai. */
+  height: number;
   mouth: MouthPoint[];
   onChange: (mouth: MouthPoint[]) => void;
   /** Avisam a tela para travar a rolagem enquanto arrasta um ponto. */
@@ -25,17 +27,16 @@ const LABELS = ['C', 'S', 'S', 'S', 'C', 'I', 'I', 'I'];
  * automático não acha o rosto — sorriso fotografado de perto): 8 pontos na borda dos lábios (C = cantos,
  * S = lábio superior, I = lábio inferior). A vista se aproxima da boca a cada ponto solto, para dar precisão.
  */
-export function MouthEditor({ photo, mouth, onChange, onDragStart, onDragEnd }: Props) {
+export function MouthEditor({ photo, height, mouth, onChange, onDragStart, onDragEnd }: Props) {
   const [width, setWidth] = useState(0);
-  // o recorte só muda quando solta o ponto (senão a vista "fugiria" do dedo)
-  const [crop, setCrop] = useState(() => mouthCrop(mouth, photo.width, photo.height));
+  // o recorte só acompanha o contorno quando solta o ponto (senão a vista "fugiria" do dedo)
+  const [focus, setFocus] = useState(mouth);
   const drag = useRef<{ i: number; x: number; y: number } | null>(null);
 
-  const aspect = crop.w / crop.h;
+  const crop = mouthCrop(focus, photo.width, photo.height, width && height ? width / height : 2);
   const s = width / crop.w;
   const toView = (p: MouthPoint) => ({ x: (p.x * photo.width - crop.x) * s, y: (p.y * photo.height - crop.y) * s });
   const pts = mouth.map(toView);
-  const height = width / aspect;
 
   const grant = (i: number) => (e: GestureResponderEvent) => {
     drag.current = { i, x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
@@ -53,11 +54,11 @@ export function MouthEditor({ photo, mouth, onChange, onDragStart, onDragEnd }: 
   const release = () => {
     drag.current = null;
     onDragEnd?.();
-    setCrop(mouthCrop(mouth, photo.width, photo.height));
+    setFocus(mouth);
   };
 
   return (
-    <View style={[styles.box, { aspectRatio: aspect }]} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+    <View style={[styles.box, { height }]} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
       {width > 0 && (
         <>
           <Image

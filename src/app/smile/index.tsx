@@ -109,6 +109,7 @@ export default function SmileDesign() {
   const compareRef = useRef<View>(null);
 
   const { width: windowW, height: windowH } = useWindowDimensions();
+  const [areaH, setAreaH] = useState(0);
   const hasKey = settings.aiApiKey.trim().length > 0;
   const result = results[current];
   const aspect = photo ? photo.width / photo.height : 3 / 4;
@@ -364,12 +365,14 @@ export default function SmileDesign() {
     );
   }
 
-  // foto inteira (antes e depois / gerando) limitada a ~42 % da altura, para sobrar espaço para as opções
-  const fullH = Math.min(windowH * 0.42, (windowW - spacing.md * 2) / aspect);
-  const fullBox = { width: fullH * aspect, height: fullH, alignSelf: 'center' as const };
+  // a foto ocupa metade da tela (pedido do Gustavo); a foto inteira (antes e depois / gerando) cabe nessa altura
+  const chipsH = result && !generating ? 44 : 0;
+  const photoH = Math.max(160, (areaH || windowH * 0.85) / 2 - chipsH - spacing.sm * 2);
+  const fullW = Math.min(windowW - spacing.md * 2, photoH * aspect);
+  const fullBox = { width: fullW, height: fullW / aspect, alignSelf: 'center' as const };
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1 }} onLayout={(e) => setAreaH(e.nativeEvent.layout.height)}>
       <FaceLandmarker ref={landmarker} />
       {/* foto fixa no topo; as opções rolam embaixo */}
       <View style={styles.fixed}>
@@ -395,10 +398,11 @@ export default function SmileDesign() {
               onDragEnd={() => setDragging(false)}
             />
           ) : mouthDraft ? (
-            <MouthEditor photo={photo} mouth={mouthDraft} onChange={setMouthDraft} onDragStart={() => setDragging(true)} onDragEnd={() => setDragging(false)} />
+            <MouthEditor photo={photo} height={photoH} mouth={mouthDraft} onChange={setMouthDraft} onDragStart={() => setDragging(true)} onDragEnd={() => setDragging(false)} />
           ) : (
             <SmileMap
               photo={photo}
+              height={photoH}
               teeth={planTeeth}
               frame={frameTeeth}
               status={mapStatus}

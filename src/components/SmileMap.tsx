@@ -9,6 +9,8 @@ type Photo = { uri: string; width: number; height: number };
 
 type Props = {
   photo: Photo;
+  /** Altura da vista (px); a largura é a do pai. O recorte segue essa proporção. */
+  height: number;
   /** Dentes como devem aparecer (arco e comprimentos já aplicados), em px da foto. */
   teeth: MappedTooth[];
   /** Dentes do encaixe original: definem o recorte, que fica parado enquanto o arco é ajustado. */
@@ -29,31 +31,33 @@ const GLOW = '#F3C9BE';
  * com uma textura escolhida, uma prévia transparente dela aparece nos incisivos 12, 11, 21 e 22. Tocar num dente
  * seleciona para ajustar só ele. Pinça aproxima (até 5x) e, aproximada, um dedo arrasta a vista.
  */
-export function SmileMap({ photo, teeth, frame, status, shapeMix, texture, selected, onSelect }: Props) {
+export function SmileMap({ photo, height, teeth, frame, status, shapeMix, texture, selected, onSelect }: Props) {
   const [width, setWidth] = useState(0);
   const [zoom, setZoom] = useState({ scale: 1, tx: 0, ty: 0 });
   const gesture = useRef<{ x: number; y: number; dist: number; scale: number; tx: number; ty: number; pinch: boolean } | null>(null);
   const start = useRef<{ x: number; y: number } | null>(null);
 
-  // recorte em volta dos dentes do encaixe (ou a foto inteira, sem mapa)
-  let crop = { x: 0, y: 0, w: photo.width, h: photo.height };
+  // recorte em volta dos dentes do encaixe, na proporção da vista (sem mapa: a foto inteira, centralizada)
+  const aspect = width && height ? width / height : 1;
+  let crop: { x: number; y: number; w: number; h: number };
   if (frame.length) {
     const x0 = Math.min(...frame.map((t) => t.x));
     const x1 = Math.max(...frame.map((t) => t.x + t.w));
     const y0 = Math.min(...frame.map((t) => t.y));
     const y1 = Math.max(...frame.map((t) => t.y + t.h));
-    const w = (x1 - x0) * 1.45;
-    const h = Math.max((y1 - y0) * 2.3, w / 2.3);
-    const cx = (x0 + x1) / 2;
-    const cy = (y0 + y1) / 2;
-    crop = { x: cx - w / 2, y: cy - h / 2, w, h };
+    let w = (x1 - x0) * 1.45;
+    let h = Math.max((y1 - y0) * 2.3, w / aspect);
+    if (w / h < aspect) w = h * aspect;
+    else h = w / aspect;
+    crop = { x: (x0 + x1) / 2 - w / 2, y: (y0 + y1) / 2 - h / 2, w, h };
+  } else {
+    const fit = photo.width / photo.height > aspect ? { w: photo.width, h: photo.width / aspect } : { w: photo.height * aspect, h: photo.height };
+    crop = { x: (photo.width - fit.w) / 2, y: (photo.height - fit.h) / 2, ...fit };
   }
-  const aspect = crop.w / crop.h;
   const s = width / crop.w;
   const toView = (t: MappedTooth): MappedTooth => ({ ...t, x: (t.x - crop.x) * s, y: (t.y - crop.y) * s, w: t.w * s, h: t.h * s });
   const view = teeth.map(toView);
   const textureMix = shapeMix ?? 0.5;
-  const height = width / aspect;
 
   // ----- zoom: pinça com dois dedos; com zoom, um dedo arrasta (toques curtos continuam escolhendo o dente) -----
   const touches = (e: GestureResponderEvent) => e.nativeEvent.touches ?? [];
@@ -100,7 +104,7 @@ export function SmileMap({ photo, teeth, frame, status, shapeMix, texture, selec
 
   return (
     <View
-      style={[styles.box, { aspectRatio: aspect }]}
+      style={[styles.box, { height }]}
       onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
       onStartShouldSetResponderCapture={startCapture}
       onMoveShouldSetResponderCapture={moveCapture}
