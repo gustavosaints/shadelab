@@ -129,7 +129,8 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   5x) e, aproximado, arrasto com um dedo; selo "tocar para 1x". A tela agora é foto FIXA no topo (planejamento,
   delimitar boca, antes e depois ou a animação de geração) ocupando METADE da área da tela (`photoH`; SmileMap e MouthEditor recortam na proporção da caixa) e as opções
   rolam embaixo. `SmileGenerating` preenche a caixa do pai.
-  ALÇAS NA SILHUETA (2026-10-22, vídeo do SmileCloud que ele mandou): os botões do arco saíram; `SmileMap` desenha
+  ALÇAS NA SILHUETA (2026-10-22, vídeo do SmileCloud que ele mandou): os botões do arco saíram; arrastar com um dedo
+  em cima dos dentes (`ArchBody`) move o conjunto inteiro e um toque rápido escolhe o dente; `SmileMap` desenha
   alças (`archHandles`): ✥ em cima no meio move o arco (dx/dy mm), colchetes ciano nas pontas = "curva distal"
   (para os lados abre/fecha o arco — `open`, largura aparente de canino/pré-molares, corredor bucal; para cima/baixo
   muda a curva do sorriso — `curveMm`), barras brancas embaixo nas pontas = largura (`centralMm`). Lógica pura em

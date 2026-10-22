@@ -196,8 +196,7 @@ export function SmileMap({ photo, height, teeth, status, shapeMix, texture, sele
                 const y = t.y - 5 / z;
                 const sel = selected === t.fdi;
                 return (
-                  <G key={`lbl-${t.fdi}`} onPress={() => onSelect(t.fdi)}>
-                    <Rect x={t.x} y={t.y - 16 / z} width={t.w} height={t.h + 16 / z} fill="rgba(0,0,0,0.001)" />
+                  <G key={`lbl-${t.fdi}`}>
                     {shapeMix === null && <Ellipse cx={cx} cy={t.y + t.h * 0.55} rx={2.2 / z} ry={2.2 / z} fill="#FFFFFF" opacity={0.85} />}
                     <SvgText x={cx} y={y} fontSize={10 / z} fontWeight="700" textAnchor="middle" stroke="rgba(0,0,0,0.55)" strokeWidth={3 / z} fill="none">
                       {t.fdi}
@@ -210,6 +209,7 @@ export function SmileMap({ photo, height, teeth, status, shapeMix, texture, sele
               })}
             </Svg>
           )}
+          {view.length > 0 && <ArchBody view={view} z={z} scale={s * z} onDrag={onArchDrag} onTap={onSelect} />}
           {onArchDrag && view.length > 0 && archHandles(view, s * z, z, onArchDrag)}
         </View>
       )}
@@ -316,6 +316,72 @@ function Handle({
 }
 
 const HANDLE_HIT = 40;
+
+/**
+ * Área dos dentes (pedido do Gustavo, 2026-10-22): arrastar com um dedo em cima das silhuetas move o conjunto
+ * inteiro; um toque rápido seleciona o dente tocado. Dois dedos ficam com a pinça (zoom) da foto.
+ */
+function ArchBody({
+  view,
+  z,
+  scale,
+  onDrag,
+  onTap,
+}: {
+  view: MappedTooth[];
+  z: number;
+  scale: number;
+  onDrag?: Props['onArchDrag'];
+  onTap: (fdi: Fdi) => void;
+}) {
+  const start = useRef<{ x: number; y: number; lx: number; moving: boolean } | null>(null);
+  const pad = 14 / z;
+  const x0 = Math.min(...view.map((t) => t.x)) - pad;
+  const x1 = Math.max(...view.map((t) => t.x + t.w)) + pad;
+  const y0 = Math.min(...view.map((t) => t.y)) - pad;
+  const y1 = Math.max(...view.map((t) => t.y + t.h)) + pad;
+  const delta = (e: GestureResponderEvent) => {
+    const st = start.current!;
+    return [(e.nativeEvent.pageX - st.x) / scale, (e.nativeEvent.pageY - st.y) / scale] as const;
+  };
+  const finish = (e: GestureResponderEvent, cancelled: boolean) => {
+    const st = start.current;
+    start.current = null;
+    if (!st) return;
+    if (st.moving) onDrag?.('move', ...delta(e), 'end');
+    else if (!cancelled) {
+      // toque: o dente debaixo do dedo (ou o mais próximo na horizontal)
+      const x = x0 + st.lx;
+      const hit = view.reduce((b, t) => (Math.abs(t.x + t.w / 2 - x) < Math.abs(b.x + b.w / 2 - x) ? t : b), view[0]);
+      onTap(hit.fdi);
+    }
+  };
+  return (
+    <View
+      style={{ position: 'absolute', left: x0, top: y0, width: x1 - x0, height: y1 - y0 }}
+      onStartShouldSetResponder={(e) => (e.nativeEvent.touches?.length ?? 1) < 2}
+      onMoveShouldSetResponder={() => false}
+      onResponderTerminationRequest={(e) => (e.nativeEvent.touches?.length ?? 0) >= 2}
+      onResponderGrant={(e) => {
+        start.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY, lx: e.nativeEvent.locationX, moving: false };
+      }}
+      onResponderMove={(e) => {
+        const st = start.current;
+        if (!st || !onDrag) return;
+        const [dx, dy] = delta(e);
+        if (!st.moving) {
+          if (Math.hypot(dx * scale, dy * scale) < 6) return;
+          st.moving = true;
+          onDrag('move', 0, 0, 'start');
+        }
+        onDrag('move', dx, dy, 'move');
+      }}
+      onResponderRelease={(e) => finish(e, false)}
+      onResponderTerminate={(e) => finish(e, true)}
+      accessibilityLabel="Dentes: arraste para mover o conjunto, toque para escolher um dente"
+    />
+  );
+}
 
 function MoveIcon() {
   return (

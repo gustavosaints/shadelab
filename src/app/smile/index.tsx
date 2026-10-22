@@ -561,7 +561,7 @@ export default function SmileDesign() {
                 <Chip label="Proporção áurea" selected={arch.golden} onPress={() => changeArch({ golden: true })} />
               </View>
               <Muted>
-                {`Ajuste direto na foto: ✥ no meio, em cima, move o arco · colchetes ciano nas pontas: para os lados abre ou fecha o arco, para cima ou para baixo muda a curva do sorriso · barras brancas embaixo, nas pontas: largura dos dentes.${
+                {`Ajuste direto na foto: arraste os dentes (ou o ✥ em cima) para mover o conjunto inteiro · colchetes ciano nas pontas: para os lados abre ou fecha o arco, para cima ou para baixo muda a curva do sorriso · barras brancas embaixo, nas pontas: largura dos dentes.${
                   arch.golden ? ' Proporção áurea: central 1,618 : lateral 1 : canino 0,618, mantida na largura.' : ''
                 }`}
               </Muted>
