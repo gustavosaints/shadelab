@@ -110,6 +110,12 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
 - Histórico (já descartado, não refazer): sprites das anatomias do exocad, arco 3D ao vivo com three.js, biblioteca
   2D recortada de imagem e editor manual de contornos — o Gustavo achou todos "sem forma" ou difíceis de usar; o
   realismo que ele quer é o de IA guiada (ver `docs/smilecloud-estudo.md` e `docs/smilefy-estudo.md`).
+- CASOS (2026-10-22, pedido do Gustavo): `app/cases/index.tsx` com duas abas (Tomada de cor / Smile Design, com
+  contagem). Na aba de cor: `components/SwipeRow.tsx` (responder do View, regras puras em `lib/swipe.ts`) — arrastar
+  para a direita envia o PDF (`lib/report/shareShadeCase.ts`, o mesmo do detalhe), para a esquerda exclui com
+  "Tem certeza…?"; "Selecionar" no cabeçalho (ou toque longo) marca casos, com "Selecionar todos" e "Excluir /
+  Excluir todos" (`deleteCases`). A aba de Smile Design ainda é só a lista (ele pediu os gestos só na de cor, "por
+  enquanto").
 - `src/lib/storage/` AsyncStorage: `settings.ts` e `cases.ts` (`ShadeCase` | `SmileCase`, fotos copiadas para
   `Paths.document/cases`).
 - `src/components/` `Marker` (quadro de amostra), `BeforeAfter`, `AiConfig`, `FaceLandmarker` (MediaPipe invisível), etc.

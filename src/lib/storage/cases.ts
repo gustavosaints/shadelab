@@ -125,10 +125,16 @@ export async function saveCase(c: AnyCase): Promise<void> {
 }
 
 export async function deleteCase(id: string): Promise<void> {
+  await deleteCases([id]);
+}
+
+/** Exclui vários casos de uma vez (e as fotos deles). */
+export async function deleteCases(ids: string[]): Promise<void> {
+  const gone = new Set(ids);
   const list = await listCases();
-  const target = list.find((c) => c.id === id);
-  await AsyncStorage.setItem(KEY, JSON.stringify(list.filter((c) => c.id !== id)));
-  if (target && Platform.OS !== 'web') {
+  await AsyncStorage.setItem(KEY, JSON.stringify(list.filter((c) => !gone.has(c.id))));
+  if (Platform.OS === 'web') return;
+  for (const target of list.filter((c) => gone.has(c.id))) {
     const uris = [target.photoUri, isSmileCase(target) ? target.renderedUri : undefined];
     for (const uri of uris) {
       if (!uri) continue;

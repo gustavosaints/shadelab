@@ -1,4 +1,3 @@
-import * as Print from 'expo-print';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useEffect, useState } from 'react';
@@ -11,8 +10,7 @@ import { ShadeRow } from '@/components/ShadeRow';
 import { findShade, getSystem } from '@/lib/color/shades';
 import { deleteCase, getCase, isSmileCase, type AnyCase, type ShadeCase, type SmileCase } from '@/lib/storage/cases';
 import { findGingiva } from '@/lib/color/gingiva';
-import { buildShadeReportHtml } from '@/lib/report/shadeReport';
-import { loadSettings } from '@/lib/storage/settings';
+import { shareShadeCasePdf } from '@/lib/report/shareShadeCase';
 import { colors, radius, spacing } from '@/theme';
 
 export default function CaseDetail() {
@@ -102,24 +100,10 @@ function SmileDetail({ c }: { c: SmileCase }) {
 }
 
 function ShadeDetail({ c }: { c: ShadeCase }) {
-
   const system = getSystem(c.shadeSystem);
   const best = c.matches[0];
 
-  const exportPdf = async () => {
-    try {
-      const s = await loadSettings();
-      const html = await buildShadeReportHtml(c, s);
-      const { uri } = await Print.printToFileAsync({ html });
-      if (Platform.OS !== 'web' && (await Sharing.isAvailableAsync())) {
-        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf' });
-      } else {
-        Alert.alert('PDF gerado', uri);
-      }
-    } catch (e) {
-      Alert.alert('Erro ao exportar', String(e));
-    }
-  };
+  const exportPdf = () => shareShadeCasePdf(c);
 
   const remove = () =>
     Alert.alert('Excluir caso', 'Essa ação não pode ser desfeita.', [
