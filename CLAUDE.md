@@ -28,6 +28,12 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   LOCAL: `lib/auth.ts` grava usuário, sal e SHA-256 da senha no expo-secure-store (sem servidor, sem recuperação de
   senha; trocar senha e Sair em Configurações). As rotas ficam sempre montadas e a tela de acesso é uma camada por
   cima, para não perder o que estava aberto ao bloquear. Tela inicial sem cabeçalho: logo no topo e cartões pastel.
+  FACE ID (2026-10-22): `lib/biometric.ts` (expo-local-authentication) é só um atalho para o login local. Se o
+  aparelho tem biometria cadastrada, depois do 1º login com senha um Alert oferece "Usar Face ID?" (preferência
+  `cypris.auth.biometric` on/off no AsyncStorage); ligado, a tela de login pede o Face ID ao abrir e mostra o botão
+  "Entrar com Face ID" (cancelar volta para a senha). Liga/desliga em Configurações › Acesso (ligar pede o Face ID
+  antes). `faceIDPermission` no plugin do app.json; no Expo Go o iOS pode recusar (`missing_usage_description`)
+  e o app mostra uma mensagem pedindo a senha — no app instalado (EAS) funciona.
 
 - `src/app/` telas (Expo Router): `index` (início), `shade/capture` (câmera), `shade/analyze` (marcadores, análise, salvar
   caso ou calibração), `cases/` (lista e detalhe), `settings` (escala, calibração), `smile/index` (Smile Design por IA).

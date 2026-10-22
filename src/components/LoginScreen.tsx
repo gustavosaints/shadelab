@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/Button';
 import { Logo } from '@/components/Logo';
 import { checkLogin, createAccount } from '@/lib/auth';
 import { useAuth } from '@/lib/AuthContext';
+import { authenticateBiometric, biometricInfo, getBiometricPref, setBiometricPref, type BiometricInfo } from '@/lib/biometric';
 import { colors, fonts, radius, spacing } from '@/theme';
 
 /** Tela de acesso: cria usuário e senha no primeiro uso; depois, pede o login. Fica por cima de todo o app. */
@@ -18,6 +19,46 @@ export function LoginScreen() {
   const [show, setShow] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Face ID / digital: `bio` só existe quando o aparelho tem biometria cadastrada; `bioOn` = a pessoa escolheu usar
+  const [bio, setBio] = useState<BiometricInfo | null>(null);
+  const [bioOn, setBioOn] = useState(false);
+  const autoAsked = useRef(false);
+
+  const tryBiometric = async (info: BiometricInfo) => {
+    if (!savedUser) return;
+    setError(null);
+    const r = await authenticateBiometric(info.label);
+    if (r.ok) unlock(savedUser);
+    else if (r.message) setError(r.message);
+  };
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const [info, pref] = await Promise.all([biometricInfo(), getBiometricPref()]);
+      if (!alive || !info.available) return;
+      setBio(info);
+      setBioOn(pref === 'on');
+      // ao abrir a tela de login, já pede o Face ID uma vez (se cancelar, fica a senha)
+      if (!setup && pref === 'on' && !autoAsked.current) {
+        autoAsked.current = true;
+        tryBiometric(info);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setup]);
+
+  /** Depois do 1º login com senha, oferece o Face ID (uma vez; dá para mudar em Configurações). */
+  const offerBiometric = async () => {
+    if (!bio || (await getBiometricPref()) !== null) return;
+    Alert.alert(`Usar ${bio.label}?`, `Nas próximas vezes você pode entrar no Cypris Smile com o ${bio.label}, sem digitar a senha.`, [
+      { text: 'Agora não', style: 'cancel', onPress: () => setBiometricPref('off') },
+      { text: `Usar ${bio.label}`, onPress: () => setBiometricPref('on') },
+    ]);
+  };
 
   const submit = async () => {
     setBusy(true);
@@ -26,8 +67,10 @@ export function LoginScreen() {
       if (setup) {
         const name = await createAccount(user, password, confirm);
         unlock(name);
+        offerBiometric();
       } else if (await checkLogin(user, password)) {
         unlock(user.trim().toLowerCase());
+        offerBiometric();
       } else {
         setError('Usuário ou senha incorretos.');
         setPassword('');
@@ -103,6 +146,11 @@ export function LoginScreen() {
           )}
           {error && <Text style={styles.error}>{error}</Text>}
           <Button title={setup ? 'Criar acesso e entrar' : 'Entrar'} onPress={submit} loading={busy} style={{ marginTop: spacing.md }} />
+          {!setup && bio && bioOn && (
+            <Pressable onPress={() => tryBiometric(bio)} style={styles.bioBtn} accessibilityRole="button">
+              <Text style={styles.bioText}>Entrar com {bio.label}</Text>
+            </Pressable>
+          )}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -139,4 +187,14 @@ const styles = StyleSheet.create({
   showBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 6 },
   showText: { color: colors.primary, fontFamily: fonts.medium, fontSize: 14 },
   error: { color: colors.danger, fontSize: 14, marginTop: spacing.sm },
+  bioBtn: {
+    marginTop: spacing.sm,
+    minHeight: 48,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.rose,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bioText: { color: colors.primaryDark, fontFamily: fonts.medium, fontSize: 16 },
 });

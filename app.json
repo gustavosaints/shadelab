@@ -57,7 +57,13 @@
       "expo-asset",
       "expo-font",
       "expo-secure-store",
-      "expo-splash-screen"
+      "expo-splash-screen",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "O Cypris Smile usa o Face ID para você entrar sem digitar a senha."
+        }
+      ]
     ]
   }
 }

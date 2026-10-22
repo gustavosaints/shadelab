@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { Button } from '@/components/Button';
 import { Card, Muted, SectionTitle } from '@/components/Card';
 import { Chip } from '@/components/Chip';
@@ -9,6 +9,7 @@ import { GINGIVA_SYSTEM } from '@/lib/color/gingiva';
 import { getSystem, SHADE_SYSTEMS, type ShadeSystemId } from '@/lib/color/shades';
 import { changePassword } from '@/lib/auth';
 import { useAuth } from '@/lib/AuthContext';
+import { authenticateBiometric, biometricInfo, getBiometricPref, setBiometricPref, type BiometricInfo } from '@/lib/biometric';
 import { clearCalibration, clearGingivaCalibration, saveSettings } from '@/lib/storage/settings';
 import { useSettings } from '@/lib/useSettings';
 import { colors, radius, spacing } from '@/theme';
@@ -31,6 +32,29 @@ export default function Settings() {
     } catch (e) {
       Alert.alert('Não foi possível trocar', String((e as Error).message ?? e));
     }
+  };
+  // Face ID / digital: só aparece se o aparelho tiver biometria cadastrada
+  const [bio, setBio] = useState<BiometricInfo | null>(null);
+  const [bioOn, setBioOn] = useState(false);
+  useEffect(() => {
+    Promise.all([biometricInfo(), getBiometricPref()]).then(([info, pref]) => {
+      if (!info.available) return;
+      setBio(info);
+      setBioOn(pref === 'on');
+    });
+  }, []);
+  const toggleBio = async (on: boolean) => {
+    if (!bio) return;
+    if (on) {
+      // confirma que é a pessoa antes de ligar
+      const r = await authenticateBiometric(bio.label);
+      if (!r.ok) {
+        if (r.message) Alert.alert(bio.label, r.message);
+        return;
+      }
+    }
+    await setBiometricPref(on ? 'on' : 'off');
+    setBioOn(on);
   };
   const [clinic, setClinic] = useState<string | null>(null);
   const [dentist, setDentist] = useState<string | null>(null);
@@ -162,6 +186,12 @@ export default function Settings() {
       <Card>
         <SectionTitle>Acesso</SectionTitle>
         <Muted>{`Usuário: ${user ?? '—'}. O app pede a senha sempre que abre e quando volta de mais de 5 minutos em segundo plano.`}</Muted>
+        {bio && (
+          <View style={styles.bioRow}>
+            <Text style={styles.bioLabel}>Entrar com {bio.label}</Text>
+            <Switch value={bioOn} onValueChange={toggleBio} trackColor={{ true: colors.rose }} accessibilityLabel={`Entrar com ${bio.label}`} />
+          </View>
+        )}
         {pwOpen && (
           <View style={{ marginTop: 10 }}>
             <TextInput placeholder="Senha atual" value={pwCurrent} onChangeText={setPwCurrent} secureTextEntry style={styles.input} placeholderTextColor={colors.muted} />
@@ -198,6 +228,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: '#FBFCFE',
   },
+  bioRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, minHeight: 44 },
+  bioLabel: { color: colors.text, fontSize: 15 },
   tabDone: { borderColor: colors.accent, backgroundColor: '#F0FBF7' },
   tabSwatch: { width: 36, height: 36, borderRadius: 6, borderWidth: 1, borderColor: colors.border },
   tabId: { fontWeight: '700', color: colors.text, marginTop: 4 },
