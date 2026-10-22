@@ -2,7 +2,7 @@ import { useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View, type GestureResponderEvent } from 'react-native';
 import Svg, { ClipPath, Defs, Ellipse, G, Line, LinearGradient, Path, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import type { TextureId } from '@/lib/ai/prompt';
-import { silhouette, TEXTURE_TEETH, type Fdi, type MappedTooth } from '@/lib/smile/mapping';
+import { silhouette, TEXTURE_TEETH, type ArchHandle, type Fdi, type MappedTooth } from '@/lib/smile/mapping';
 import { fonts, radius } from '@/theme';
 
 type Photo = { uri: string; width: number; height: number };
@@ -21,7 +21,13 @@ type Props = {
   texture: TextureId | null;
   selected: Fdi | 'all';
   onSelect: (fdi: Fdi) => void;
+  /** Alças do arco na foto (mover, largura, abrir/fechar + curva). dx/dy: total desde o toque, em px da foto. */
+  onArchDrag?: (handle: ArchHandle, dx: number, dy: number, phase: 'start' | 'move' | 'end') => void;
+  /** Texto mostrado no canto enquanto arrasta uma alça (ex.: "abertura +40 %"). */
+  hint?: string | null;
 };
+
+const CYAN = '#4FD1C5';
 
 const GLOW = '#F3C9BE';
 
@@ -31,7 +37,7 @@ const GLOW = '#F3C9BE';
  * com uma textura escolhida, uma prévia transparente dela aparece nos incisivos 12, 11, 21 e 22. Tocar num dente
  * seleciona para ajustar só ele. Pinça aproxima (até 5x) e, aproximada, um dedo arrasta a vista.
  */
-export function SmileMap({ photo, height, teeth, frame, status, shapeMix, texture, selected, onSelect }: Props) {
+export function SmileMap({ photo, height, teeth, frame, status, shapeMix, texture, selected, onSelect, onArchDrag, hint }: Props) {
   const [width, setWidth] = useState(0);
   const [zoom, setZoom] = useState({ scale: 1, tx: 0, ty: 0 });
   const gesture = useRef<{ x: number; y: number; dist: number; scale: number; tx: number; ty: number; pinch: boolean } | null>(null);
@@ -197,6 +203,7 @@ export function SmileMap({ photo, height, teeth, frame, status, shapeMix, textur
               })}
             </Svg>
           )}
+          {onArchDrag && view.length > 0 && archHandles(view, s * zoom.scale, onArchDrag)}
         </View>
       )}
       {width > 0 && (
@@ -206,6 +213,11 @@ export function SmileMap({ photo, height, teeth, frame, status, shapeMix, textur
               <Text style={styles.zoomText}>{`${zoom.scale.toFixed(1)}x · tocar para 1x`}</Text>
             </Pressable>
           )}
+          {hint ? (
+            <View style={styles.hint} pointerEvents="none">
+              <Text style={styles.hintText}>{hint}</Text>
+            </View>
+          ) : null}
           {status !== 'ok' && (
             <View style={styles.badge}>
               {status === 'detecting' && <ActivityIndicator size="small" color="#FFFFFF" />}
@@ -215,6 +227,82 @@ export function SmileMap({ photo, height, teeth, frame, status, shapeMix, textur
         </>
       )}
     </View>
+  );
+}
+
+/**
+ * Alças do arco (estilo SmileCloud): círculo no meio, em cima, move o arco; colchetes ciano nas pontas abrem/fecham
+ * o arco (para os lados) e mudam a curva do sorriso (para cima/baixo); barras brancas nas laterais mudam a largura.
+ * `scale` converte px de tela em px da foto.
+ */
+function archHandles(view: MappedTooth[], scale: number, onDrag: NonNullable<Props['onArchDrag']>): ReactNode {
+  const x0 = Math.min(...view.map((t) => t.x));
+  const x1 = Math.max(...view.map((t) => t.x + t.w));
+  const top = Math.min(...view.map((t) => t.y));
+  const bottom = Math.max(...view.map((t) => t.y + t.h));
+  const mid = view.find((t) => t.fdi === '11' || t.fdi === '21');
+  const midX = mid ? (mid.fdi === '11' ? mid.x + mid.w : mid.x) : (x0 + x1) / 2;
+  const items: { key: ArchHandle; x: number; y: number; body: ReactNode; label: string }[] = [
+    { key: 'move', x: midX, y: top - 20, body: <MoveIcon />, label: 'Mover o arco' },
+    { key: 'distalL', x: x0 - 4, y: top - 4, body: <Bracket side="L" />, label: 'Abrir ou fechar o arco e mudar a curva do sorriso' },
+    { key: 'distalR', x: x1 + 4, y: top - 4, body: <Bracket side="R" />, label: 'Abrir ou fechar o arco e mudar a curva do sorriso' },
+    { key: 'widthL', x: x0 - 14, y: bottom, body: <View style={styles.widthBar} />, label: 'Largura do arco' },
+    { key: 'widthR', x: x1 + 14, y: bottom, body: <View style={styles.widthBar} />, label: 'Largura do arco' },
+  ];
+  return items.map((h) => <Handle key={h.key} handle={h.key} x={h.x} y={h.y} scale={scale} onDrag={onDrag} label={h.label}>{h.body}</Handle>);
+}
+
+function Handle({ handle, x, y, scale, onDrag, label, children }: { handle: ArchHandle; x: number; y: number; scale: number; onDrag: NonNullable<Props['onArchDrag']>; label: string; children: ReactNode }) {
+  const start = useRef<{ x: number; y: number } | null>(null);
+  const delta = (e: GestureResponderEvent) => {
+    const st = start.current ?? { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
+    return [(e.nativeEvent.pageX - st.x) / scale, (e.nativeEvent.pageY - st.y) / scale] as const;
+  };
+  return (
+    <View
+      style={[styles.handle, { left: x - HANDLE_HIT / 2, top: y - HANDLE_HIT / 2 }]}
+      onStartShouldSetResponder={() => true}
+      onMoveShouldSetResponder={() => true}
+      onResponderTerminationRequest={() => false}
+      onResponderGrant={(e) => {
+        start.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
+        onDrag(handle, 0, 0, 'start');
+      }}
+      onResponderMove={(e) => onDrag(handle, ...delta(e), 'move')}
+      onResponderRelease={(e) => {
+        onDrag(handle, ...delta(e), 'end');
+        start.current = null;
+      }}
+      onResponderTerminate={(e) => {
+        onDrag(handle, ...delta(e), 'end');
+        start.current = null;
+      }}
+      accessibilityRole="adjustable"
+      accessibilityLabel={label}
+    >
+      {children}
+    </View>
+  );
+}
+
+const HANDLE_HIT = 40;
+
+function MoveIcon() {
+  return (
+    <Svg width={24} height={24} viewBox="0 0 24 24">
+      <Rect x={1} y={1} width={22} height={22} rx={11} fill="rgba(31,34,43,0.7)" stroke="#FFFFFF" strokeWidth={1.4} />
+      <Path d="M12 5 L14.5 8 H9.5 Z M12 19 L9.5 16 H14.5 Z M5 12 L8 9.5 V14.5 Z M19 12 L16 14.5 V9.5 Z" fill="#FFFFFF" />
+    </Svg>
+  );
+}
+
+function Bracket({ side }: { side: 'L' | 'R' }) {
+  const d = side === 'L' ? 'M5 17 V5 H17' : 'M5 5 H17 V17';
+  return (
+    <Svg width={22} height={22} viewBox="0 0 22 22">
+      <Path d={d} stroke="rgba(0,0,0,0.45)" strokeWidth={6} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <Path d={d} stroke={CYAN} strokeWidth={3.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
   );
 }
 
@@ -283,6 +371,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: 'rgba(31,34,43,0.85)',
   },
+  handle: { position: 'absolute', width: HANDLE_HIT, height: HANDLE_HIT, alignItems: 'center', justifyContent: 'center' },
+  widthBar: { width: 6, height: 24, borderRadius: 3, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'rgba(0,0,0,0.35)' },
+  hint: { position: 'absolute', top: 8, left: 8, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, backgroundColor: 'rgba(31,34,43,0.8)' },
+  hintText: { color: '#FFFFFF', fontFamily: fonts.medium, fontSize: 12 },
   zoomBadge: { position: 'absolute', top: 8, right: 8, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, backgroundColor: 'rgba(31,34,43,0.75)' },
   zoomText: { color: '#FFFFFF', fontFamily: fonts.medium, fontSize: 11 },
   badgeText: { color: '#FFFFFF', fontFamily: fonts.regular, fontSize: 13, textAlign: 'center', flexShrink: 1 },

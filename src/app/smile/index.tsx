@@ -34,13 +34,13 @@ import { getSystem } from '@/lib/color/shades';
 import { detectFace, fitTeethToPhoto } from '@/lib/face/detect';
 import {
   applyLength,
-  ARCH_MOVE_STEP_MM,
-  ARCH_WIDTH_STEP_MM,
   archTeeth,
   bumpLength,
   clampArch,
   DEFAULT_ARCH,
   describeArch,
+  dragArch,
+  isDefaultArch,
   commonLength,
   describeLengths,
   LENGTH_STEP_MM,
@@ -50,6 +50,7 @@ import {
   mirrorLabels,
   plausibleFit,
   type ArchEdit,
+  type ArchHandle,
   type Fdi,
   type LengthEdit,
   type LengthEdits,
@@ -87,6 +88,9 @@ export default function SmileDesign() {
   const [mapStatus, setMapStatus] = useState<MapStatus>('detecting');
   const [lengths, setLengths] = useState<LengthEdits>({});
   const [arch, setArch] = useState<ArchEdit>(DEFAULT_ARCH);
+  // arrasto das alças do arco na foto: arco no começo do arrasto e o texto mostrado enquanto arrasta
+  const dragFrom = useRef<ArchEdit | null>(null);
+  const [dragHint, setDragHint] = useState<string | null>(null);
   const [target, setTarget] = useState<Fdi | 'all'>('all');
   const [view, setView] = useState<'plan' | 'compare'>('plan');
   // contorno da boca (do detector ou marcado à mão) e o rascunho enquanto delimita
@@ -302,6 +306,29 @@ export default function SmileDesign() {
     setArch((cur) => clampArch({ ...cur, ...next }));
     setView('plan');
   };
+  const fmt1 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const archHint = (h: ArchHandle, a: ArchEdit) =>
+    h === 'move'
+      ? `linha média ${fmt1(a.dxMm)} mm · altura ${fmt1(a.dyMm)} mm`
+      : h.startsWith('width')
+        ? `central ${fmt1(a.centralMm)} mm`
+        : `${a.open >= 0 ? 'abertura' : 'fechamento'} ${Math.round(Math.abs(a.open) * 100)} % · curva ${fmt1(a.curveMm)} mm`;
+  const onArchDrag = (h: ArchHandle, dx: number, dy: number, phase: 'start' | 'move' | 'end') => {
+    if (phase === 'start') {
+      dragFrom.current = arch;
+      setDragHint(archHint(h, arch));
+      return;
+    }
+    if (!map || !dragFrom.current) return;
+    const xs = planTeeth.map((t) => t.x);
+    const archW = Math.max(...planTeeth.map((t) => t.x + t.w)) - Math.min(...xs);
+    const next = dragArch(dragFrom.current, h, dx, dy, map.pxPerMm, archW);
+    setArch(next);
+    if (phase === 'end') {
+      dragFrom.current = null;
+      setDragHint(null);
+    } else setDragHint(archHint(h, next));
+  };
   const pick = (next: Partial<Choice>) => {
     setChoice({ ...choice, ...next });
     setView('plan');
@@ -410,6 +437,8 @@ export default function SmileDesign() {
               texture={choice.texture}
               selected={target}
               onSelect={(fdi) => setTarget(target === fdi ? 'all' : fdi)}
+              onArchDrag={map ? onArchDrag : undefined}
+              hint={dragHint}
             />
           )}
           {generating && <SmileGenerating photoUri={photo.uri} steps={genSteps} resultUri={pending?.uri} onDone={finishReveal} />}
@@ -492,36 +521,12 @@ export default function SmileDesign() {
                 <Chip label="Proporção natural" selected={!arch.golden} onPress={() => changeArch({ golden: false })} />
                 <Chip label="Proporção áurea" selected={arch.golden} onPress={() => changeArch({ golden: true })} />
               </View>
-              <View style={styles.stepRow}>
-                <Text style={styles.stepLabel}>Largura</Text>
-                <Pressable onPress={() => changeArch({ centralMm: arch.centralMm - ARCH_WIDTH_STEP_MM })} style={styles.stepBtn} accessibilityRole="button" accessibilityLabel="Fechar o arco">
-                  <Text style={styles.stepBtnText}>−</Text>
-                </Pressable>
-                <Text style={styles.stepValue}>{`central ${arch.centralMm.toLocaleString('pt-BR', { minimumFractionDigits: 1 })} mm`}</Text>
-                <Pressable onPress={() => changeArch({ centralMm: arch.centralMm + ARCH_WIDTH_STEP_MM })} style={styles.stepBtn} accessibilityRole="button" accessibilityLabel="Abrir o arco">
-                  <Text style={styles.stepBtnText}>+</Text>
-                </Pressable>
-              </View>
-              <View style={styles.stepRow}>
-                <Text style={styles.stepLabel}>Altura</Text>
-                <Pressable onPress={() => changeArch({ dyMm: arch.dyMm - ARCH_MOVE_STEP_MM })} style={styles.stepBtn} accessibilityRole="button" accessibilityLabel="Subir o arco">
-                  <Text style={styles.stepBtnText}>↑</Text>
-                </Pressable>
-                <Text style={styles.stepValue}>
-                  {arch.dyMm === 0 ? 'no lugar' : `${Math.abs(arch.dyMm).toLocaleString('pt-BR', { minimumFractionDigits: 1 })} mm ${arch.dyMm > 0 ? 'abaixo' : 'acima'}`}
-                </Text>
-                <Pressable onPress={() => changeArch({ dyMm: arch.dyMm + ARCH_MOVE_STEP_MM })} style={styles.stepBtn} accessibilityRole="button" accessibilityLabel="Descer o arco">
-                  <Text style={styles.stepBtnText}>↓</Text>
-                </Pressable>
-              </View>
               <Muted>
-                {arch.golden
-                  ? 'Proporção áurea: central 1,618 : lateral 1 : canino 0,618, mantida ao fechar ou abrir o arco.'
-                  : '− fecha e + abre o arco (todas as larguras juntas); ↑ ↓ sobe e desce o arco inteiro.'}
+                {`Ajuste direto na foto: ✥ no meio, em cima, move o arco · colchetes ciano nas pontas: para os lados abre ou fecha o arco, para cima ou para baixo muda a curva do sorriso · barras brancas embaixo, nas pontas: largura dos dentes.${
+                  arch.golden ? ' Proporção áurea: central 1,618 : lateral 1 : canino 0,618, mantida na largura.' : ''
+                }`}
               </Muted>
-              {(arch.golden || arch.centralMm !== DEFAULT_ARCH.centralMm || arch.dyMm !== 0) && (
-                <Button title="Zerar arco" variant="ghost" onPress={() => changeArch(DEFAULT_ARCH)} />
-              )}
+              {!isDefaultArch(arch) && <Button title="Zerar arco" variant="ghost" onPress={() => changeArch(DEFAULT_ARCH)} />}
 
               <Text style={styles.subTitle}>Tamanho</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>

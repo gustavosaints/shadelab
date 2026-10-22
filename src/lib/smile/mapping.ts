@@ -2,7 +2,8 @@
  * Mapeamento dos dentes 15 a 25 na foto do sorriso e as silhuetas da forma escolhida (pedido do Gustavo,
  * 2026-10-22): o dentista vê sobre os próprios dentes do paciente como fica a forma quadrada, arredondada ou
  * triangular antes de gerar com a IA, e pode alongar/encurtar cada dente (ou todos) pela incisal e pela cervical.
- * O arco inteiro pode fechar/abrir (largura dos dentes), subir/descer e seguir a proporção áurea.
+ * O arco inteiro é ajustado direto na silhueta (como no SmileCloud): mover, largura, abrir/fechar (corredor
+ * bucal: dentes de trás mais largos ou mais estreitos) e curva do sorriso; e pode seguir a proporção áurea.
  *
  * Geometria em PIXELS DA FOTO. A base vem do encaixe automático (`autofit`, pela boca detectada) ou, sem ele, só
  * da largura da boca. Os contornos reaproveitam `toothPath` de `teeth.ts` (pré-molares usam o contorno do canino).
@@ -46,11 +47,16 @@ export type MappedTooth = { fdi: Fdi; kind: MapKind; outline: ToothKind; side: S
 export type MapBase = { midX: number; gumY: number; centralW: number; heightRatio: number; widthScale: Partial<Record<Fdi, number>> };
 export type ToothMap = { base: MapBase; pxPerMm: number; source: 'autofit' | 'boca'; /** selfie: números trocados de lado */ mirrored: boolean };
 
-/** Ajuste do arco inteiro: largura do central (mm, fecha/abre o arco), posição vertical (mm, + desce) e áurea. */
-export type ArchEdit = { centralMm: number; dyMm: number; golden: boolean };
-export const DEFAULT_ARCH: ArchEdit = { centralMm: 8.5, dyMm: 0, golden: false };
-export const ARCH_WIDTH_STEP_MM = 0.25;
-export const ARCH_MOVE_STEP_MM = 0.5;
+/**
+ * Ajuste do arco inteiro: largura do central (mm, escala todas as larguras), deslocamento (mm; dx + = para a
+ * direita da foto, dy + = desce), abertura (−1 fechado … 1 aberto: largura aparente de caninos e pré-molares, o
+ * corredor bucal), curva (mm que os pré-molares sobem; + = sorriso mais convexo) e proporção áurea.
+ */
+export type ArchEdit = { centralMm: number; dxMm: number; dyMm: number; open: number; curveMm: number; golden: boolean };
+export const DEFAULT_ARCH: ArchEdit = { centralMm: 8.5, dxMm: 0, dyMm: 0, open: 0, curveMm: 0, golden: false };
+/** Quanto cada dente responde à abertura (largura) e à curva (subida), do central ao 2º pré-molar. */
+const OPEN_W: Record<MapKind, number> = { central: 0, lateral: 0.08, canine: 0.25, premolar1: 0.38, premolar2: 0.5 };
+const CURVE_Y: Record<MapKind, number> = { central: 0, lateral: 0.12, canine: 0.35, premolar1: 0.65, premolar2: 1 };
 
 /** Comprimento extra em mm: incisal positivo = borda desce (alonga); cervical positivo = colo sobe (alonga). */
 export type LengthEdit = { incisal: number; cervical: number };
@@ -71,6 +77,8 @@ export function layoutMapped(
   widthScale: Partial<Record<Fdi, number>> = {},
   widthFactor = 1,
   golden = false,
+  open = 0,
+  curvePx = 0,
 ): MappedTooth[] {
   const ch = centralW * heightRatio;
   const cw = centralW * widthFactor;
@@ -82,9 +90,10 @@ export function layoutMapped(
     ORDER.forEach((kind, k) => {
       const fdi = `${dir < 0 ? 1 : 2}${k + 1}` as Fdi;
       const p = PROFILE[kind];
-      const w = golden ? cw * GOLDEN_W[kind] : cw * p.w * (widthScale[fdi] ?? 1);
+      const ratio = golden ? GOLDEN_W[kind] : p.w * (widthScale[fdi] ?? 1);
+      const w = cw * ratio * (1 + open * OPEN_W[kind]);
       const x = dir > 0 ? edge : edge - w;
-      teeth.push({ fdi, kind, outline: p.outline, side, x, y: gumY + p.top * ch, w, h: ch * p.h });
+      teeth.push({ fdi, kind, outline: p.outline, side, x, y: gumY + p.top * ch - curvePx * CURVE_Y[kind], w, h: ch * p.h });
       edge = dir > 0 ? x + w + gap : x - gap;
     });
   }
@@ -122,18 +131,56 @@ export function mirrorLabels(map: ToothMap): ToothMap {
 /** Os 10 dentes do mapa com o ajuste do arco (sem os comprimentos individuais). */
 export function archTeeth(map: ToothMap, arch: ArchEdit = DEFAULT_ARCH): MappedTooth[] {
   const b = map.base;
-  const teeth = layoutMapped(b.midX, b.gumY + arch.dyMm * map.pxPerMm, b.centralW, b.heightRatio, b.widthScale, arch.centralMm / CENTRAL_WIDTH_MM, arch.golden);
+  const k = map.pxPerMm;
+  const teeth = layoutMapped(
+    b.midX + arch.dxMm * k,
+    b.gumY + arch.dyMm * k,
+    b.centralW,
+    b.heightRatio,
+    b.widthScale,
+    arch.centralMm / CENTRAL_WIDTH_MM,
+    arch.golden,
+    arch.open,
+    arch.curveMm * k,
+  );
   if (!map.mirrored) return teeth;
   return teeth.map((t) => ({ ...t, fdi: `${t.fdi[0] === '1' ? '2' : '1'}${t.fdi[1]}` as Fdi }));
 }
 
 export function clampArch(a: ArchEdit): ArchEdit {
-  const r = (v: number, step: number) => Math.round(v / step) * step;
+  const c = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
   return {
     ...a,
-    centralMm: Math.min(11, Math.max(6.5, r(a.centralMm, ARCH_WIDTH_STEP_MM))),
-    dyMm: Math.min(4, Math.max(-4, r(a.dyMm, ARCH_MOVE_STEP_MM))),
+    centralMm: c(a.centralMm, 6.5, 11),
+    dxMm: c(a.dxMm, -6, 6),
+    dyMm: c(a.dyMm, -6, 6),
+    open: c(a.open, -1, 1),
+    curveMm: c(a.curveMm, -3, 4),
   };
+}
+
+export function isDefaultArch(a: ArchEdit): boolean {
+  return (Object.keys(DEFAULT_ARCH) as (keyof ArchEdit)[]).every((k) => a[k] === DEFAULT_ARCH[k]);
+}
+
+export type ArchHandle = 'move' | 'widthL' | 'widthR' | 'distalL' | 'distalR';
+
+/**
+ * Arrasto de uma alça do arco na foto: `dx`/`dy` = deslocamento total desde o toque (px da foto), `from` = arco no
+ * começo do arrasto, `archW` = largura do arco (px). L/R = alça à esquerda/direita da foto (simétricas).
+ */
+export function dragArch(from: ArchEdit, handle: ArchHandle, dx: number, dy: number, pxPerMm: number, archW: number): ArchEdit {
+  const out = handle.endsWith('L') ? -dx : dx; // para fora do arco = positivo
+  switch (handle) {
+    case 'move':
+      return clampArch({ ...from, dxMm: from.dxMm + dx / pxPerMm, dyMm: from.dyMm + dy / pxPerMm });
+    case 'widthL':
+    case 'widthR':
+      return clampArch({ ...from, centralMm: from.centralMm * (1 + (2 * out) / Math.max(1, archW)) });
+    default:
+      // alça distal: para fora abre o arco (1/4 da largura do arco = do neutro ao máximo); para cima aumenta a curva
+      return clampArch({ ...from, open: from.open + out / Math.max(1, archW * 0.25), curveMm: from.curveMm - dy / pxPerMm });
+  }
 }
 
 /** Descreve o arco planejado para a IA (vazio quando não mudou nada). */
@@ -141,10 +188,20 @@ export function describeArch(a: ArchEdit): string {
   const parts: string[] = [];
   if (a.golden)
     parts.push('use the GOLDEN PROPORTION for the visible tooth widths seen from the front: central incisor 1.618, lateral incisor 1, canine 0.618');
-  if (a.centralMm !== DEFAULT_ARCH.centralMm)
-    parts.push(`make the central incisors about ${a.centralMm.toLocaleString('en-US')} mm wide (${a.centralMm < DEFAULT_ARCH.centralMm ? 'a narrower, more closed arch' : 'a wider, more open arch'}), keeping the width proportions`);
-  if (a.dyMm)
-    parts.push(`move the whole incisal plane about ${Math.abs(a.dyMm).toLocaleString('en-US')} mm ${a.dyMm > 0 ? 'lower (more tooth display)' : 'higher (less tooth display)'}`);
+  if (Math.abs(a.centralMm - DEFAULT_ARCH.centralMm) >= 0.1)
+    parts.push(`make the central incisors about ${a.centralMm.toLocaleString('en-US', { maximumFractionDigits: 1 })} mm wide (${a.centralMm < DEFAULT_ARCH.centralMm ? 'a narrower, more closed arch' : 'a wider, more open arch'}), keeping the width proportions`);
+  const mm = (v: number) => `${Math.abs(v).toLocaleString('en-US', { maximumFractionDigits: 1 })} mm`;
+  if (Math.abs(a.dyMm) >= 0.25)
+    parts.push(`move the whole incisal plane about ${mm(a.dyMm)} ${a.dyMm > 0 ? 'lower (more tooth display)' : 'higher (less tooth display)'}`);
+  if (Math.abs(a.dxMm) >= 0.25) parts.push(`shift the dental midline about ${mm(a.dxMm)} to the ${a.dxMm > 0 ? 'right' : 'left'} side of the image`);
+  if (Math.abs(a.open) >= 0.1)
+    parts.push(
+      a.open > 0
+        ? 'open the arch: broader canines and premolars, filling the buccal corridors'
+        : 'close the arch: narrower-looking canines and premolars, with wider dark buccal corridors',
+    );
+  if (Math.abs(a.curveMm) >= 0.25)
+    parts.push(`${a.curveMm > 0 ? 'a more convex' : 'a flatter'} smile curve (premolars about ${mm(a.curveMm)} ${a.curveMm > 0 ? 'higher' : 'lower'} relative to the central incisors)`);
   return parts.length ? `Arch plan: ${parts.join('; ')}.` : '';
 }
 

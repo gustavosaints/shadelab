@@ -7,6 +7,7 @@ import {
   clampArch,
   DEFAULT_ARCH,
   describeArch,
+  dragArch,
   bumpLength,
   commonLength,
   describeLengths,
@@ -71,12 +72,32 @@ describe('arco: fechar/abrir, subir/descer e proporção áurea', () => {
   });
 
   it('limites e descrição para a IA', () => {
-    expect(clampArch({ centralMm: 20, dyMm: -9, golden: false })).toEqual({ centralMm: 11, dyMm: -4, golden: false });
+    expect(clampArch({ ...DEFAULT_ARCH, centralMm: 20, dyMm: -9, open: 3 })).toEqual({ ...DEFAULT_ARCH, centralMm: 11, dyMm: -6, open: 1 });
     expect(describeArch(DEFAULT_ARCH)).toBe('');
-    const d = describeArch({ centralMm: 8, dyMm: 1, golden: true });
+    const d = describeArch({ ...DEFAULT_ARCH, centralMm: 8, dyMm: 1, golden: true, open: -0.5, curveMm: 1 });
     expect(d).toMatch(/GOLDEN PROPORTION/);
     expect(d).toMatch(/8 mm wide/);
     expect(d).toMatch(/1 mm lower/);
+    expect(d).toMatch(/close the arch/);
+    expect(d).toMatch(/more convex smile curve/);
+  });
+
+  it('alças: mover, largura simétrica e alça distal (abre para fora, curva para cima)', () => {
+    const moved = dragArch(DEFAULT_ARCH, 'move', 20, -10, 10, 600);
+    expect(moved.dxMm).toBeCloseTo(2);
+    expect(moved.dyMm).toBeCloseTo(-1);
+    const wider = dragArch(DEFAULT_ARCH, 'widthL', -30, 0, 10, 600); // esquerda para fora
+    expect(wider.centralMm).toBeCloseTo(8.5 * 1.1);
+    const narrower = dragArch(DEFAULT_ARCH, 'widthR', -30, 0, 10, 600); // direita para dentro
+    expect(narrower.centralMm).toBeCloseTo(8.5 * 0.9);
+    const opened = dragArch(DEFAULT_ARCH, 'distalR', 75, -20, 10, 600);
+    expect(opened.open).toBeCloseTo(0.5);
+    expect(opened.curveMm).toBeCloseTo(2);
+    const base = archTeeth(map);
+    const op = archTeeth(map, opened);
+    expect(get(op, '15').w).toBeGreaterThan(get(base, '15').w);
+    expect(get(op, '11').w).toBeCloseTo(get(base, '11').w);
+    expect(get(op, '15').y).toBeLessThan(get(base, '15').y);
   });
 });
 
