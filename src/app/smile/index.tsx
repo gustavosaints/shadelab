@@ -7,13 +7,14 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Platform, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 import { AiConfig } from '@/components/AiConfig';
 import { BeforeAfter, type CompareMode } from '@/components/BeforeAfter';
 import { Button } from '@/components/Button';
 import { Card, Muted, SectionTitle } from '@/components/Card';
 import { Chip } from '@/components/Chip';
+import { SmileGenerating } from '@/components/SmileGenerating';
 import {
   buildDesignPrompt,
   DEFAULT_AI_MODEL,
@@ -48,6 +49,9 @@ export default function SmileDesign() {
   const [current, setCurrent] = useState(0);
   const [mode, setMode] = useState<CompareMode>('cortina');
   const [generating, setGenerating] = useState(false);
+  // animação da espera: legendas das etapas e o resultado que está sendo revelado
+  const [genSteps, setGenSteps] = useState<string[]>([]);
+  const [pending, setPending] = useState<Result | null>(null);
   const [dragging, setDragging] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
   const [patientName, setPatientName] = useState('');
@@ -126,6 +130,16 @@ export default function SmileDesign() {
     const ch = { ...choice, shadeId };
     const shade = system.shades.find((s) => s.id === ch.shadeId) ?? system.shades[0];
     const shadeLab = settings.calibrations[settings.shadeSystem]?.[shade.id] ?? shade.lab;
+    const nameOf = (list: { id: string; name: string }[], id: string) => (list.find((o) => o.id === id)?.name ?? id).toLowerCase();
+    setGenSteps([
+      'Analisando o rosto e o sorriso',
+      `Desenhando a forma ${nameOf(TOOTH_SHAPES, ch.shape)}`,
+      `Aplicando a textura ${nameOf(TEXTURES, ch.texture)}`,
+      `Ajustando a cor ${shade.id}`,
+      ch.gum === 'plastia' ? 'Simulando a plastia gengival' : 'Preservando lábios e gengiva',
+      'Finalizando os detalhes',
+    ]);
+    setPending(null);
     setGenerating(true);
     try {
       const r = await generateDesign({
@@ -134,17 +148,24 @@ export default function SmileDesign() {
         apiKey: settings.aiApiKey,
         model: settings.aiModel || DEFAULT_AI_MODEL,
       });
+      // a animação revela a imagem e chama `finishReveal`
+      setPending({ uri: r.uri, choice: ch, model: r.model, ms: r.ms });
+    } catch (e) {
+      setGenerating(false);
+      Alert.alert('Não foi possível gerar', String((e as Error).message ?? e));
+    }
+  };
+
+  const finishReveal = useCallback(() => {
+    if (pending)
       setResults((list) => {
-        const next = [...list, { uri: r.uri, choice: ch, model: r.model, ms: r.ms }];
+        const next = [...list, pending];
         setCurrent(next.length - 1);
         return next;
       });
-    } catch (e) {
-      Alert.alert('Não foi possível gerar', String((e as Error).message ?? e));
-    } finally {
-      setGenerating(false);
-    }
-  };
+    setPending(null);
+    setGenerating(false);
+  }, [pending]);
 
   const share = async (what: 'compare' | 'result') => {
     try {
@@ -223,12 +244,7 @@ export default function SmileDesign() {
             <Image source={{ uri: photo.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
           </View>
         )}
-        {generating && (
-          <View style={[styles.busy, { aspectRatio: aspect }]}>
-            <ActivityIndicator color="#fff" size="large" />
-            <Text style={styles.busyText}>Gerando o sorriso… (uns 15 a 30 segundos)</Text>
-          </View>
-        )}
+        {generating && <SmileGenerating photoUri={photo.uri} aspect={aspect} steps={genSteps} resultUri={pending?.uri} onDone={finishReveal} />}
       </View>
 
       {result && (
@@ -320,18 +336,6 @@ export default function SmileDesign() {
 
 const styles = StyleSheet.create({
   photoBox: { width: '100%', backgroundColor: '#000', borderRadius: radius.md, overflow: 'hidden' },
-  busy: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    width: '100%',
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-  },
-  busyText: { color: '#fff', fontWeight: '600', textAlign: 'center', paddingHorizontal: 16 },
   chips: { flexDirection: 'row', flexWrap: 'wrap' },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   input: {

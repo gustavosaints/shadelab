@@ -93,7 +93,11 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   a 1536 px). Modelo padrão `gemini-3.1-flash-lite-image` (Nano Banana 2 Lite, o mais barato; testado no AI Studio
   com a foto dele em 2026-10-22); quem estava no padrão antigo `gemini-2.5-flash-image` é migrado em
   `loadSettings`. Chave e modelo em `components/AiConfig.tsx` ("Configurar IA" no fim da tela; ficam só no
-  aparelho). Cada geração vira uma variação (chips) com o resumo `designSummary`. Antes e depois em
+  aparelho). Cada geração vira uma variação (chips) com o resumo `designSummary`. Espera da geração:
+  `components/SmileGenerating.tsx` (mesmo estilo da `ShadeScan`, aprovado pelo Gustavo): grade + faixa de luz
+  varrendo a foto, cartão com os 6 dentes anteriores acendendo, etapas a cada 4,5 s (forma/textura/cor/gengiva da
+  escolha), barra até ~92 % em 28 s e segundos; ao chegar a imagem, "revela" o sorriso da esquerda para a direita
+  (como o Revelar HD do SmileCloud) e só então entra no antes e depois. Antes e depois em
   `components/BeforeAfter.tsx`: "Cortina" (arrastar na foto passa a linha de um lado para o outro) e
   "Transparência" (barra que mistura o depois sobre o antes — pedida para casos de plastia gengival); o `ref`
   serve para compartilhar a imagem com a comparação. O caso (`SmileCase`) guarda `renderedUri`, `targetShade`,
