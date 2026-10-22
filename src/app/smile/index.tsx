@@ -407,21 +407,26 @@ export default function SmileDesign() {
 
   // ----- sem foto -----
   if (!photo) {
+    // mesma raiz e mesma ordem (corte, detector) da tela com foto: o detector de rosto já fica carregado quando a
+    // foto chega (antes ele só montava depois, e a primeira detecção falhava)
     return (
-      <ScrollView contentContainerStyle={{ padding: spacing.md }}>
+      <View style={{ flex: 1 }} onLayout={(e) => setAreaH(e.nativeEvent.layout.height)}>
         {cropper}
-        <Card>
-          <SectionTitle>Smile Design por IA</SectionTitle>
-          <Muted>
-            Fotografe o sorriso de frente, escolha a forma, a textura e a cor dos dentes, e a IA gera a simulação sobre a
-            própria foto. Depois compare o antes e o depois.
-          </Muted>
-          <Button title="Fotografar com guia" onPress={() => router.push('/smile/capture')} style={{ marginTop: 12 }} />
-          <Button title="Escolher da galeria" variant="secondary" onPress={pickFromGallery} style={{ marginTop: 8 }} />
-        </Card>
-        <Button title={configOpen ? 'Ocultar configuração da IA' : hasKey ? 'Configurar IA' : 'Configurar IA (falta a chave)'} variant="ghost" onPress={() => setConfigOpen(!configOpen)} />
-        {configOpen && <AiConfig settings={settings} onSaved={reloadSettings} />}
-      </ScrollView>
+        <FaceLandmarker ref={landmarker} />
+        <ScrollView contentContainerStyle={{ padding: spacing.md }}>
+          <Card>
+            <SectionTitle>Smile Design por IA</SectionTitle>
+            <Muted>
+              Fotografe o sorriso de frente, escolha a forma, a textura e a cor dos dentes, e a IA gera a simulação sobre a
+              própria foto. Depois compare o antes e o depois.
+            </Muted>
+            <Button title="Fotografar com guia" onPress={() => router.push('/smile/capture')} style={{ marginTop: 12 }} />
+            <Button title="Escolher da galeria" variant="secondary" onPress={pickFromGallery} style={{ marginTop: 8 }} />
+          </Card>
+          <Button title={configOpen ? 'Ocultar configuração da IA' : hasKey ? 'Configurar IA' : 'Configurar IA (falta a chave)'} variant="ghost" onPress={() => setConfigOpen(!configOpen)} />
+          {configOpen && <AiConfig settings={settings} onSaved={reloadSettings} />}
+        </ScrollView>
+      </View>
     );
   }
 

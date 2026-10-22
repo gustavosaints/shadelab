@@ -169,13 +169,13 @@ export function fitToMouth(params: SmileParams, mouth: MouthPoint[], width: numb
 }
 
 /**
- * Contorno inicial para delimitar à mão quando o detector não achou o rosto (sorriso fotografado de perto):
- * boca no centro da foto ocupando ~64 % da largura.
+ * Contorno inicial para delimitar à mão quando nem o detector nem a varredura acharam a boca: um pouco abaixo do
+ * meio da foto (onde a boca costuma ficar, de perto ou com o rosto inteiro), com metade da largura.
  */
 export function centeredMouth(width: number, height: number): MouthPoint[] {
   const cx = width / 2;
-  const cy = height / 2;
-  const w = width * 0.64;
+  const cy = height * 0.6;
+  const w = width * 0.5;
   const h = w * 0.3;
   const pts = [
     [cx - w / 2, cy],
@@ -203,7 +203,14 @@ export function mouthCrop(mouth: MouthPoint[], width: number, height: number, as
   let h = Math.max(bh * 2.6, w / aspect);
   if (w / h < aspect) w = h * aspect;
   else h = w / aspect;
+  // nunca maior que a foto inteira na proporção da vista (senão sobram faixas pretas em volta)
+  const fitW = width / height > aspect ? width : height * aspect;
+  if (w > fitW) {
+    w = fitW;
+    h = fitW / aspect;
+  }
+  const keep = (c: number, size: number, total: number) => (size >= total ? (total - size) / 2 : Math.min(total - size, Math.max(0, c - size / 2)));
   const cx = (Math.max(...xs) + Math.min(...xs)) / 2;
   const cy = (Math.max(...ys) + Math.min(...ys)) / 2;
-  return { x: cx - w / 2, y: cy - h / 2, w, h };
+  return { x: keep(cx, w, width), y: keep(cy, h, height), w, h };
 }

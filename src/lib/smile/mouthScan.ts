@@ -140,7 +140,16 @@ export function scanMouth(img: Rgba): MouthScan | null {
 
   const window: number[] = [];
   for (let y = wy0; y < wy1; y += 2) for (let x = wx0; x < wx1; x += 2) window.push(L[y * w + x]);
-  const tL = Math.max(45, percentile(window, 0.93) - 18);
+  // limiar dos dentes: perto dos mais claros da foto, mas nunca acima da pele + 8 — numa foto com parede branca ao
+  // fundo, os mais claros são a parede, e dentes amarelados/sombreados ficariam de fora
+  const skin: number[] = [];
+  for (let y = wy0; y < wy1; y += 3)
+    for (let x = wx0; x < wx1; x += 3) {
+      const i = y * w + x;
+      if (A[i] >= 7 && A[i] <= 28 && B[i] >= 8 && L[i] > 25) skin.push(L[i]);
+    }
+  const skinL = skin.length > 50 ? median(skin) : 60;
+  const tL = Math.max(45, Math.min(percentile(window, 0.93) - 18, skinL + 8));
   const tDark = Math.min(32, percentile(window, 0.06) + 12);
 
   // 2. dentes candidatos

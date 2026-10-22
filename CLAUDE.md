@@ -148,6 +148,11 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   moldura nessa proporção, escurece o resto e corta a foto nela; foto da galeria (na câmera ou em "Escolher da
   galeria") abre `components/PhotoCropper.tsx` (moldura fixa, arrastar/pinça, "Cortar e usar" ou "Usar a foto
   inteira"); `PendingPhoto.crop` avisa a tela para abrir o corte.
+  CORREÇÕES (print do Gustavo, 2026-10-22): o `FaceLandmarker` montava só depois de escolher a foto, então a 1ª
+  detecção sempre falhava — agora as duas versões da tela (sem foto / com foto) têm a mesma raiz e ordem (corte,
+  detector), e ele já está carregado. Na varredura, o limiar dos dentes ficou relativo à PELE (no máx. pele + 8):
+  com parede branca ao fundo, dentes amarelados/sombreados ficavam de fora. `centeredMouth` agora começa abaixo do
+  meio (60 %) e `mouthCrop` nunca passa do tamanho da foto (sem faixas pretas no editor).
   Próximo passo possível: mandar também a imagem com as silhuetas como guia para a IA (testar quando houver crédito).
   REMOVIDOS nessa data: editor manual (contorno, boca, ajustar, face-bow na tela, biblioteca 2D de sorrisos,
   cenários, rascunho automático) e a tela separada "Sorriso por IA". Ficaram só bibliotecas usadas por outras
