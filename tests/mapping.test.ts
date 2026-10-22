@@ -11,6 +11,7 @@ import {
   bumpLength,
   commonLength,
   describeLengths,
+  setToothEdit,
   layoutMapped,
   MAPPED_TEETH,
   mirrorLabels,
@@ -163,5 +164,29 @@ describe('delimitar a boca à mão', () => {
     expect(crop.w).toBeLessThanOrEqual(4000);
     expect(crop.x).toBeGreaterThanOrEqual(0);
     expect(crop.w / crop.h).toBeLessThanOrEqual(2.01);
+  });
+});
+
+describe('ajuste de um dente direto na silhueta', () => {
+  const map: ToothMap = { base: { midX: 500, gumY: 300, centralW: 85, heightRatio: 1.2, widthScale: {} }, pxPerMm: 10, source: 'boca', mirrored: false };
+  const get = (teeth: ReturnType<typeof archTeeth>, f: string) => teeth.find((t) => t.fdi === f)!;
+
+  it('largura de um dente empurra os vizinhos de fora, sem mexer no outro lado', () => {
+    const e = setToothEdit({}, '12', { width: 1 });
+    const base = archTeeth(map);
+    const wide = archTeeth(map, DEFAULT_ARCH, e);
+    expect(get(wide, '12').w).toBeCloseTo(get(base, '12').w + 10);
+    expect(get(wide, '13').x).toBeCloseTo(get(base, '13').x - 10); // vizinho distal se afasta
+    expect(get(wide, '22').x).toBeCloseTo(get(base, '22').x);
+  });
+
+  it('arrasto livre em 0,1 mm, limitado e some quando zera', () => {
+    expect(setToothEdit({}, '11', { incisal: 0.83 })['11']?.incisal).toBe(0.8);
+    expect(setToothEdit({}, '11', { cervical: 9 })['11']?.cervical).toBe(3);
+    expect(setToothEdit({ '11': { incisal: 1, cervical: 0 } }, '11', { incisal: 0 })['11']).toBeUndefined();
+  });
+
+  it('a largura entra na instrução da IA', () => {
+    expect(describeLengths(setToothEdit({}, '21', { width: -0.5 }))).toMatch(/tooth 21: visible width reduced by 0.5 mm/);
   });
 });

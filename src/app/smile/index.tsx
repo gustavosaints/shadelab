@@ -17,7 +17,7 @@ import { Card, Muted, SectionTitle } from '@/components/Card';
 import { Chip } from '@/components/Chip';
 import { FaceLandmarker, type FaceLandmarkerHandle } from '@/components/FaceLandmarker';
 import { MouthEditor } from '@/components/MouthEditor';
-import { SmileMap } from '@/components/SmileMap';
+import { SmileMap, type ToothPart } from '@/components/SmileMap';
 import { PhotoCropper } from '@/components/PhotoCropper';
 import { SmileGenerating } from '@/components/SmileGenerating';
 import {
@@ -51,6 +51,7 @@ import {
   MAPPED_TEETH,
   mirrorLabels,
   plausibleFit,
+  setToothEdit,
   type ArchEdit,
   type ArchHandle,
   type Fdi,
@@ -326,7 +327,7 @@ export default function SmileDesign() {
   }, [pending]);
 
   // dentes na foto: encaixe original (recorte da vista) e com o arco + comprimentos (o que aparece)
-  const planTeeth = map ? archTeeth(map, arch).map((t) => applyLength(t, lengths[t.fdi], map.pxPerMm)) : [];
+  const planTeeth = map ? archTeeth(map, arch, lengths).map((t) => applyLength(t, lengths[t.fdi], map.pxPerMm)) : [];
 
   // ajustes de comprimento: todos os dentes ou o selecionado
   const targets: readonly Fdi[] = target === 'all' ? MAPPED_TEETH : [target];
@@ -345,6 +346,29 @@ export default function SmileDesign() {
       : h.startsWith('width')
         ? `central ${fmt1(a.centralMm)} mm`
         : `${a.open >= 0 ? 'abertura' : 'fechamento'} ${Math.round(Math.abs(a.open) * 100)} % · curva ${fmt1(a.curveMm)} mm`;
+  // alças do dente selecionado: arrasto direto na silhueta (mm = px da foto ÷ px/mm)
+  const toothFrom = useRef<LengthEdits | null>(null);
+  const onToothDrag = (fdi: Fdi, part: ToothPart, dx: number, dy: number, phase: 'start' | 'move' | 'end') => {
+    if (phase === 'start') {
+      toothFrom.current = lengths;
+      return;
+    }
+    if (!map || !toothFrom.current) return;
+    const from = toothFrom.current[fdi] ?? { incisal: 0, cervical: 0 };
+    const k = map.pxPerMm;
+    const next =
+      part === 'incisal'
+        ? setToothEdit(toothFrom.current, fdi, { incisal: from.incisal + dy / k })
+        : part === 'cervical'
+          ? setToothEdit(toothFrom.current, fdi, { cervical: from.cervical - dy / k })
+          : setToothEdit(toothFrom.current, fdi, { width: (from.width ?? 0) + (part === 'widthR' ? dx : -dx) / k });
+    setLengths(next);
+    const e = next[fdi] ?? { incisal: 0, cervical: 0 };
+    const v = part === 'incisal' ? e.incisal : part === 'cervical' ? e.cervical : (e.width ?? 0);
+    const name = part === 'incisal' ? 'incisal' : part === 'cervical' ? 'cervical' : 'largura';
+    setDragHint(phase === 'end' ? null : `${fdi} · ${name} ${fmtMm(v)}`);
+    if (phase === 'end') toothFrom.current = null;
+  };
   const onArchDrag = (h: ArchHandle, dx: number, dy: number, phase: 'start' | 'move' | 'end') => {
     if (phase === 'start') {
       dragFrom.current = arch;
@@ -476,6 +500,7 @@ export default function SmileDesign() {
               selected={target}
               onSelect={(fdi) => setTarget(target === fdi ? 'all' : fdi)}
               onArchDrag={map ? onArchDrag : undefined}
+              onToothDrag={map ? onToothDrag : undefined}
               mouth={mouth}
               hint={dragHint}
             />
@@ -570,9 +595,9 @@ export default function SmileDesign() {
                   <Chip key={fdi} label={fdi} selected={target === fdi} onPress={() => setTarget(fdi)} />
                 ))}
               </ScrollView>
-              {(['incisal', 'cervical'] as const).map((which) => (
+              {(['incisal', 'cervical', 'width'] as const).map((which) => (
                 <View key={which} style={styles.stepRow}>
-                  <Text style={styles.stepLabel}>{which === 'incisal' ? 'Incisal' : 'Cervical'}</Text>
+                  <Text style={styles.stepLabel}>{which === 'incisal' ? 'Incisal' : which === 'cervical' ? 'Cervical' : 'Largura'}</Text>
                   <Pressable onPress={() => bump(which, -1)} style={styles.stepBtn} accessibilityRole="button" accessibilityLabel={`Encurtar pela ${which}`}>
                     <Text style={styles.stepBtnText}>−</Text>
                   </Pressable>
@@ -583,7 +608,7 @@ export default function SmileDesign() {
                 </View>
               ))}
               <Muted>
-                {`${target === 'all' ? 'Todos os dentes' : `Dente ${target}`} · + alonga, − encurta (0,5 mm por toque). Toque num dente na foto para ajustar só ele.`}
+                {`${target === 'all' ? 'Todos os dentes' : `Dente ${target}`} · + alonga ou alarga, − encurta ou estreita (0,5 mm por toque). Toque num dente na foto: aparecem barrinhas rosé para arrastar (em cima = cervical, embaixo = incisal, lados = largura).`}
               </Muted>
               {Object.keys(lengths).length > 0 && <Button title="Zerar tamanhos" variant="ghost" onPress={() => setLengths({})} />}
             </>

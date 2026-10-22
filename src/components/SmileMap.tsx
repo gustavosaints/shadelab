@@ -23,6 +23,8 @@ type Props = {
   onSelect: (fdi: Fdi) => void;
   /** Alças do arco na foto (mover, largura, abrir/fechar + curva). dx/dy: total desde o toque, em px da foto. */
   onArchDrag?: (handle: ArchHandle, dx: number, dy: number, phase: 'start' | 'move' | 'end') => void;
+  /** Alças do dente selecionado: comprimento (incisal/cervical) e largura. dx/dy em px da foto. */
+  onToothDrag?: (fdi: Fdi, part: ToothPart, dx: number, dy: number, phase: 'start' | 'move' | 'end') => void;
   /** Texto mostrado no canto enquanto arrasta uma alça (ex.: "abertura +40 %"). */
   hint?: string | null;
   /** Contorno da boca (lado de dentro dos lábios), desenhado de leve para conferir a delimitação automática. */
@@ -30,6 +32,8 @@ type Props = {
 };
 
 const CYAN = '#4FD1C5';
+
+export type ToothPart = 'incisal' | 'cervical' | 'widthL' | 'widthR';
 
 const GLOW = '#F3C9BE';
 
@@ -39,7 +43,7 @@ const GLOW = '#F3C9BE';
  * com uma textura escolhida, uma prévia transparente dela aparece nos incisivos 12, 11, 21 e 22. Tocar num dente
  * seleciona para ajustar só ele. Pinça aproxima (até 5x) e, aproximada, um dedo arrasta a vista.
  */
-export function SmileMap({ photo, height, teeth, status, shapeMix, texture, selected, onSelect, onArchDrag, hint, mouth }: Props) {
+export function SmileMap({ photo, height, teeth, status, shapeMix, texture, selected, onSelect, onArchDrag, onToothDrag, hint, mouth }: Props) {
   const [width, setWidth] = useState(0);
   const [zoom, setZoom] = useState({ scale: 1, tx: 0, ty: 0 });
   const gesture = useRef<{ x: number; y: number; dist: number; scale: number; tx: number; ty: number; pinch: boolean } | null>(null);
@@ -211,6 +215,7 @@ export function SmileMap({ photo, height, teeth, status, shapeMix, texture, sele
           )}
           {view.length > 0 && <ArchBody view={view} z={z} scale={s * z} onDrag={onArchDrag} onTap={onSelect} />}
           {onArchDrag && view.length > 0 && archHandles(view, s * z, z, onArchDrag)}
+          {onToothDrag && selected !== 'all' && toothHandles(view.find((t) => t.fdi === selected), s * z, z, onToothDrag)}
         </View>
       )}
       {width > 0 && (
@@ -257,8 +262,29 @@ function archHandles(view: MappedTooth[], scale: number, z: number, onDrag: NonN
     { key: 'widthR', x: x1 + 14 / z, y: bottom, body: <View style={styles.widthBar} />, label: 'Largura do arco' },
   ];
   return items.map((h) => (
-    <Handle key={h.key} handle={h.key} x={h.x} y={h.y} scale={scale} z={z} onDrag={onDrag} label={h.label}>
+    <Handle key={h.key} handle={h.key} x={h.x} y={h.y} scale={scale} z={z} onDrag={(id, dx, dy, ph) => onDrag(id as ArchHandle, dx, dy, ph)} label={h.label}>
       {h.body}
+    </Handle>
+  ));
+}
+
+/**
+ * Alças do dente tocado (pedido do Gustavo, 2026-10-22): barrinha em cima = cervical, embaixo = incisal,
+ * nas laterais = largura daquele dente (os vizinhos se acomodam).
+ */
+function toothHandles(t: MappedTooth | undefined, scale: number, z: number, onDrag: NonNullable<Props['onToothDrag']>): ReactNode {
+  if (!t) return null;
+  const cx = t.x + t.w / 2;
+  const cy = t.y + t.h / 2;
+  const items: { key: ToothPart; x: number; y: number; vertical: boolean; label: string }[] = [
+    { key: 'cervical', x: cx, y: t.y, vertical: false, label: `Cervical do ${t.fdi}` },
+    { key: 'incisal', x: cx, y: t.y + t.h, vertical: false, label: `Incisal do ${t.fdi}` },
+    { key: 'widthL', x: t.x, y: cy, vertical: true, label: `Largura do ${t.fdi}` },
+    { key: 'widthR', x: t.x + t.w, y: cy, vertical: true, label: `Largura do ${t.fdi}` },
+  ];
+  return items.map((h) => (
+    <Handle key={`t-${h.key}`} handle={h.key} x={h.x} y={h.y} scale={scale} z={z} onDrag={(id, dx, dy, ph) => onDrag(t.fdi, id as ToothPart, dx, dy, ph)} label={h.label}>
+      <View style={h.vertical ? styles.toothBarV : styles.toothBarH} />
     </Handle>
   ));
 }
@@ -273,13 +299,13 @@ function Handle({
   label,
   children,
 }: {
-  handle: ArchHandle;
+  handle: string;
   x: number;
   y: number;
   scale: number;
   /** zoom atual: a alça é desenhada 1/z para ficar do mesmo tamanho na tela */
   z: number;
-  onDrag: NonNullable<Props['onArchDrag']>;
+  onDrag: (handle: string, dx: number, dy: number, phase: 'start' | 'move' | 'end') => void;
   label: string;
   children: ReactNode;
 }) {
@@ -466,6 +492,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(31,34,43,0.85)',
   },
   handle: { position: 'absolute', width: HANDLE_HIT, height: HANDLE_HIT, alignItems: 'center', justifyContent: 'center' },
+  toothBarH: { width: 22, height: 7, borderRadius: 4, backgroundColor: GLOW, borderWidth: 1, borderColor: 'rgba(0,0,0,0.45)' },
+  toothBarV: { width: 7, height: 22, borderRadius: 4, backgroundColor: GLOW, borderWidth: 1, borderColor: 'rgba(0,0,0,0.45)' },
   widthBar: { width: 6, height: 24, borderRadius: 3, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'rgba(0,0,0,0.35)' },
   hint: { position: 'absolute', top: 8, left: 8, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, backgroundColor: 'rgba(31,34,43,0.8)' },
   hintText: { color: '#FFFFFF', fontFamily: fonts.medium, fontSize: 12 },

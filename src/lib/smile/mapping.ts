@@ -59,7 +59,8 @@ const OPEN_W: Record<MapKind, number> = { central: 0, lateral: 0.08, canine: 0.2
 const CURVE_Y: Record<MapKind, number> = { central: 0, lateral: 0.12, canine: 0.35, premolar1: 0.65, premolar2: 1 };
 
 /** Comprimento extra em mm: incisal positivo = borda desce (alonga); cervical positivo = colo sobe (alonga). */
-export type LengthEdit = { incisal: number; cervical: number };
+/** Ajuste de um dente (mm): comprimento pela incisal e pela cervical e, opcional, largura visível. */
+export type LengthEdit = { incisal: number; cervical: number; width?: number };
 export type LengthEdits = Partial<Record<Fdi, LengthEdit>>;
 export const LENGTH_STEP_MM = 0.5;
 export const LENGTH_LIMIT_MM = 3;
@@ -79,6 +80,7 @@ export function layoutMapped(
   golden = false,
   open = 0,
   curvePx = 0,
+  extraW: Partial<Record<Fdi, number>> = {},
 ): MappedTooth[] {
   const ch = centralW * heightRatio;
   const cw = centralW * widthFactor;
@@ -91,7 +93,7 @@ export function layoutMapped(
       const fdi = `${dir < 0 ? 1 : 2}${k + 1}` as Fdi;
       const p = PROFILE[kind];
       const ratio = golden ? GOLDEN_W[kind] : p.w * (widthScale[fdi] ?? 1);
-      const w = cw * ratio * (1 + open * OPEN_W[kind]);
+      const w = Math.max(cw * 0.2, cw * ratio * (1 + open * OPEN_W[kind]) + (extraW[fdi] ?? 0));
       const x = dir > 0 ? edge : edge - w;
       teeth.push({ fdi, kind, outline: p.outline, side, x, y: gumY + p.top * ch - curvePx * CURVE_Y[kind], w, h: ch * p.h });
       edge = dir > 0 ? x + w + gap : x - gap;
@@ -128,10 +130,21 @@ export function mirrorLabels(map: ToothMap): ToothMap {
   return { ...map, mirrored: !map.mirrored };
 }
 
-/** Os 10 dentes do mapa com o ajuste do arco (sem os comprimentos individuais). */
-export function archTeeth(map: ToothMap, arch: ArchEdit = DEFAULT_ARCH): MappedTooth[] {
+const swapSide = (fdi: Fdi) => `${fdi[0] === '1' ? '2' : '1'}${fdi[1]}` as Fdi;
+
+/**
+ * Os 10 dentes do mapa com o ajuste do arco e as larguras individuais (`edits[fdi].width`, mm; os vizinhos se
+ * acomodam). Os comprimentos individuais entram depois, com `applyLength`.
+ */
+export function archTeeth(map: ToothMap, arch: ArchEdit = DEFAULT_ARCH, edits: LengthEdits = {}): MappedTooth[] {
   const b = map.base;
   const k = map.pxPerMm;
+  const extraW: Partial<Record<Fdi, number>> = {};
+  for (const fdi of MAPPED_TEETH) {
+    const wmm = edits[fdi]?.width;
+    // o layout numera sem espelho; com foto espelhada o dente 11 da tela é o 21 do layout
+    if (wmm) extraW[map.mirrored ? swapSide(fdi) : fdi] = wmm * k;
+  }
   const teeth = layoutMapped(
     b.midX + arch.dxMm * k,
     b.gumY + arch.dyMm * k,
@@ -142,9 +155,10 @@ export function archTeeth(map: ToothMap, arch: ArchEdit = DEFAULT_ARCH): MappedT
     arch.golden,
     arch.open,
     arch.curveMm * k,
+    extraW,
   );
   if (!map.mirrored) return teeth;
-  return teeth.map((t) => ({ ...t, fdi: `${t.fdi[0] === '1' ? '2' : '1'}${t.fdi[1]}` as Fdi }));
+  return teeth.map((t) => ({ ...t, fdi: swapSide(t.fdi) }));
 }
 
 export function clampArch(a: ArchEdit): ArchEdit {
@@ -225,13 +239,31 @@ export function clampLength(v: number): number {
   return Math.max(-LENGTH_LIMIT_MM, Math.min(LENGTH_LIMIT_MM, Math.round(v / LENGTH_STEP_MM) * LENGTH_STEP_MM));
 }
 
-/** Soma `delta` (mm) na incisal ou na cervical dos dentes `targets`. */
+const isZero = (e: LengthEdit) => e.incisal === 0 && e.cervical === 0 && !e.width;
+
+/** Arrasto na silhueta: valor livre (passo de 0,1 mm), limitado a ±3 mm. */
+export function clampLengthFine(v: number): number {
+  return Math.max(-LENGTH_LIMIT_MM, Math.min(LENGTH_LIMIT_MM, Math.round(v * 10) / 10));
+}
+
+/** Troca partes do ajuste de um dente (já limitadas); some quando volta a zero. */
+export function setToothEdit(edits: LengthEdits, fdi: Fdi, patch: Partial<LengthEdit>): LengthEdits {
+  const cur = edits[fdi] ?? { incisal: 0, cervical: 0 };
+  const v: LengthEdit = { ...cur };
+  for (const [k, val] of Object.entries(patch) as [keyof LengthEdit, number][]) v[k] = clampLengthFine(val);
+  const next: LengthEdits = { ...edits };
+  if (isZero(v)) delete next[fdi];
+  else next[fdi] = v;
+  return next;
+}
+
+/** Soma `delta` (mm) na incisal, na cervical ou na largura dos dentes `targets`. */
 export function bumpLength(edits: LengthEdits, targets: readonly Fdi[], which: keyof LengthEdit, delta: number): LengthEdits {
   const next: LengthEdits = { ...edits };
   for (const fdi of targets) {
     const cur = next[fdi] ?? { incisal: 0, cervical: 0 };
-    const v = { ...cur, [which]: clampLength(cur[which] + delta) };
-    if (v.incisal === 0 && v.cervical === 0) delete next[fdi];
+    const v = { ...cur, [which]: clampLength((cur[which] ?? 0) + delta) };
+    if (isZero(v)) delete next[fdi];
     else next[fdi] = v;
   }
   return next;
@@ -267,6 +299,7 @@ export function describeLengths(edits: LengthEdits): string {
           ? `gingival margin moved ${mm(e.cervical)} apically (longer clinical crown, gingival recontouring)`
           : `gingival margin moved ${mm(e.cervical)} incisally (shorter clinical crown)`,
       );
+    if (e.width) parts.push(e.width > 0 ? `visible width increased by ${mm(e.width)}` : `visible width reduced by ${mm(e.width)}`);
     const key = parts.join(' and ');
     groups.set(key, [...(groups.get(key) ?? []), fdi]);
   }
@@ -275,5 +308,5 @@ export function describeLengths(edits: LengthEdits): string {
   const items = [...groups.entries()].map(([what, teeth]) =>
     all.length === 1 && teeth.length === MAPPED_TEETH.length ? `all upper teeth from 15 to 25: ${what}` : `tooth ${teeth.join(', ')}: ${what}`,
   );
-  return `Tooth length changes planned by the dentist (FDI numbering): ${items.join('; ')}.`;
+  return `Tooth size changes planned by the dentist (FDI numbering): ${items.join('; ')}.`;
 }

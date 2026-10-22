@@ -154,6 +154,10 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   detector), e ele já está carregado. Na varredura, o limiar dos dentes ficou relativo à PELE (no máx. pele + 8):
   com parede branca ao fundo, dentes amarelados/sombreados ficavam de fora. `centeredMouth` agora começa abaixo do
   meio (60 %) e `mouthCrop` nunca passa do tamanho da foto (sem faixas pretas no editor).
+  DENTE A DENTE NA SILHUETA (2026-10-22): tocar num dente mostra barrinhas rosé (`toothHandles` em SmileMap):
+  em cima = cervical, embaixo = incisal, lados = largura daquele dente (`LengthEdit.width`, mm; `archTeeth(map, arch,
+  edits)` soma a largura no layout e os vizinhos se acomodam). Arrasto livre em 0,1 mm (`setToothEdit`), botões
+  de 0,5 mm na seção Tamanho (Incisal, Cervical, Largura). Tudo vai na instrução da IA (`describeLengths`).
   Próximo passo possível: mandar também a imagem com as silhuetas como guia para a IA (testar quando houver crédito).
   REMOVIDOS nessa data: editor manual (contorno, boca, ajustar, face-bow na tela, biblioteca 2D de sorrisos,
   cenários, rascunho automático) e a tela separada "Sorriso por IA". Ficaram só bibliotecas usadas por outras
