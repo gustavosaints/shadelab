@@ -14,7 +14,7 @@ const ZOOM_STEPS = [0, 0.25, 0.5];
 export default function Capture() {
   const { mode = 'shade', shade } = useLocalSearchParams<Params>();
   const [permission, requestPermission] = useCameraPermissions();
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(false); // só informativo: o disparo tenta mesmo sem o aviso de pronto
   const [busy, setBusy] = useState(false);
   const [facing, setFacing] = useState<CameraType>('back');
   const [zoom, setZoom] = useState(0);
@@ -28,7 +28,7 @@ export default function Capture() {
     });
 
   const takePhoto = async () => {
-    if (!cameraRef.current || !ready || busy) return;
+    if (!cameraRef.current || busy) return;
     setBusy(true);
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 1, shutterSound: false });
@@ -47,10 +47,7 @@ export default function Capture() {
     goAnalyze(a.uri, a.width, a.height);
   };
 
-  const flip = () => {
-    setReady(false);
-    setFacing((f) => (f === 'back' ? 'front' : 'back'));
-  };
+  const flip = () => setFacing((f) => (f === 'back' ? 'front' : 'back'));
   const nextZoom = () => setZoom((z) => ZOOM_STEPS[(ZOOM_STEPS.indexOf(z) + 1) % ZOOM_STEPS.length]);
 
   if (!permission) return <View style={styles.center} />;
@@ -100,15 +97,15 @@ export default function Capture() {
 
       <View style={[styles.bottom, { paddingBottom: insets.bottom + 16 }]}>
         <Text style={styles.tip}>
-          Luz natural indireta, sem flash. Dente limpo e úmido, de frente para a câmera.
+          {ready ? '' : 'Abrindo a câmera… '}Luz natural indireta, sem flash. Dente limpo e úmido, de frente para a câmera.
           {facing === 'front' ? ' Câmera frontal: a foto sai como você vê na tela.' : ''}
         </Text>
         <View style={styles.controls}>
           <Pressable onPress={pickPhoto} style={styles.sideBtn}>
             <Text style={styles.sideText}>Galeria</Text>
           </Pressable>
-          <Pressable onPress={takePhoto} disabled={!ready || busy} style={styles.shutterOuter}>
-            <View style={[styles.shutterInner, (!ready || busy) && { opacity: 0.4 }]} />
+          <Pressable onPress={takePhoto} disabled={busy} style={styles.shutterOuter} hitSlop={10}>
+            <View style={[styles.shutterInner, busy && { opacity: 0.4 }]} />
           </Pressable>
           <Pressable onPress={flip} style={styles.sideBtn}>
             <Text style={styles.sideText}>{facing === 'back' ? 'Frontal' : 'Traseira'}</Text>
