@@ -1,4 +1,6 @@
 import type { Lab } from './convert';
+import type { ThirdsProfile } from './match';
+import { VITA_CLASSICAL_IMAGES, VITA_CLASSICAL_MEASURED, VITA_CLASSICAL_THIRDS } from './vitaClassicalMeasured';
 
 export type ShadeSystemId = 'vita-classical' | 'vita-3d-master';
 
@@ -7,6 +9,10 @@ export type ShadeRef = {
   system: ShadeSystemId;
   lab: Lab;
   group?: string; // ex.: "A" ou "2M"
+  /** Cor por terços medida na escala real (quando houver). */
+  thirds?: ThirdsProfile;
+  /** Foto recortada do tab real (require do asset), para resultados e PDF. */
+  image?: number;
 };
 
 export type ShadeSystem = {
@@ -16,12 +22,11 @@ export type ShadeSystem = {
 };
 
 /**
- * Valores CIELAB de referência (D65/2°) para a VITA Classical A1–D4.
- * São valores médios aproximados da literatura (medições com
- * espectrofotômetro no terço médio do tab). Use a calibração da própria
- * escala em Configurações para resultados mais precisos no seu aparelho.
+ * Valores CIELAB (D65/2°) da VITA Classical A1–D4 da LITERATURA (terço médio, espectrofotômetro). Desde
+ * 2026-10-22 o app usa os valores MEDIDOS na escala do Gustavo (`vitaClassicalMeasured.ts`); estes só ficam
+ * para o tab que faltou na foto (B3). A calibração em Configurações continua substituindo tudo.
  */
-const VITA_CLASSICAL_LAB: Record<string, Lab> = {
+const VITA_CLASSICAL_LITERATURE: Record<string, Lab> = {
   A1: { L: 76.5, a: 1.0, b: 14.5 },
   A2: { L: 74.5, a: 1.8, b: 17.5 },
   A3: { L: 72.0, a: 2.5, b: 19.5 },
@@ -43,10 +48,12 @@ const VITA_CLASSICAL_LAB: Record<string, Lab> = {
 export const VITA_CLASSICAL: ShadeSystem = {
   id: 'vita-classical',
   name: 'VITA Classical',
-  shades: Object.entries(VITA_CLASSICAL_LAB).map(([id, lab]) => ({
+  shades: Object.entries(VITA_CLASSICAL_LITERATURE).map(([id, lab]) => ({
     id,
     system: 'vita-classical',
-    lab,
+    lab: VITA_CLASSICAL_MEASURED[id] ?? lab,
+    thirds: VITA_CLASSICAL_THIRDS[id],
+    image: VITA_CLASSICAL_IMAGES[id],
     group: id[0],
   })),
 };

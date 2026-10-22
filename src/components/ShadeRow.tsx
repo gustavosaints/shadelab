@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { labToHex, type Lab } from '@/lib/color/convert';
 import { colors, radius } from '@/theme';
 
@@ -7,16 +7,20 @@ type Props = {
   lab: Lab;
   deltaE: number;
   rank: number;
+  /** Foto do tab real da escala (asset), mostrada no lugar da amostra de cor. */
+  image?: number;
 };
 
 const RANK_LABEL: Record<number, string> = { 1: 'Mais provável', 2: 'Alternativa mais próxima' };
 
 /** Linha de resultado: amostra da cor, nome do tab e o papel dele (mais provável / alternativa). */
-export function ShadeRow({ shadeId, lab, deltaE, rank }: Props) {
+export function ShadeRow({ shadeId, lab, deltaE, rank, image }: Props) {
   const first = rank === 1;
   return (
     <View style={[styles.row, first && styles.rowFirst]}>
-      <View style={[styles.swatch, first && styles.swatchFirst, { backgroundColor: labToHex(lab) }]} />
+      <View style={[styles.swatch, first && styles.swatchFirst, { backgroundColor: labToHex(lab) }]}>
+        {image !== undefined && <Image source={image} style={styles.tabImg} resizeMode="cover" accessibilityLabel={`Tab ${shadeId} da escala`} />}
+      </View>
       <View style={{ flex: 1 }}>
         <Text style={styles.role}>{RANK_LABEL[rank] ?? `${rank}ª opção`}</Text>
         <Text style={[styles.name, first && styles.nameFirst]}>{shadeId}</Text>
@@ -29,8 +33,9 @@ export function ShadeRow({ shadeId, lab, deltaE, rank }: Props) {
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 12 },
   rowFirst: { backgroundColor: '#F7EFEC', borderRadius: radius.md, paddingHorizontal: 10, marginBottom: 4 },
-  swatch: { width: 48, height: 48, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border },
+  swatch: { width: 48, height: 48, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
   swatchFirst: { width: 64, height: 64 },
+  tabImg: { position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', borderRadius: radius.sm },
   role: { color: colors.muted, fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
   name: { fontSize: 20, fontWeight: '700', color: colors.text },
   nameFirst: { fontSize: 28 },

@@ -163,6 +163,7 @@ function ShadeDetail({ c }: { c: ShadeCase }) {
             shadeId={m.shadeId}
             lab={findShade(c.shadeSystem, m.shadeId)?.lab ?? c.toothLab}
             deltaE={m.deltaE}
+            image={findShade(c.shadeSystem, m.shadeId)?.image}
           />
         ))}
       </Card>

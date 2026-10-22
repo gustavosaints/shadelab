@@ -444,7 +444,7 @@ export default function Analyze() {
                 <>
                   <SectionTitle>{`Resultado · ${system?.name ?? ''}`}</SectionTitle>
                   {result.match.matches.map((m, i) => (
-                    <ShadeRow key={m.shade.id} rank={i + 1} shadeId={m.shade.id} lab={m.shade.lab} deltaE={m.deltaE} />
+                    <ShadeRow key={m.shade.id} rank={i + 1} shadeId={m.shade.id} lab={m.shade.lab} deltaE={m.deltaE} image={m.shade.image} />
                   ))}
                   <Muted>
                     {result.match.confidence >= 0.5

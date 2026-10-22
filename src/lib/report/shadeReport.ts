@@ -1,3 +1,4 @@
+import { Asset } from 'expo-asset';
 import { labToHex, type Lab } from '@/lib/color/convert';
 import { findGingiva, GINGIVA_SYSTEM } from '@/lib/color/gingiva';
 import { tabProfile, type ThirdsProfile } from '@/lib/color/match';
@@ -49,10 +50,21 @@ function syntheticTab(profile: ThirdsProfile, label: string, widthPx: number): s
 </svg>`;
 }
 
-async function tabImage(uri: string | undefined, fallbackSvg: string, widthPx: number): Promise<{ html: string; real: boolean }> {
+async function tabImage(uri: string | undefined, fallbackSvg: string, widthPx: number, builtin?: number): Promise<{ html: string; real: boolean; source?: 'calib' | 'escala' }> {
+  const img = (data: string) => `<img src="${data}" style="width:${widthPx}px;border-radius:8px;border:1px solid #E3E7EF"/>`;
   if (uri) {
     const data = await fileToDataUrl(uri);
-    if (data) return { html: `<img src="${data}" style="width:${widthPx}px;border-radius:8px;border:1px solid #E3E7EF"/>`, real: true };
+    if (data) return { html: img(data), real: true, source: 'calib' };
+  }
+  if (builtin !== undefined) {
+    try {
+      const asset = Asset.fromModule(builtin);
+      await asset.downloadAsync();
+      const data = asset.localUri ? await fileToDataUrl(asset.localUri) : null;
+      if (data) return { html: img(data), real: true, source: 'escala' };
+    } catch {
+      // sem a foto embutida: cai no desenho
+    }
   }
   return { html: fallbackSvg, real: false };
 }
@@ -76,11 +88,11 @@ export async function buildShadeReportHtml(c: ShadeCase, s: Settings): Promise<s
   if (c.toothRect && best && bestProfile) {
     const [mouth, tab] = await Promise.all([
       framedCrop(c, c.toothRect, '#2F6BFF', true, !!c.lowerTooth, 330),
-      tabImage(s.tabImages[c.shadeSystem]?.[best.shadeId], syntheticTab(bestProfile, best.shadeId, 150), 150),
+      tabImage(s.tabImages[c.shadeSystem]?.[best.shadeId], syntheticTab(bestProfile, best.shadeId, 150), 150, bestRef?.image),
     ]);
     toothBlock = `<div class="cols">
 <div class="col"><div class="cap">Dente ${esc(c.tooth) || ''} do paciente · quadro lido em três terços</div>${mouth}<div class="row3">${swatches(toothProfile)}</div></div>
-<div class="col tabcol"><div class="cap">Tab mais próximo</div>${tab.html}<div class="big">${esc(best.shadeId)}</div><div class="muted">${tab.real ? 'foto do seu tab, calibrado neste aparelho' : 'ilustração a partir dos valores da escala'}</div><div class="row3">${swatches(bestProfile)}</div></div>
+<div class="col tabcol"><div class="cap">Tab mais próximo</div>${tab.html}<div class="big">${esc(best.shadeId)}</div><div class="muted">${tab.source === 'calib' ? 'foto do seu tab, calibrado neste aparelho' : tab.source === 'escala' ? 'foto da sua escala VITA Classical' : 'ilustração a partir dos valores da escala'}</div><div class="row3">${swatches(bestProfile)}</div></div>
 </div>`;
   } else if (best) {
     toothBlock = `<div class="cols"><div class="col"><span class="sw" style="background:${c.toothHex}"></span><b>Dente medido</b> L*a*b* ${fmt(c.toothLab)}</div>

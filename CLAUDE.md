@@ -32,6 +32,13 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
 - `src/app/` telas (Expo Router): `index` (início), `shade/capture` (câmera), `shade/analyze` (marcadores, análise, salvar
   caso ou calibração), `cases/` (lista e detalhe), `settings` (escala, calibração), `smile/index` (Smile Design por IA).
 - `src/lib/color/` sRGB↔CIELAB, CIEDE2000, escalas VITA Classical e 3D-Master, correção por referência, matching.
+  ESCALA REAL (2026-10-22): a VITA Classical do app usa os valores MEDIDOS na régua do Gustavo
+  (`lib/color/vitaClassicalMeasured.ts`, GERADO por `scripts/escala/measure.mjs` a partir de
+  `reference/escala/vita-classical.jpg`, fora do git: caixas das coroas marcadas à mão, balanço de branco pela placa
+  cinza, exposição normalizada para a média de L* da literatura, leitura por terços) + a foto recortada de cada tab
+  em `assets/escala/vita-classical/` (resultados, caso salvo e PDF). A régua tinha um A2 repetido no lugar do B3
+  (ele mandou ignorar): o B3 fica com o valor da literatura e sem foto. `ShadeRef.thirds`/`image`; a comparação usa
+  os terços medidos quando a escala não está calibrada no aparelho. Testes carregam imagens via `tests/setup.mjs`.
   Tomada de cor (redesenho de 2026-10-21, pedido do Gustavo): o quadro do dente é um RETÂNGULO redimensionável
   (alça no canto inferior direito, `components/Marker.tsx`) que cobre a coroa inteira; `sampleThirds` lê colo /
   médio / incisal e `matchShadeProfile` compara o perfil com o tab inteiro (terços medidos na calibração —

@@ -129,7 +129,7 @@ describe('matchShadeProfile (dente inteiro por terços)', () => {
     const { matchShadeProfile, tabProfile } = await import('@/lib/color/match');
     const { getSystem } = await import('@/lib/color/shades');
     for (const shade of getSystem('vita-classical').shades) {
-      const r = matchShadeProfile(tabProfile(shade.lab), 'vita-classical');
+      const r = matchShadeProfile(shade.thirds ?? tabProfile(shade.lab), 'vita-classical');
       expect(r.matches).toHaveLength(2);
       expect(r.matches[0].shade.id).toBe(shade.id);
       expect(r.matches[0].deltaE).toBeCloseTo(0, 6);

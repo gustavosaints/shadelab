@@ -69,10 +69,14 @@ export function matchShade(measured: Lab, system: ShadeSystemId, options: Option
  * devolvido é o terço médio.
  */
 export function matchShadeProfile(profile: ThirdsProfile, system: ShadeSystemId, options: Options = {}): MatchResult {
-  return rank(profile.middle, system, options, (ref, id) => profileDeltaE(profile, tabProfile(ref.lab, options.calibrationThirds?.[id])));
+  return rank(profile.middle, system, options, (ref, id, calibrated) =>
+    profileDeltaE(profile, tabProfile(ref.lab, options.calibrationThirds?.[id] ?? (calibrated ? undefined : ref.thirds))),
+  );
 }
 
-function rank(measured: Lab, system: ShadeSystemId, options: Options, distance: (ref: { lab: Lab }, id: string) => number): MatchResult {
+type DistanceRef = { lab: Lab; thirds?: ThirdsProfile };
+
+function rank(measured: Lab, system: ShadeSystemId, options: Options, distance: (ref: DistanceRef, id: string, calibrated: boolean) => number): MatchResult {
   const { topN = 2, calibration } = options;
   const sys = getSystem(system);
   const calibratedCount = calibration ? sys.shades.filter((s) => calibration[s.id]).length : 0;
@@ -80,7 +84,7 @@ function rank(measured: Lab, system: ShadeSystemId, options: Options, distance: 
 
   const all: ShadeMatch[] = sys.shades.map((shade) => {
     const refLab = useCalibration && calibration ? calibration[shade.id]! : shade.lab;
-    const dE = distance({ lab: refLab }, shade.id);
+    const dE = distance({ lab: refLab, thirds: shade.thirds }, shade.id, useCalibration);
     return { shade: { ...shade, lab: refLab }, deltaE: dE, quality: classifyDeltaE(dE) };
   });
   all.sort((a, b) => a.deltaE - b.deltaE);
