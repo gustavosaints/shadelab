@@ -77,6 +77,11 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   padrão `none` (o código de correção em `lib/color/calibrate.ts` continua para uso futuro). `Marker`: alça redonda
   com responder próprio, pinça sobre o quadro, e modo explícito "Mover quadros / Redimensionar quadros" (chips
   abaixo da foto); enquanto arrasta um quadro a rolagem da tela trava (`dragging`).
+  ANIMAÇÃO DA LEITURA (2026-10-22, inspirada na varredura do "Gerar HD" do SmileCloud): ao tocar "Analisar cor",
+  `components/ShadeScan.tsx` abre um cartão escuro no meio da tela (Modal) com o contorno de um incisivo, grade de
+  pontos, anel girando, faixa de luz varrendo e os terços acendendo; legenda em 3 passos. Fica ≥ 2 s (0,3 s com
+  "Reduzir movimento"); quando o resultado chega o dente se pinta com a cor medida e mostra o tab, e fecha (~1,1 s;
+  toque pula). Só na tomada de cor, não na calibração.
 - `src/lib/image/` leitura de pixels (expo-image-manipulator + jpeg-js) e média robusta (descarta 15% extremos).
 - SMILE DESIGN POR IA (redesenho de 2026-10-22, pedido do Gustavo: "retirar toda a parte manual de colocar os
   dentes"). `src/app/smile/index.tsx`: foto (câmera guiada `smile/capture.tsx` → `pendingPhoto.ts`, ou galeria) →

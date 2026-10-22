@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Image,
@@ -20,6 +20,7 @@ import { Chip } from '@/components/Chip';
 import { FaceLandmarker, type FaceLandmarkerHandle } from '@/components/FaceLandmarker';
 import { Marker } from '@/components/Marker';
 import { ShadeRow } from '@/components/ShadeRow';
+import { ShadeScan } from '@/components/ShadeScan';
 import { correctedLab, type ReferenceSpec } from '@/lib/color/calibrate';
 import { labToHex, roundLab, type Lab } from '@/lib/color/convert';
 import { matchGingiva, type GingivaMatch } from '@/lib/color/gingiva';
@@ -88,6 +89,7 @@ export default function Analyze() {
   /** Enquanto um quadro (ou a foto ampliada) está sendo arrastado, a rolagem da tela fica travada. */
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [scan, setScan] = useState<{ result?: { id: string; hex: string } } | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [result, setResult] = useState<{
     match: MatchResult;
@@ -217,6 +219,8 @@ export default function Analyze() {
     setBusy(true);
     setResult(null);
     setWarning(null);
+    // animação de leitura só na tomada de cor (na calibração o dentista mede tab após tab)
+    if (mode === 'shade') setScan({});
     try {
       const refSpec: ReferenceSpec | undefined = undefined;
       // dente inteiro: três terços (colo → incisal) comparados com o tab inteiro
@@ -241,17 +245,20 @@ export default function Analyze() {
         gingivaMatches = matchGingiva(gingivaLab, settings.gingivaCalibrations).matches;
       }
       setResult({ match, profile, whole: thirds.whole, gingivaLab, gingivaMatches });
+      if (mode === 'shade') setScan({ result: { id: match.matches[0].shade.id, hex: labToHex(profile.middle) } });
       if (thirds.middle.cv > HETEROGENEOUS_CV) {
         setWarning(
           `Variação de ${Math.round(thirds.middle.cv * 100)}% no terço médio do dente. Se houver reflexo, borda ou mancha dentro do quadro, ajuste o quadro para cobrir só a coroa e repita.`,
         );
       }
     } catch (e) {
+      setScan(null);
       Alert.alert('Não foi possível analisar', String(e));
     } finally {
       setBusy(false);
     }
   };
+  const closeScan = useCallback(() => setScan(null), []);
 
   const saveAsCalibration = async () => {
     if (!result || !settings || !calibShade) return;
@@ -334,6 +341,7 @@ export default function Analyze() {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <FaceLandmarker ref={landmarker} />
+      <ShadeScan visible={!!scan} systemName={system?.name ?? 'escala'} result={scan?.result} onDone={closeScan} />
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled" scrollEnabled={!dragging}>
         <View
           style={styles.imageArea}
