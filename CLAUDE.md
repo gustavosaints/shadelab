@@ -141,6 +141,13 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   gengiva à mostra até o lábio; contorno pelo lado de dentro dos lábios, cantos nas pontas (8 pontos). Testado nas
   fotos de perto do Gustavo e no quadro do vídeo do SmileCloud (fixtures fora do git em `reference/scan-test/`);
   teste sintético em `tests/mouthScan.test.ts`. O contorno aparece tracejado sobre a foto (`SmileMap` prop `mouth`).
+  FOTO INTEIRA + MOLDURA (2026-10-22, ele achou que o recorte na boca "cortava muito o rosto"): `SmileMap` mostra a
+  foto INTEIRA no quadro (sem recorte na boca), pinça até 8x; números, contornos e alças são divididos pelo zoom
+  para ficarem do mesmo tamanho na tela. Para a foto encher o quadro: `lib/smile/frameAspect.ts` (proporção do
+  quadro = metade da área); a câmera do Smile Design (`smile/capture.tsx`, `faceGuide(W, H, aspect)`) mostra a
+  moldura nessa proporção, escurece o resto e corta a foto nela; foto da galeria (na câmera ou em "Escolher da
+  galeria") abre `components/PhotoCropper.tsx` (moldura fixa, arrastar/pinça, "Cortar e usar" ou "Usar a foto
+  inteira"); `PendingPhoto.crop` avisa a tela para abrir o corte.
   Próximo passo possível: mandar também a imagem com as silhuetas como guia para a IA (testar quando houver crédito).
   REMOVIDOS nessa data: editor manual (contorno, boca, ajustar, face-bow na tela, biblioteca 2D de sorrisos,
   cenários, rascunho automático) e a tela separada "Sorriso por IA". Ficaram só bibliotecas usadas por outras

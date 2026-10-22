@@ -1,5 +1,6 @@
 import { CameraView, useCameraPermissions, type CameraType } from 'expo-camera';
 import { File, Paths } from 'expo-file-system';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useRef, useState } from 'react';
@@ -9,10 +10,18 @@ import Svg, { Line, Path, Rect } from 'react-native-svg';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { Button } from '@/components/Button';
 import { faceGuide } from '@/lib/face/landmarks';
+import { estimateAreaH, smileFrameAspect } from '@/lib/smile/frameAspect';
 import { setPendingPhoto } from '@/lib/smile/pendingPhoto';
 import { colors, spacing } from '@/theme';
 
-const TIP = 'Encaixe o rosto no guia: olhos na linha, boca na faixa. Sorria mostrando os dentes.';
+const TIP = 'Encaixe o rosto no guia: olhos na linha, boca na faixa. Sorria mostrando os dentes. A moldura é o que aparece na tela do Smile Design.';
+
+/** Proporção da moldura = a do quadro da foto no Smile Design (metade da tela). */
+function useFrameAspect() {
+  const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  return smileFrameAspect(width, estimateAreaH(height, insets.top));
+}
 
 /**
  * Câmera guiada do Smile Design: janela 3:4 com um guia de rosto (contorno, olhos,
@@ -25,9 +34,9 @@ export default function SmileCapture() {
   return fallback ? <NativeCapture /> : <LiveCapture onFallback={() => setFallback(true)} />;
 }
 
-/** HTML da prévia para uma área de W×H px (guia desenhado em px, sem esticar). */
-const liveHtml = (W: number, H: number) => {
-  const G = faceGuide(W, H);
+/** HTML da prévia para uma área de W×H px (guia desenhado em px, sem esticar), moldura na proporção `aspect`. */
+const liveHtml = (W: number, H: number, aspect: number) => {
+  const G = faceGuide(W, H, aspect);
   const fr = G.frame;
   return `<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
@@ -68,7 +77,7 @@ const liveHtml = (W: number, H: number) => {
   window.__switch = () => start(facing === 'user' ? 'environment' : 'user');
   window.__capture = () => {
     try {
-      // recorta o que aparece na janela 3:4 (object-fit: cover)
+      // recorta o que aparece na moldura (object-fit: cover)
       const vw = v.videoWidth, vh = v.videoHeight;
       const s = Math.max(FR.w / vw, FR.h / vh);
       const cw = Math.round(FR.w / s), chh = Math.round(FR.h / s);
@@ -91,6 +100,7 @@ function LiveCapture({ onFallback }: { onFallback: () => void }) {
   const { width: winW, height: winH } = useWindowDimensions();
   const [cameraOk, setCameraOk] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
+  const aspect = useFrameAspect();
 
   const onMessage = (e: WebViewMessageEvent) => {
     let msg: { type: string; ok?: boolean; error?: string; data?: string; width?: number; height?: number; mirrored?: boolean };
@@ -128,7 +138,7 @@ function LiveCapture({ onFallback }: { onFallback: () => void }) {
     const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
     if (res.canceled || !res.assets[0]) return;
     const a = res.assets[0];
-    setPendingPhoto({ uri: a.uri, width: a.width, height: a.height, mirrored: false });
+    setPendingPhoto({ uri: a.uri, width: a.width, height: a.height, mirrored: false, crop: true });
     router.back();
   };
 
@@ -136,7 +146,7 @@ function LiveCapture({ onFallback }: { onFallback: () => void }) {
     <View style={styles.root}>
       <WebView
         ref={web}
-        source={{ html: liveHtml(winW, winH), baseUrl: 'https://shadelab.app/' }}
+        source={{ html: liveHtml(winW, winH, aspect), baseUrl: 'https://shadelab.app/' }}
         onMessage={onMessage}
         style={StyleSheet.absoluteFill}
         javaScriptEnabled
@@ -190,13 +200,25 @@ function NativeCapture() {
   const [size, setSize] = useState({ width: 0, height: 0 });
   const cameraRef = useRef<CameraView>(null);
   const insets = useSafeAreaInsets();
+  const aspect = useFrameAspect();
 
   const takePhoto = async () => {
     if (!cameraRef.current || !ready || busy) return;
     setBusy(true);
     try {
       const p = await cameraRef.current.takePictureAsync({ quality: 1, shutterSound: false });
-      setShot({ uri: p.uri, width: p.width, height: p.height, mirrored: facing === 'front' });
+      // corta a foto na moldura: a prévia cobre a tela (cover), então mapeia a moldura da tela para a foto
+      const fr = faceGuide(size.width, size.height, aspect).frame;
+      const sc = Math.max(size.width / p.width, size.height / p.height);
+      const ox = (size.width - p.width * sc) / 2;
+      const oy = (size.height - p.height * sc) / 2;
+      const cx = Math.max(0, Math.round((fr.x - ox) / sc));
+      const cy = Math.max(0, Math.round((fr.y - oy) / sc));
+      const cw = Math.min(p.width - cx, Math.round(fr.w / sc));
+      const ch = Math.min(p.height - cy, Math.round(fr.h / sc));
+      const ref = await ImageManipulator.manipulate(p.uri).crop({ originX: cx, originY: cy, width: cw, height: ch }).renderAsync();
+      const out = await ref.saveAsync({ format: SaveFormat.JPEG, compress: 0.95 });
+      setShot({ uri: out.uri, width: out.width, height: out.height, mirrored: facing === 'front' });
     } catch (e) {
       Alert.alert('Erro ao capturar', String(e));
     } finally {
@@ -208,7 +230,8 @@ function NativeCapture() {
     const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
     if (res.canceled || !res.assets[0]) return;
     const a = res.assets[0];
-    setShot({ uri: a.uri, width: a.width, height: a.height, mirrored: false });
+    setPendingPhoto({ uri: a.uri, width: a.width, height: a.height, mirrored: false, crop: true });
+    router.back();
   };
 
   const use = () => {
@@ -230,17 +253,24 @@ function NativeCapture() {
     );
   }
 
-  const G = size.width > 0 ? faceGuide(size.width, size.height) : null;
+  const G = size.width > 0 ? faceGuide(size.width, size.height, aspect) : null;
   const stroke = 'rgba(235,235,235,0.9)';
   return (
     <View style={styles.root} onLayout={(e) => setSize(e.nativeEvent.layout)}>
       {shot ? (
-        <Image source={{ uri: shot.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+        <Image source={{ uri: shot.uri }} style={StyleSheet.absoluteFill} resizeMode="contain" />
       ) : (
         <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing={facing} mirror={facing === 'front'} flash="off" animateShutter={false} onCameraReady={() => setReady(true)} />
       )}
       {G && !shot && (
         <Svg pointerEvents="none" width={size.width} height={size.height} style={StyleSheet.absoluteFill}>
+          {/* fora da moldura fica escuro: só o que está dentro vai para a tela do Smile Design */}
+          <Path
+            d={`M0 0 H${size.width} V${size.height} H0 Z M${G.frame.x} ${G.frame.y} V${G.frame.y + G.frame.h} H${G.frame.x + G.frame.w} V${G.frame.y} Z`}
+            fill="rgba(0,0,0,0.55)"
+            fillRule="evenodd"
+          />
+          <Rect x={G.frame.x} y={G.frame.y} width={G.frame.w} height={G.frame.h} stroke={colors.rose} strokeWidth={2} fill="none" />
           <Line x1={G.cross.x} y1={G.frame.y} x2={G.cross.x} y2={G.frame.y + G.frame.h} stroke="rgba(255,80,80,0.75)" strokeWidth={1} strokeDasharray="4 4" />
           <Line x1={G.frame.x} y1={G.cross.eyeY} x2={G.frame.x + G.frame.w} y2={G.cross.eyeY} stroke="rgba(255,80,80,0.75)" strokeWidth={1} strokeDasharray="4 4" />
           <Path d={G.head} stroke={stroke} strokeWidth={2.2} fill="none" strokeLinecap="round" />

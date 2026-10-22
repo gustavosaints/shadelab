@@ -130,7 +130,7 @@ export type FramingGuide = {
 export const DEFAULT_GUIDE: FramingGuide = { cx: 0.5, cy: 0.42, rx: 0.23, ry: 0.3, mouthCy: 0.585, mouthH: 0.09 };
 
 export type FaceGuide = {
-  /** Janela 3:4 da câmera dentro da área (px); fora dela ficam barras pretas. */
+  /** Janela da câmera dentro da área (px), na proporção pedida; fora dela ficam barras escuras. */
   frame: { x: number; y: number; w: number; h: number };
   /** Contorno do rosto (têmporas → mandíbula → queixo) e arco do alto da cabeça, em px. */
   head: string;
@@ -145,20 +145,20 @@ export type FaceGuide = {
 };
 
 /**
- * Guia de rosto no estilo "ficha de foto": janela 3:4, rosto grande (≈78% da largura da janela),
- * traços de orelhas, sobrancelhas, olhos, nariz e lábios, e cruz de alinhamento. Tudo em px da
- * área W×H, com proporção real de rosto, independente da proporção da tela.
+ * Guia de rosto no estilo "ficha de foto": janela na proporção `aspect` (largura/altura; padrão 3:4 — no Smile
+ * Design é a do quadro da foto na tela), rosto grande, traços de orelhas, sobrancelhas, olhos, nariz e lábios, e
+ * cruz de alinhamento. Tudo em px da área W×H, com proporção real de rosto, independente da proporção da tela.
  */
-export function faceGuide(W: number, H: number): FaceGuide {
-  // janela 3:4 centralizada
+export function faceGuide(W: number, H: number, aspect = 3 / 4): FaceGuide {
+  // janela centralizada na proporção pedida
   let fw = W;
-  let fh = (W * 4) / 3;
+  let fh = W / aspect;
   if (fh > H) {
     fh = H;
-    fw = (H * 3) / 4;
+    fw = H * aspect;
   }
   const frame = { x: (W - fw) / 2, y: (H - fh) / 2, w: fw, h: fh };
-  const u = 0.78 * fw; // unidade: largura do rosto nas têmporas
+  const u = 0.78 * Math.min(fw, fh * 0.75); // unidade: largura do rosto nas têmporas (o rosto cabe na altura)
   const cx = frame.x + fw / 2;
   const eyeY = frame.y + 0.42 * fh;
   const cy = eyeY + 0.14 * u; // centro de referência do rosto

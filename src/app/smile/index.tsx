@@ -8,6 +8,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { captureRef } from 'react-native-view-shot';
 import { AiConfig } from '@/components/AiConfig';
 import { BeforeAfter, type CompareMode } from '@/components/BeforeAfter';
@@ -17,6 +18,7 @@ import { Chip } from '@/components/Chip';
 import { FaceLandmarker, type FaceLandmarkerHandle } from '@/components/FaceLandmarker';
 import { MouthEditor } from '@/components/MouthEditor';
 import { SmileMap } from '@/components/SmileMap';
+import { PhotoCropper } from '@/components/PhotoCropper';
 import { SmileGenerating } from '@/components/SmileGenerating';
 import {
   buildDesignPrompt,
@@ -56,6 +58,7 @@ import {
   type LengthEdits,
   type ToothMap,
 } from '@/lib/smile/mapping';
+import { estimateAreaH, smileFrameAspect, smilePhotoHeight } from '@/lib/smile/frameAspect';
 import { centeredMouth, mouthBounds } from '@/lib/smile/mouth';
 import type { MouthPoint } from '@/lib/smile/teeth';
 import { takePendingPhoto } from '@/lib/smile/pendingPhoto';
@@ -113,7 +116,10 @@ export default function SmileDesign() {
   const compareRef = useRef<View>(null);
 
   const { width: windowW, height: windowH } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const [areaH, setAreaH] = useState(0);
+  // foto da galeria esperando o corte na proporção do quadro
+  const [cropSrc, setCropSrc] = useState<Photo | null>(null);
   const hasKey = settings.aiApiKey.trim().length > 0;
   const result = results[current];
   const aspect = photo ? photo.width / photo.height : 3 / 4;
@@ -205,7 +211,8 @@ export default function SmileDesign() {
   useFocusEffect(
     useCallback(() => {
       const p = takePendingPhoto();
-      if (p) startWithPhoto({ uri: p.uri, width: p.width, height: p.height });
+      if (p?.crop) setCropSrc({ uri: p.uri, width: p.width, height: p.height });
+      else if (p) startWithPhoto({ uri: p.uri, width: p.width, height: p.height });
       // só ao ganhar foco: a foto pendente é consumida uma vez
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []),
@@ -251,8 +258,20 @@ export default function SmileDesign() {
     const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
     if (res.canceled || !res.assets[0]) return;
     const a = res.assets[0];
-    startWithPhoto({ uri: a.uri, width: a.width, height: a.height });
+    setCropSrc({ uri: a.uri, width: a.width, height: a.height });
   };
+  const frameAspect = smileFrameAspect(windowW, areaH || estimateAreaH(windowH, insets.top));
+  const cropper = (
+    <PhotoCropper
+      photo={cropSrc}
+      aspect={frameAspect}
+      onCancel={() => setCropSrc(null)}
+      onDone={(p) => {
+        setCropSrc(null);
+        startWithPhoto(p);
+      }}
+    />
+  );
 
   const generate = async () => {
     if (!photo) return;
@@ -307,7 +326,6 @@ export default function SmileDesign() {
   }, [pending]);
 
   // dentes na foto: encaixe original (recorte da vista) e com o arco + comprimentos (o que aparece)
-  const frameTeeth = map ? archTeeth(map) : [];
   const planTeeth = map ? archTeeth(map, arch).map((t) => applyLength(t, lengths[t.fdi], map.pxPerMm)) : [];
 
   // ajustes de comprimento: todos os dentes ou o selecionado
@@ -391,6 +409,7 @@ export default function SmileDesign() {
   if (!photo) {
     return (
       <ScrollView contentContainerStyle={{ padding: spacing.md }}>
+        {cropper}
         <Card>
           <SectionTitle>Smile Design por IA</SectionTitle>
           <Muted>
@@ -408,12 +427,13 @@ export default function SmileDesign() {
 
   // a foto ocupa metade da tela (pedido do Gustavo); a foto inteira (antes e depois / gerando) cabe nessa altura
   const chipsH = result && !generating ? 44 : 0;
-  const photoH = Math.max(160, (areaH || windowH * 0.85) / 2 - chipsH - spacing.sm * 2);
+  const photoH = smilePhotoHeight(areaH || estimateAreaH(windowH, insets.top), chipsH);
   const fullW = Math.min(windowW - spacing.md * 2, photoH * aspect);
   const fullBox = { width: fullW, height: fullW / aspect, alignSelf: 'center' as const };
 
   return (
     <View style={{ flex: 1 }} onLayout={(e) => setAreaH(e.nativeEvent.layout.height)}>
+      {cropper}
       <FaceLandmarker ref={landmarker} />
       {/* foto fixa no topo; as opções rolam embaixo */}
       <View style={styles.fixed}>
@@ -445,7 +465,6 @@ export default function SmileDesign() {
               photo={photo}
               height={photoH}
               teeth={planTeeth}
-              frame={frameTeeth}
               status={mapStatus}
               shapeMix={TOOTH_SHAPES.find((sh) => sh.id === choice.shape)?.mix ?? null}
               texture={choice.texture}

@@ -15,8 +15,6 @@ type Props = {
   height: number;
   /** Dentes como devem aparecer (arco e comprimentos já aplicados), em px da foto. */
   teeth: MappedTooth[];
-  /** Dentes do encaixe original: definem o recorte, que fica parado enquanto o arco é ajustado. */
-  frame: MappedTooth[];
   status: 'detecting' | 'ok' | 'failed';
   /** 0 quadrada … 1 triangular; null = nenhuma forma escolhida (só os números dos dentes). */
   shapeMix: number | null;
@@ -41,30 +39,19 @@ const GLOW = '#F3C9BE';
  * com uma textura escolhida, uma prévia transparente dela aparece nos incisivos 12, 11, 21 e 22. Tocar num dente
  * seleciona para ajustar só ele. Pinça aproxima (até 5x) e, aproximada, um dedo arrasta a vista.
  */
-export function SmileMap({ photo, height, teeth, frame, status, shapeMix, texture, selected, onSelect, onArchDrag, hint, mouth }: Props) {
+export function SmileMap({ photo, height, teeth, status, shapeMix, texture, selected, onSelect, onArchDrag, hint, mouth }: Props) {
   const [width, setWidth] = useState(0);
   const [zoom, setZoom] = useState({ scale: 1, tx: 0, ty: 0 });
   const gesture = useRef<{ x: number; y: number; dist: number; scale: number; tx: number; ty: number; pinch: boolean } | null>(null);
   const start = useRef<{ x: number; y: number } | null>(null);
 
-  // recorte em volta dos dentes do encaixe, na proporção da vista (sem mapa: a foto inteira, centralizada)
+  // a foto inteira, centralizada no quadro (o rosto não é cortado; a pinça aproxima — pedido do Gustavo)
   const aspect = width && height ? width / height : 1;
-  let crop: { x: number; y: number; w: number; h: number };
-  if (frame.length) {
-    const x0 = Math.min(...frame.map((t) => t.x));
-    const x1 = Math.max(...frame.map((t) => t.x + t.w));
-    const y0 = Math.min(...frame.map((t) => t.y));
-    const y1 = Math.max(...frame.map((t) => t.y + t.h));
-    let w = (x1 - x0) * 1.45;
-    let h = Math.max((y1 - y0) * 2.3, w / aspect);
-    if (w / h < aspect) w = h * aspect;
-    else h = w / aspect;
-    crop = { x: (x0 + x1) / 2 - w / 2, y: (y0 + y1) / 2 - h / 2, w, h };
-  } else {
-    const fit = photo.width / photo.height > aspect ? { w: photo.width, h: photo.width / aspect } : { w: photo.height * aspect, h: photo.height };
-    crop = { x: (photo.width - fit.w) / 2, y: (photo.height - fit.h) / 2, ...fit };
-  }
+  const fit = photo.width / photo.height > aspect ? { w: photo.width, h: photo.width / aspect } : { w: photo.height * aspect, h: photo.height };
+  const crop = { x: (photo.width - fit.w) / 2, y: (photo.height - fit.h) / 2, ...fit };
   const s = width / crop.w;
+  // números, contornos e alças mantêm o tamanho na tela com zoom (divididos pelo zoom)
+  const z = zoom.scale;
   const toView = (t: MappedTooth): MappedTooth => ({ ...t, x: (t.x - crop.x) * s, y: (t.y - crop.y) * s, w: t.w * s, h: t.h * s });
   const view = teeth.map(toView);
   const textureMix = shapeMix ?? 0.5;
@@ -101,7 +88,7 @@ export function SmileMap({ photo, height, teeth, frame, status, shapeMix, textur
         gesture.current = { ...g, dist: d, scale: zoom.scale, pinch: true };
         return;
       }
-      setZoom(clampZoom({ scale: Math.max(1, Math.min(5, (g.scale * d) / g.dist)), tx: zoom.tx, ty: zoom.ty }));
+      setZoom(clampZoom({ scale: Math.max(1, Math.min(8, (g.scale * d) / g.dist)), tx: zoom.tx, ty: zoom.ty }));
     } else if (!g.pinch) {
       setZoom(clampZoom({ scale: zoom.scale, tx: g.tx + e.nativeEvent.pageX - g.x, ty: g.ty + e.nativeEvent.pageY - g.y }));
     }
@@ -142,8 +129,8 @@ export function SmileMap({ photo, height, teeth, frame, status, shapeMix, textur
                 fill="none"
                 stroke={GLOW}
                 strokeOpacity={0.8}
-                strokeWidth={1.4}
-                strokeDasharray="5 4"
+                strokeWidth={1.4 / z}
+                strokeDasharray={`${5 / z} ${4 / z}`}
               />
             </Svg>
           )}
@@ -198,7 +185,7 @@ export function SmileMap({ photo, height, teeth, frame, status, shapeMix, textur
                       fill={texture ? 'none' : 'rgba(255,255,255,0.10)'}
                       stroke={selected === t.fdi ? GLOW : '#FFFFFF'}
                       strokeOpacity={on ? 0.95 : 0.55}
-                      strokeWidth={selected === t.fdi ? 2.2 : 1.4}
+                      strokeWidth={(selected === t.fdi ? 2.2 : 1.4) / z}
                     />
                   );
                 })}
@@ -206,16 +193,16 @@ export function SmileMap({ photo, height, teeth, frame, status, shapeMix, textur
               {/* números (mapeamento) e área de toque de cada dente */}
               {view.map((t) => {
                 const cx = t.x + t.w / 2;
-                const y = t.y - 5;
+                const y = t.y - 5 / z;
                 const sel = selected === t.fdi;
                 return (
                   <G key={`lbl-${t.fdi}`} onPress={() => onSelect(t.fdi)}>
-                    <Rect x={t.x} y={t.y - 16} width={t.w} height={t.h + 16} fill="rgba(0,0,0,0.001)" />
-                    {shapeMix === null && <Ellipse cx={cx} cy={t.y + t.h * 0.55} rx={2.2} ry={2.2} fill="#FFFFFF" opacity={0.85} />}
-                    <SvgText x={cx} y={y} fontSize={10} fontWeight="700" textAnchor="middle" stroke="rgba(0,0,0,0.55)" strokeWidth={3} fill="none">
+                    <Rect x={t.x} y={t.y - 16 / z} width={t.w} height={t.h + 16 / z} fill="rgba(0,0,0,0.001)" />
+                    {shapeMix === null && <Ellipse cx={cx} cy={t.y + t.h * 0.55} rx={2.2 / z} ry={2.2 / z} fill="#FFFFFF" opacity={0.85} />}
+                    <SvgText x={cx} y={y} fontSize={10 / z} fontWeight="700" textAnchor="middle" stroke="rgba(0,0,0,0.55)" strokeWidth={3 / z} fill="none">
                       {t.fdi}
                     </SvgText>
-                    <SvgText x={cx} y={y} fontSize={10} fontWeight="700" textAnchor="middle" fill={sel ? GLOW : '#FFFFFF'}>
+                    <SvgText x={cx} y={y} fontSize={10 / z} fontWeight="700" textAnchor="middle" fill={sel ? GLOW : '#FFFFFF'}>
                       {t.fdi}
                     </SvgText>
                   </G>
@@ -223,7 +210,7 @@ export function SmileMap({ photo, height, teeth, frame, status, shapeMix, textur
               })}
             </Svg>
           )}
-          {onArchDrag && view.length > 0 && archHandles(view, s * zoom.scale, onArchDrag)}
+          {onArchDrag && view.length > 0 && archHandles(view, s * z, z, onArchDrag)}
         </View>
       )}
       {width > 0 && (
@@ -255,7 +242,7 @@ export function SmileMap({ photo, height, teeth, frame, status, shapeMix, textur
  * o arco (para os lados) e mudam a curva do sorriso (para cima/baixo); barras brancas nas laterais mudam a largura.
  * `scale` converte px de tela em px da foto.
  */
-function archHandles(view: MappedTooth[], scale: number, onDrag: NonNullable<Props['onArchDrag']>): ReactNode {
+function archHandles(view: MappedTooth[], scale: number, z: number, onDrag: NonNullable<Props['onArchDrag']>): ReactNode {
   const x0 = Math.min(...view.map((t) => t.x));
   const x1 = Math.max(...view.map((t) => t.x + t.w));
   const top = Math.min(...view.map((t) => t.y));
@@ -263,16 +250,39 @@ function archHandles(view: MappedTooth[], scale: number, onDrag: NonNullable<Pro
   const mid = view.find((t) => t.fdi === '11' || t.fdi === '21');
   const midX = mid ? (mid.fdi === '11' ? mid.x + mid.w : mid.x) : (x0 + x1) / 2;
   const items: { key: ArchHandle; x: number; y: number; body: ReactNode; label: string }[] = [
-    { key: 'move', x: midX, y: top - 20, body: <MoveIcon />, label: 'Mover o arco' },
-    { key: 'distalL', x: x0 - 4, y: top - 4, body: <Bracket side="L" />, label: 'Abrir ou fechar o arco e mudar a curva do sorriso' },
-    { key: 'distalR', x: x1 + 4, y: top - 4, body: <Bracket side="R" />, label: 'Abrir ou fechar o arco e mudar a curva do sorriso' },
-    { key: 'widthL', x: x0 - 14, y: bottom, body: <View style={styles.widthBar} />, label: 'Largura do arco' },
-    { key: 'widthR', x: x1 + 14, y: bottom, body: <View style={styles.widthBar} />, label: 'Largura do arco' },
+    { key: 'move', x: midX, y: top - 20 / z, body: <MoveIcon />, label: 'Mover o arco' },
+    { key: 'distalL', x: x0 - 4 / z, y: top - 4 / z, body: <Bracket side="L" />, label: 'Abrir ou fechar o arco e mudar a curva do sorriso' },
+    { key: 'distalR', x: x1 + 4 / z, y: top - 4 / z, body: <Bracket side="R" />, label: 'Abrir ou fechar o arco e mudar a curva do sorriso' },
+    { key: 'widthL', x: x0 - 14 / z, y: bottom, body: <View style={styles.widthBar} />, label: 'Largura do arco' },
+    { key: 'widthR', x: x1 + 14 / z, y: bottom, body: <View style={styles.widthBar} />, label: 'Largura do arco' },
   ];
-  return items.map((h) => <Handle key={h.key} handle={h.key} x={h.x} y={h.y} scale={scale} onDrag={onDrag} label={h.label}>{h.body}</Handle>);
+  return items.map((h) => (
+    <Handle key={h.key} handle={h.key} x={h.x} y={h.y} scale={scale} z={z} onDrag={onDrag} label={h.label}>
+      {h.body}
+    </Handle>
+  ));
 }
 
-function Handle({ handle, x, y, scale, onDrag, label, children }: { handle: ArchHandle; x: number; y: number; scale: number; onDrag: NonNullable<Props['onArchDrag']>; label: string; children: ReactNode }) {
+function Handle({
+  handle,
+  x,
+  y,
+  scale,
+  z,
+  onDrag,
+  label,
+  children,
+}: {
+  handle: ArchHandle;
+  x: number;
+  y: number;
+  scale: number;
+  /** zoom atual: a alça é desenhada 1/z para ficar do mesmo tamanho na tela */
+  z: number;
+  onDrag: NonNullable<Props['onArchDrag']>;
+  label: string;
+  children: ReactNode;
+}) {
   const start = useRef<{ x: number; y: number } | null>(null);
   const delta = (e: GestureResponderEvent) => {
     const st = start.current ?? { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
@@ -280,7 +290,7 @@ function Handle({ handle, x, y, scale, onDrag, label, children }: { handle: Arch
   };
   return (
     <View
-      style={[styles.handle, { left: x - HANDLE_HIT / 2, top: y - HANDLE_HIT / 2 }]}
+      style={[styles.handle, { left: x - HANDLE_HIT / 2, top: y - HANDLE_HIT / 2, transform: [{ scale: 1 / z }] }]}
       onStartShouldSetResponder={() => true}
       onMoveShouldSetResponder={() => true}
       onResponderTerminationRequest={() => false}
