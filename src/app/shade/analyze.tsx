@@ -17,11 +17,14 @@ import {
 import { Button } from '@/components/Button';
 import { Card, Muted, SectionTitle } from '@/components/Card';
 import { Chip } from '@/components/Chip';
+import { FaceLandmarker, type FaceLandmarkerHandle } from '@/components/FaceLandmarker';
 import { Marker } from '@/components/Marker';
 import { ShadeRow } from '@/components/ShadeRow';
 import { correctedLab, type ReferenceSpec } from '@/lib/color/calibrate';
 import { labToHex, roundLab, type Lab } from '@/lib/color/convert';
 import { matchGingiva, type GingivaMatch } from '@/lib/color/gingiva';
+import { detectFace } from '@/lib/face/detect';
+import { mouthBounds } from '@/lib/smile/mouth';
 import { matchShadeProfile, type MatchResult, type ThirdsProfile } from '@/lib/color/match';
 import { getSystem } from '@/lib/color/shades';
 import { cropToFile } from '@/lib/image/crop';
@@ -76,8 +79,8 @@ export default function Analyze() {
   const [layout, setLayout] = useState({ width: 0, height: 0 });
   const [zoom, setZoom] = useState<Zoom>({ scale: 1, tx: 0, ty: 0 });
   // retângulos em pixels da imagem: o do dente cobre a coroa inteira (colo → borda incisal)
-  const [tooth, setTooth] = useState<Rect>({ x: imgW * 0.46, y: imgH * 0.37, width: imgW * 0.08, height: imgH * 0.12 });
-  const [gingiva, setGingiva] = useState<Rect>({ x: imgW * 0.46, y: imgH * 0.27, width: imgW * 0.08, height: imgW * 0.06 });
+  const [tooth, setTooth] = useState<Rect>({ x: imgW * 0.46, y: imgH * 0.44, width: imgW * 0.08, height: imgW * 0.08 });
+  const [gingiva, setGingiva] = useState<Rect>({ x: imgW * 0.47, y: imgH * 0.44 - imgW * 0.075, width: imgW * 0.06, height: imgW * 0.06 });
   const [useGingiva, setUseGingiva] = useState(false);
   const [lowerTooth, setLowerTooth] = useState(false);
   /** O que o arrasto no quadro faz: mover ou redimensionar (modo explícito, pedido do Gustavo). */
@@ -94,6 +97,39 @@ export default function Analyze() {
     gingivaMatches?: GingivaMatch[];
   } | null>(null);
   const calibratingGingiva = mode === 'calibrate-gingiva';
+  const landmarker = useRef<FaceLandmarkerHandle>(null);
+  const placedOnce = useRef(false);
+
+  /**
+   * Posição inicial dos quadros: a mesma detecção de boca do Smile Design (MediaPipe) dá as comissuras e o lábio
+   * superior; um central mede ~16 % da largura da boca. O quadro do dente fica QUADRADO, sobre o 11 (à esquerda da
+   * linha média para quem olha), logo abaixo do lábio superior; o da gengiva, menor, logo acima. Só uma sugestão
+   * de onde começar: o ajuste fino é manual.
+   */
+  const placeByMouth = async () => {
+    if (!landmarker.current) return;
+    try {
+      const det = await detectFace(landmarker.current, uri);
+      if (!det) return;
+      const b = mouthBounds(det.mouth, imgW, imgH);
+      const side = Math.max(12, b.widthPx * 0.16);
+      const midX = det.face.philtrum.x * imgW;
+      const topY = b.upperMidY + side * 0.25;
+      const clamp = (r: Rect): Rect => ({ ...r, x: Math.max(0, Math.min(imgW - r.width, r.x)), y: Math.max(0, Math.min(imgH - r.height, r.y)) });
+      setTooth(clamp({ x: midX - side * 1.05, y: topY, width: side, height: side }));
+      const g = side * 0.6;
+      setGingiva(clamp({ x: midX - side * 0.85, y: topY - g * 1.15, width: g, height: g }));
+    } catch {
+      // sem detector (offline) ou sem rosto: ficam os quadros padrão
+    }
+  };
+  useEffect(() => {
+    if (mode !== 'shade' || placedOnce.current || !layout.width) return;
+    placedOnce.current = true;
+    const t = setTimeout(() => placeByMouth(), 500); // dá tempo do detector (WebView) carregar
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layout.width, mode]);
   const [patientName, setPatientName] = useState(patient && patient !== 'Sem nome' ? patient : '');
   const [toothNumber, setToothNumber] = useState(toothParam ?? '');
   const [notes, setNotes] = useState(notesParam ?? '');
@@ -297,6 +333,7 @@ export default function Analyze() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <FaceLandmarker ref={landmarker} />
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled" scrollEnabled={!dragging}>
         <View
           style={styles.imageArea}
