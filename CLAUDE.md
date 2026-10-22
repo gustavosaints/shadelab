@@ -134,7 +134,7 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   alças (`archHandles`): ✥ em cima no meio move o arco (dx/dy mm), colchetes ciano nas pontas = "curva distal"
   (para os lados abre/fecha o arco — `open`, largura aparente de canino/pré-molares, corredor bucal; para cima/baixo
   muda a curva do sorriso — `curveMm`), barras brancas embaixo nas pontas = largura (`centralMm`). Lógica pura em
-  `dragArch` (mapping.ts); texto no canto enquanto arrasta. Ficaram os chips Natural/Áurea e "Zerar arco".
+  `dragArch` (mapping.ts); texto no canto enquanto arrasta. Ficou "Zerar arco" (os chips Natural/Áurea saíram em 2026-10-22: "não faz sentido"; `golden` segue no modelo, sempre falso).
   VARREDURA DA BOCA (2026-10-22): sem rosto na foto, `runMapping` usa `scanMouthInPhoto` (detect.ts) →
   `lib/smile/mouthScan.ts#scanMouth` (foto a 360 px, Lab): dentes = claros e pouco croma; junta os dentes
   (dilatação) e escolhe o grupo largo com vermelho em volta e escuro entre os dentes (evita brilho do nariz);

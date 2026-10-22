@@ -556,14 +556,10 @@ export default function SmileDesign() {
           {map && (
             <>
               <Text style={styles.subTitle}>Arco</Text>
-              <View style={styles.chips}>
-                <Chip label="Proporção natural" selected={!arch.golden} onPress={() => changeArch({ golden: false })} />
-                <Chip label="Proporção áurea" selected={arch.golden} onPress={() => changeArch({ golden: true })} />
-              </View>
+              {/* os botões Proporção natural/áurea saíram a pedido do Gustavo ("não faz sentido"); o arco segue as larguras naturais */}
               <Muted>
-                {`Ajuste direto na foto: arraste os dentes (ou o ✥ em cima) para mover o conjunto inteiro · colchetes ciano nas pontas: para os lados abre ou fecha o arco, para cima ou para baixo muda a curva do sorriso · barras brancas embaixo, nas pontas: largura dos dentes.${
-                  arch.golden ? ' Proporção áurea: central 1,618 : lateral 1 : canino 0,618, mantida na largura.' : ''
-                }`}
+                Ajuste direto na foto: arraste os dentes (ou o ✥ em cima) para mover o conjunto inteiro · colchetes ciano nas pontas: para os lados
+                abre ou fecha o arco, para cima ou para baixo muda a curva do sorriso · barras brancas embaixo, nas pontas: largura dos dentes.
               </Muted>
               {!isDefaultArch(arch) && <Button title="Zerar arco" variant="ghost" onPress={() => changeArch(DEFAULT_ARCH)} />}
 
