@@ -42,7 +42,7 @@ describe('ajuste dente a dente', () => {
   });
 });
 
-describe('forma por dente e biblioteca 2D', () => {
+describe('forma por dente', () => {
   it('um dente com forma própria muda só o próprio contorno', async () => {
     const { layoutTeeth, DEFAULT_SMILE_PARAMS, NO_EDIT } = await import('@/lib/smile/teeth');
     const base = layoutTeeth(DEFAULT_SMILE_PARAMS, 1000, 800);
@@ -50,18 +50,5 @@ describe('forma por dente e biblioteca 2D', () => {
     const d = (list: typeof base, fdi: string) => list.find((t) => t.fdi === fdi)!.d;
     expect(d(edited, '11')).not.toBe(d(base, '11'));
     expect(d(edited, '21')).toBe(d(base, '21'));
-  });
-  it('encaixa o arco da biblioteca pela linha média, colo e largura do central', async () => {
-    const { libraryPlacement } = await import('@/lib/smile/library');
-    const { DEFAULT_SMILE_PARAMS } = await import('@/lib/smile/teeth');
-    const entry = { id: 'x', name: 'x', image: 0, width: 200, height: 70, midlineX: 100, incisalY: 60, gumY: 10, centralWidth: 40 };
-    const p = { ...DEFAULT_SMILE_PARAMS, midlineX: 0.5, gumY: 0.4, centralWidth: 0.08, heightRatio: 1.2 };
-    const b = libraryPlacement(p, entry, 1000, 800);
-    const sx = 80 / 40;
-    expect(b.width).toBeCloseTo(200 * sx, 6);
-    expect(b.left + entry.midlineX * sx).toBeCloseTo(500, 6); // linha média
-    const sy = (1.2 * 80) / 50;
-    expect(b.top + entry.gumY * sy).toBeCloseTo(320, 6); // colo em gumY
-    expect(b.top + entry.incisalY * sy).toBeCloseTo(320 + 96, 6); // incisal = colo + comprimento
   });
 });

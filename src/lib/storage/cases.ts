@@ -69,8 +69,10 @@ export type SmileCase = {
   centralsWidthMm?: number;
   /** Resumo numérico da análise facial no momento de salvar. */
   frame?: FrameSummary;
-  /** Estilo escolhido quando a simulação foi gerada por IA (tela "Sorriso por IA"). */
+  /** Resumo das escolhas quando a simulação foi gerada por IA. */
   aiStyle?: string;
+  /** Smile Design por IA (2026-10-22): forma, textura, gengiva e modelo usados. */
+  ai?: { shape: string; texture: string; gum: string; model: string };
   /** Variações guardadas do mesmo caso (até 3), para comparar lado a lado. */
   variants?: SmileVariant[];
   targetShade: string;

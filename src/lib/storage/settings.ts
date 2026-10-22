@@ -39,7 +39,7 @@ export const DEFAULT_SETTINGS: Settings = {
   clinicName: '',
   dentistName: '',
   aiApiKey: '',
-  aiModel: 'gemini-2.5-flash-image',
+  aiModel: 'gemini-3.1-flash-lite-image',
 };
 
 const KEY = 'shadelab.settings.v1';
@@ -48,7 +48,10 @@ export async function loadSettings(): Promise<Settings> {
   try {
     const raw = await AsyncStorage.getItem(KEY);
     if (!raw) return DEFAULT_SETTINGS;
-    return { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<Settings>) };
+    const s = { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<Settings>) };
+    // quem ficou no modelo padrão antigo passa para o Nano Banana 2 Lite (mais barato, testado em 2026-10-22)
+    if (s.aiModel === 'gemini-2.5-flash-image') s.aiModel = DEFAULT_SETTINGS.aiModel;
+    return s;
   } catch {
     return DEFAULT_SETTINGS;
   }

@@ -1,45 +1,61 @@
-/** Estilos de sorriso e montagem da instrução para o modelo de imagem (parte pura, testável). */
+/**
+ * Smile Design por IA: opções que o dentista escolhe (forma, textura, cor da escala, gengiva) e a montagem da
+ * instrução para o modelo de imagem (parte pura, testável). A forma segue a imagem de referência do Gustavo
+ * (retangular, triangular, arredondado, quadrado).
+ */
 import { labToHex, type Lab } from '@/lib/color/convert';
 
-export type SmileStyleId = 'natural' | 'hollywood' | 'youthful' | 'conservative' | 'aligned' | 'whitening';
+export type ToothShapeId = 'retangular' | 'triangular' | 'arredondado' | 'quadrado';
+export type TextureId = 'lisa' | 'natural' | 'caracterizada';
+export type GumId = 'manter' | 'plastia';
 
-export const SMILE_STYLES: { id: SmileStyleId; name: string; description: string; prompt: string }[] = [
+export const TOOTH_SHAPES: { id: ToothShapeId; name: string; prompt: string }[] = [
+  {
+    id: 'retangular',
+    name: 'Retangular',
+    prompt:
+      'RECTANGULAR teeth: clearly longer than wide, nearly parallel mesial and distal outlines, straight incisal edges and slightly rounded incisal angles',
+  },
+  {
+    id: 'triangular',
+    name: 'Triangular',
+    prompt:
+      'TRIANGULAR (tapered) teeth: wider at the incisal third and converging toward the gum line, pointed contact areas and more open incisal embrasures',
+  },
+  {
+    id: 'arredondado',
+    name: 'Arredondado',
+    prompt: 'ROUNDED (oval) teeth: convex mesial and distal outlines, softly rounded incisal angles and gently open incisal embrasures',
+  },
+  {
+    id: 'quadrado',
+    name: 'Quadrado',
+    prompt: 'SQUARE teeth: width close to height, broad and flat incisal edges, square incisal angles and closed embrasures',
+  },
+];
+
+export const TEXTURES: { id: TextureId; name: string; prompt: string }[] = [
+  { id: 'lisa', name: 'Lisa', prompt: 'smooth, highly polished glossy enamel with minimal surface texture, like polished porcelain veneers' },
   {
     id: 'natural',
     name: 'Natural',
-    description: 'Dentes saudáveis e alinhados, com bordas suaves e pequenas variações naturais.',
+    prompt: 'natural enamel surface with subtle perikymata and soft vertical developmental grooves, satin gloss, like healthy young natural teeth',
+  },
+  {
+    id: 'caracterizada',
+    name: 'Caracterizada',
     prompt:
-      'natural, healthy, well-aligned teeth with softly rounded incisal edges, a gentle smile arc following the lower lip, and subtle individual character (not perfectly identical teeth)',
+      'characterized natural teeth: visible surface texture, incisal translucency with a faint opalescent halo and a subtle mamelon effect, slightly more saturated cervical third',
   },
+];
+
+export const GUM_OPTIONS: { id: GumId; name: string; prompt: string }[] = [
+  { id: 'manter', name: 'Manter gengiva', prompt: 'Keep the gums exactly as they are in the original photo (same margins and contour).' },
   {
-    id: 'hollywood',
-    name: 'Hollywood',
-    description: 'Sorriso amplo, dentes cheios e perfeitamente alinhados.',
-    prompt: 'a Hollywood-style smile: perfectly aligned, fuller and slightly squarer anterior teeth, a broad arch, bright and uniform enamel',
-  },
-  {
-    id: 'youthful',
-    name: 'Jovem',
-    description: 'Centrais um pouco mais longos, ameias arredondadas, curva do sorriso viva.',
-    prompt: 'a youthful smile: slightly longer central incisors, rounded incisal embrasures, a lively smile arc, dominant centrals',
-  },
-  {
-    id: 'conservative',
-    name: 'Discreto',
-    description: 'Mantém forma e alinhamento; só corrige lascas e uniformiza o esmalte.',
-    prompt: 'minimal change: keep the current tooth shapes, sizes and alignment, only repair chips and worn edges and even out the enamel',
-  },
-  {
-    id: 'aligned',
-    name: 'Alinhado',
-    description: 'Fecha espaços e corrige rotações, como um resultado ortodôntico.',
-    prompt: 'orthodontically aligned teeth: close gaps, straighten rotated teeth, level the incisal edges, keeping the same tooth shapes and sizes',
-  },
-  {
-    id: 'whitening',
-    name: 'Clareamento',
-    description: 'Mesmos dentes, só a cor muda para o tom escolhido.',
-    prompt: 'the same teeth with the same shapes and alignment, only whitened to the target shade',
+    id: 'plastia',
+    name: 'Plastia gengival',
+    prompt:
+      'Simulate a gingival contouring (gingivoplasty): harmonize the gingival margins of the upper teeth, symmetric zeniths, central incisors and canines at the same level and lateral incisors slightly lower, reduce excessive gum display; the clinical crowns become correspondingly longer. The gum must stay healthy, pink and natural.',
   },
 ];
 
@@ -52,15 +68,29 @@ export function describeShade(id: string, lab: Lab): string {
   return `VITA ${id}: ${light}, ${sat}, ${hue} tooth color, approximately sRGB ${labToHex(lab)} in the lit body of the tooth`;
 }
 
-/** Monta a instrução de edição. */
-export function buildPrompt(style: SmileStyleId, shadeId: string, shadeLab: Lab): string {
-  const s = SMILE_STYLES.find((x) => x.id === style) ?? SMILE_STYLES[0];
+export type DesignOptions = { shape: ToothShapeId; texture: TextureId; gum: GumId; shadeId: string; shadeLab: Lab };
+
+/** Monta a instrução do Smile Design (uma linha, em inglês, que é como o modelo responde melhor). */
+export function buildDesignPrompt(o: DesignOptions): string {
+  const shape = TOOTH_SHAPES.find((s) => s.id === o.shape) ?? TOOTH_SHAPES[0];
+  const texture = TEXTURES.find((t) => t.id === o.texture) ?? TEXTURES[1];
+  const gum = GUM_OPTIONS.find((g) => g.id === o.gum) ?? GUM_OPTIONS[0];
   return [
-    'Edit this dental patient photo for a treatment simulation.',
-    `Replace ONLY the visible teeth with ${s.prompt}.`,
-    `Tooth shade: ${describeShade(shadeId, shadeLab)}. Slightly more saturated near the gums, slightly translucent at the incisal edges.`,
-    'Keep absolutely everything else identical: face, skin, lips and lip line, gums, tongue, lighting, shadows, background, framing, camera angle and resolution.',
-    'The new teeth must sit naturally under the lips and follow the lip line, with realistic enamel texture and reflections matching the scene light.',
-    'Photorealistic. No text, no watermark, no other changes.',
+    'Dental smile design simulation on this patient photo.',
+    'Replace ONLY the visible upper teeth with a new, aesthetically planned smile: well-aligned teeth in a harmonious arch that follows the curve of the lower lip, dominant central incisors, correct width proportions (centrals > laterals > canines), dental midline aligned with the face, no gaps, even incisal edges with natural embrasures.',
+    `Tooth shape: ${shape.prompt}.`,
+    `Surface texture: ${texture.prompt}.`,
+    `Tooth shade: ${describeShade(o.shadeId, o.shadeLab)}. Slightly more saturated near the gums, slightly translucent at the incisal edges.`,
+    gum.prompt,
+    'Keep absolutely everything else identical to the original: face, skin, beard, lips and lip line, lower teeth, tongue, lighting, shadows, background, framing, camera angle and resolution.',
+    'The new teeth must sit naturally under the upper lip with realistic reflections matching the scene light. Photorealistic. No text, no watermark, no other changes.',
   ].join(' ');
+}
+
+/** Resumo em português das opções, para o caso salvo e a tela. */
+export function designSummary(o: Pick<DesignOptions, 'shape' | 'texture' | 'gum' | 'shadeId'>): string {
+  const shape = TOOTH_SHAPES.find((s) => s.id === o.shape)?.name ?? o.shape;
+  const texture = TEXTURES.find((t) => t.id === o.texture)?.name ?? o.texture;
+  const gum = o.gum === 'plastia' ? ' · plastia gengival' : '';
+  return `${shape} · textura ${texture.toLowerCase()} · ${o.shadeId}${gum}`;
 }

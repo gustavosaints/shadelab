@@ -1,17 +1,18 @@
 /**
- * "Gerar sorriso por IA": edição da foto do paciente por um modelo de imagem
- * (Google Gemini, família "Nano Banana"), trocando só os dentes por um sorriso
- * do estilo escolhido na cor da escala escolhida. A foto sai do aparelho para a
- * API do Google, por isso a tela pede consentimento e a chave fica nas Configurações.
+ * Smile Design por IA: edição da foto do paciente por um modelo de imagem (Google Gemini, família
+ * "Nano Banana"), trocando só os dentes pelo desenho pedido (forma, textura, cor, gengiva). A foto sai do
+ * aparelho para a API do Google, por isso a tela avisa e a chave fica guardada só no aparelho.
  */
 import { File, Paths } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
-import type { Lab } from '@/lib/color/convert';
-import { buildPrompt as makePrompt, type SmileStyleId as StyleId } from './prompt';
 
-export { buildPrompt, describeShade, SMILE_STYLES, type SmileStyleId } from './prompt';
+export { buildDesignPrompt, describeShade, designSummary, GUM_OPTIONS, TEXTURES, TOOTH_SHAPES } from './prompt';
+export type { DesignOptions, GumId, TextureId, ToothShapeId } from './prompt';
 
-export const DEFAULT_AI_MODEL = 'gemini-2.5-flash-image';
+/** Nano Banana 2 Lite: o mais barato da família e o testado no AI Studio em 2026-10-22. */
+export const DEFAULT_AI_MODEL = 'gemini-3.1-flash-lite-image';
+/** Modelo padrão antigo: quem nunca escolheu outro passa para o Lite. */
+export const LEGACY_DEFAULT_AI_MODEL = 'gemini-2.5-flash-image';
 
 export type ModelInfo = { name: string; displayName: string; image: boolean };
 
@@ -38,19 +39,6 @@ export async function listModels(apiKey: string): Promise<ModelInfo[]> {
     .sort((a, b) => Number(b.image) - Number(a.image) || a.name.localeCompare(b.name));
 }
 
-export type GenerateOptions = {
-  photoUri: string;
-  style: StyleId;
-  shadeId: string;
-  shadeLab: Lab;
-  apiKey: string;
-  model?: string;
-  /** Lado maior da foto enviada (px). Menor = mais rápido e mais barato. */
-  maxSide?: number;
-};
-
-export type GenerateResult = { uri: string; prompt: string; model: string; ms: number };
-
 /** Reduz a foto e devolve JPEG em base64. */
 async function photoToBase64(uri: string, maxSide: number): Promise<string> {
   const ctx = ImageManipulator.manipulate(uri);
@@ -66,25 +54,29 @@ type GeminiResponse = {
   error?: { message?: string; status?: string };
 };
 
-/** Chama o Gemini (generateContent com resposta em imagem) e grava o resultado no cache do app. */
-export async function generateSmile(o: GenerateOptions): Promise<GenerateResult> {
-  if (!o.apiKey.trim()) throw new Error('Informe a chave da API do Google nas Configurações.');
+export type GenerateResult = { uri: string; prompt: string; model: string; ms: number };
+
+/** Gera a simulação a partir da foto e da instrução já montada (ver `buildDesignPrompt`). */
+export async function generateDesign(o: { photoUri: string; prompt: string; apiKey: string; model?: string; maxSide?: number }): Promise<GenerateResult> {
+  if (!o.apiKey.trim()) throw new Error('Informe a chave da API do Google em "Configurar IA", no fim da tela.');
   const model = o.model?.trim() || DEFAULT_AI_MODEL;
-  const prompt = makePrompt(o.style, o.shadeId, o.shadeLab);
   const started = Date.now();
   const data = await photoToBase64(o.photoUri, o.maxSide ?? 1536);
+  const uri = await callImageModel(model, o.apiKey, [{ text: o.prompt }, { inlineData: { mimeType: 'image/jpeg', data } }]);
+  return { uri, prompt: o.prompt, model, ms: Date.now() - started };
+}
 
+type Part = { text?: string; inlineData?: { mimeType: string; data: string } };
+
+async function callImageModel(model: string, apiKey: string, parts: Part[]): Promise<string> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 120_000);
   let res: Response;
   try {
     res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': o.apiKey.trim() },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: 'image/jpeg', data } }] }],
-        generationConfig: { responseModalities: ['IMAGE'] },
-      }),
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey.trim() },
+      body: JSON.stringify({ contents: [{ parts }], generationConfig: { responseModalities: ['IMAGE'] } }),
       signal: controller.signal,
     });
   } catch (e) {
@@ -95,13 +87,13 @@ export async function generateSmile(o: GenerateOptions): Promise<GenerateResult>
   const json = (await res.json().catch(() => ({}))) as GeminiResponse;
   if (!res.ok) {
     const msg = json.error?.message ?? `HTTP ${res.status}`;
-    if (res.status === 400 && /API key/i.test(msg)) throw new Error('Chave da API inválida. Confira nas Configurações.');
-    if (res.status === 404) throw new Error(`Modelo "${model}" não encontrado. Ajuste o nome do modelo nas Configurações.`);
+    if (res.status === 400 && /API key/i.test(msg)) throw new Error('Chave da API inválida. Confira em "Configurar IA".');
+    if (res.status === 404) throw new Error(`Modelo "${model}" não encontrado. Ajuste o nome do modelo em "Configurar IA".`);
     if (res.status === 429) {
       const zeroQuota = /limit:\s*0|quota.*0\b|free tier|billing/i.test(msg);
       throw new Error(
         zeroQuota
-          ? `Sua chave não tem cota para este modelo de imagem (plano gratuito). No Google AI Studio, ative o faturamento (pay-as-you-go) ou troque o modelo em "Ver modelos". Mensagem do Google: ${msg}`
+          ? `Sua chave não tem cota para este modelo de imagem. Confira o faturamento no Google AI Studio (os créditos podem levar um tempo para entrar). Mensagem do Google: ${msg}`
           : `Limite de uso da API atingido. Mensagem do Google: ${msg}`,
       );
     }
@@ -116,5 +108,5 @@ export async function generateSmile(o: GenerateOptions): Promise<GenerateResult>
   const ext = part.inlineData.mimeType === 'image/jpeg' ? 'jpg' : 'png';
   const file = new File(Paths.cache, `ai-smile-${Date.now()}.${ext}`);
   file.write(part.inlineData.data, { encoding: 'base64' });
-  return { uri: file.uri, prompt, model, ms: Date.now() - started };
+  return file.uri;
 }

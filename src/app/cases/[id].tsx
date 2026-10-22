@@ -3,14 +3,15 @@ import { router, useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useEffect, useState } from 'react';
 import { Alert, Image, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { BeforeAfter, type CompareMode } from '@/components/BeforeAfter';
 import { Button } from '@/components/Button';
 import { Card, Muted, SectionTitle } from '@/components/Card';
+import { Chip } from '@/components/Chip';
 import { ShadeRow } from '@/components/ShadeRow';
 import { findShade, getSystem } from '@/lib/color/shades';
 import { deleteCase, getCase, isSmileCase, type AnyCase, type ShadeCase, type SmileCase } from '@/lib/storage/cases';
 import { findGingiva } from '@/lib/color/gingiva';
 import { buildShadeReportHtml } from '@/lib/report/shadeReport';
-import { SMILE_LIBRARY } from '@/lib/smile/smileLibrary';
 import { loadSettings } from '@/lib/storage/settings';
 import { colors, radius, spacing } from '@/theme';
 
@@ -27,6 +28,16 @@ export default function CaseDetail() {
 }
 
 function SmileDetail({ c }: { c: SmileCase }) {
+  const [mode, setMode] = useState<CompareMode>('cortina');
+  const [aspect, setAspect] = useState(3 / 4);
+  const [dragging, setDragging] = useState(false);
+  useEffect(() => {
+    Image.getSize(
+      c.photoUri,
+      (w, h) => setAspect(w / h),
+      () => undefined,
+    );
+  }, [c.photoUri]);
   const shareImage = async () => {
     const uri = c.renderedUri ?? c.photoUri;
     if (Platform.OS !== 'web' && (await Sharing.isAvailableAsync())) {
@@ -47,35 +58,35 @@ function SmileDetail({ c }: { c: SmileCase }) {
         },
       },
     ]);
-  const shapeLabel = (c.params.library ? SMILE_LIBRARY.find((l) => l.id === c.params.library)?.name : undefined) ?? { oval: 'Oval', square: 'Quadrada', triangular: 'Triangular' }[c.params.shape];
-  const propLabel = { natural: 'Natural', golden: 'Áurea', red: 'RED (70% / 50%)' }[c.params.proportion];
-  const frame = c.frame;
   return (
-    <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: 40 }}>
-      {c.renderedUri && <Image source={{ uri: c.renderedUri }} style={styles.photo} resizeMode="cover" />}
+    <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: 40 }} scrollEnabled={!dragging}>
+      {c.renderedUri ? (
+        <>
+          <BeforeAfter
+            beforeUri={c.photoUri}
+            afterUri={c.renderedUri}
+            aspect={aspect}
+            mode={mode}
+            onDragStart={() => setDragging(true)}
+            onDragEnd={() => setDragging(false)}
+          />
+          <View style={{ flexDirection: 'row', marginTop: 8 }}>
+            <Chip label="Cortina" selected={mode === 'cortina'} onPress={() => setMode('cortina')} />
+            <Chip label="Transparência" selected={mode === 'transparencia'} onPress={() => setMode('transparencia')} />
+          </View>
+        </>
+      ) : (
+        <Image source={{ uri: c.photoUri }} style={styles.photo} resizeMode="cover" />
+      )}
       <Card>
         <Text style={styles.name}>{c.patientName}</Text>
         <Muted>Smile Design · {new Date(c.createdAt).toLocaleString('pt-BR')}</Muted>
       </Card>
       <Card>
-        <SectionTitle>Parâmetros</SectionTitle>
-        <Text style={styles.param}>Cor-alvo: {c.targetShade}</Text>
-        <Text style={styles.param}>Forma: {shapeLabel}</Text>
-        <Text style={styles.param}>Proporção: {propLabel}</Text>
-        <Text style={styles.param}>Relação altura/largura: {c.params.heightRatio.toFixed(2)}</Text>
-        {frame && (
-          <>
-            <Text style={styles.param}>
-              Análise facial: linha média {frame.midlineShiftMm.toFixed(1)} mm · bipupilar {frame.bipupillaryDeg.toFixed(1)}° · central{' '}
-              {frame.widthHeightPct.toFixed(0)}% ({frame.centralWidthMm.toFixed(1)} × {frame.centralHeightMm.toFixed(1)} mm)
-            </Text>
-            {frame.notes.map((n, i) => (
-              <Text key={i} style={styles.param}>
-                • {n}
-              </Text>
-            ))}
-          </>
-        )}
+        <SectionTitle>Simulação</SectionTitle>
+        <Text style={styles.param}>Cor: {c.targetShade}</Text>
+        {c.aiStyle && <Text style={styles.param}>{c.aiStyle}</Text>}
+        {c.ai?.model && <Text style={styles.param}>Modelo de IA: {c.ai.model}</Text>}
       </Card>
       {!!c.notes && (
         <Card>
@@ -83,11 +94,7 @@ function SmileDetail({ c }: { c: SmileCase }) {
           <Text style={{ color: colors.text, lineHeight: 20 }}>{c.notes}</Text>
         </Card>
       )}
-      <Card>
-        <SectionTitle>Foto original</SectionTitle>
-        <Image source={{ uri: c.photoUri }} style={styles.photo} resizeMode="cover" />
-      </Card>
-      <Button title="Editar simulação" onPress={() => router.push({ pathname: '/smile', params: { caseId: c.id } })} />
+      <Button title="Gerar outra versão" onPress={() => router.push({ pathname: '/smile', params: { caseId: c.id } })} />
       <Button title="Compartilhar simulação" variant="secondary" onPress={shareImage} style={{ marginTop: 8 }} />
       <Button title="Excluir" variant="ghost" onPress={remove} style={{ marginTop: 8 }} />
     </ScrollView>

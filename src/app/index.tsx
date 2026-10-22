@@ -20,15 +20,9 @@ export default function Home() {
     },
     {
       title: 'Smile Design',
-      subtitle: 'Simule o novo sorriso sobre a foto do paciente',
+      subtitle: 'Foto do sorriso + forma, textura e cor: a IA gera a simulação, com antes e depois',
       route: '/smile',
       color: colors.accent,
-    },
-    {
-      title: 'Sorriso por IA',
-      subtitle: 'Foto do sorriso + tipo + cor da escala: a IA gera os dentes novos',
-      route: '/smile/ai',
-      color: '#7E57C2',
     },
     { title: 'Casos', subtitle: 'Histórico de pacientes e envio ao laboratório', route: '/cases', color: colors.navy },
     {
