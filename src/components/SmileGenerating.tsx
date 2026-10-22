@@ -39,8 +39,6 @@ const AnimatedRect = Animated.createAnimatedComponent(Rect);
 
 type Props = {
   photoUri: string;
-  /** largura / altura da foto */
-  aspect: number;
   /** Legendas das etapas, na ordem (a última fica até o resultado chegar). */
   steps: string[];
   /** Imagem gerada: dispara a revelação. */
@@ -48,15 +46,16 @@ type Props = {
   onDone: () => void;
 };
 
-export function SmileGenerating({ photoUri, aspect, steps, resultUri, onDone }: Props) {
-  const [width, setWidth] = useState(0);
+export function SmileGenerating({ photoUri, steps, resultUri, onDone }: Props) {
+  // ocupa a caixa da foto inteira (o pai define o tamanho); a imagem cobre a caixa
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  const { width, height } = size;
   const [sweep] = useState(() => new Animated.Value(0));
   const [pulse] = useState(() => new Animated.Value(0));
   const [spin] = useState(() => new Animated.Value(0));
   const [progress] = useState(() => new Animated.Value(0));
   const [reveal] = useState(() => new Animated.Value(0));
   const [elapsed, setElapsed] = useState(0);
-  const height = width / aspect;
   const revealing = !!resultUri;
 
   useEffect(() => {
@@ -105,8 +104,8 @@ export function SmileGenerating({ photoUri, aspect, steps, resultUri, onDone }: 
 
   return (
     <View
-      style={[styles.root, { aspectRatio: aspect }]}
-      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+      style={styles.root}
+      onLayout={(e) => setSize({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
       accessibilityLiveRegion="polite"
       accessibilityLabel={revealing ? 'Smile Design pronto' : `Gerando o Smile Design: ${steps[step]}`}
     >
@@ -178,7 +177,7 @@ export function SmileGenerating({ photoUri, aspect, steps, resultUri, onDone }: 
 }
 
 const styles = StyleSheet.create({
-  root: { position: 'absolute', left: 0, top: 0, width: '100%', borderRadius: radius.md, overflow: 'hidden', backgroundColor: '#000' },
+  root: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, borderRadius: radius.md, overflow: 'hidden', backgroundColor: '#000' },
   tint: { backgroundColor: 'rgba(22,24,32,0.5)' },
   band: { position: 'absolute', left: 0, top: 0, width: 110 },
   revealClip: { position: 'absolute', left: 0, top: 0, overflow: 'hidden' },

@@ -1,20 +1,22 @@
-import { useState, type ReactNode } from 'react';
-import { ActivityIndicator, Image, StyleSheet, Text, View } from 'react-native';
+import { useRef, useState, type ReactNode } from 'react';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View, type GestureResponderEvent } from 'react-native';
 import Svg, { ClipPath, Defs, Ellipse, G, Line, LinearGradient, Path, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import type { TextureId } from '@/lib/ai/prompt';
-import { applyLength, silhouette, TEXTURE_TEETH, type Fdi, type LengthEdits, type MappedTooth, type ToothMap } from '@/lib/smile/mapping';
+import { silhouette, TEXTURE_TEETH, type Fdi, type MappedTooth } from '@/lib/smile/mapping';
 import { fonts, radius } from '@/theme';
 
 type Photo = { uri: string; width: number; height: number };
 
 type Props = {
   photo: Photo;
-  map: ToothMap | null;
+  /** Dentes como devem aparecer (arco e comprimentos já aplicados), em px da foto. */
+  teeth: MappedTooth[];
+  /** Dentes do encaixe original: definem o recorte, que fica parado enquanto o arco é ajustado. */
+  frame: MappedTooth[];
   status: 'detecting' | 'ok' | 'failed';
   /** 0 quadrada … 1 triangular; null = nenhuma forma escolhida (só os números dos dentes). */
   shapeMix: number | null;
   texture: TextureId | null;
-  lengths: LengthEdits;
   selected: Fdi | 'all';
   onSelect: (fdi: Fdi) => void;
 };
@@ -25,21 +27,23 @@ const GLOW = '#F3C9BE';
  * Planejamento sobre a foto (pedido do Gustavo, 2026-10-22): recorte ampliado da boca com os dentes 15–25
  * numerados; com uma forma escolhida, a silhueta dela aparece em cada dente (já com os ajustes de comprimento);
  * com uma textura escolhida, uma prévia transparente dela aparece nos incisivos 12, 11, 21 e 22. Tocar num dente
- * seleciona para ajustar só ele.
+ * seleciona para ajustar só ele. Pinça aproxima (até 5x) e, aproximada, um dedo arrasta a vista.
  */
-export function SmileMap({ photo, map, status, shapeMix, texture, lengths, selected, onSelect }: Props) {
+export function SmileMap({ photo, teeth, frame, status, shapeMix, texture, selected, onSelect }: Props) {
   const [width, setWidth] = useState(0);
-  const teeth = map ? map.teeth.map((t) => applyLength(t, lengths[t.fdi], map.pxPerMm)) : [];
+  const [zoom, setZoom] = useState({ scale: 1, tx: 0, ty: 0 });
+  const gesture = useRef<{ x: number; y: number; dist: number; scale: number; tx: number; ty: number; pinch: boolean } | null>(null);
+  const start = useRef<{ x: number; y: number } | null>(null);
 
-  // recorte em volta dos dentes (ou a foto inteira, sem mapa)
+  // recorte em volta dos dentes do encaixe (ou a foto inteira, sem mapa)
   let crop = { x: 0, y: 0, w: photo.width, h: photo.height };
-  if (teeth.length) {
-    const x0 = Math.min(...teeth.map((t) => t.x));
-    const x1 = Math.max(...teeth.map((t) => t.x + t.w));
-    const y0 = Math.min(...teeth.map((t) => t.y));
-    const y1 = Math.max(...teeth.map((t) => t.y + t.h));
-    const w = (x1 - x0) * 1.3;
-    const h = Math.max((y1 - y0) * 2.1, w / 2.4);
+  if (frame.length) {
+    const x0 = Math.min(...frame.map((t) => t.x));
+    const x1 = Math.max(...frame.map((t) => t.x + t.w));
+    const y0 = Math.min(...frame.map((t) => t.y));
+    const y1 = Math.max(...frame.map((t) => t.y + t.h));
+    const w = (x1 - x0) * 1.45;
+    const h = Math.max((y1 - y0) * 2.3, w / 2.3);
     const cx = (x0 + x1) / 2;
     const cy = (y0 + y1) / 2;
     crop = { x: cx - w / 2, y: cy - h / 2, w, h };
@@ -49,18 +53,72 @@ export function SmileMap({ photo, map, status, shapeMix, texture, lengths, selec
   const toView = (t: MappedTooth): MappedTooth => ({ ...t, x: (t.x - crop.x) * s, y: (t.y - crop.y) * s, w: t.w * s, h: t.h * s });
   const view = teeth.map(toView);
   const textureMix = shapeMix ?? 0.5;
+  const height = width / aspect;
+
+  // ----- zoom: pinça com dois dedos; com zoom, um dedo arrasta (toques curtos continuam escolhendo o dente) -----
+  const touches = (e: GestureResponderEvent) => e.nativeEvent.touches ?? [];
+  const spread = (e: GestureResponderEvent) => {
+    const t = touches(e);
+    return t.length >= 2 ? Math.hypot(t[0].pageX - t[1].pageX, t[0].pageY - t[1].pageY) : 0;
+  };
+  const clampZoom = (z: { scale: number; tx: number; ty: number }) => {
+    const mx = ((z.scale - 1) * width) / 2;
+    const my = ((z.scale - 1) * height) / 2;
+    return { scale: z.scale, tx: Math.max(-mx, Math.min(mx, z.tx)), ty: Math.max(-my, Math.min(my, z.ty)) };
+  };
+  const startCapture = (e: GestureResponderEvent) => {
+    start.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
+    return touches(e).length >= 2;
+  };
+  const moveCapture = (e: GestureResponderEvent) => {
+    if (touches(e).length >= 2) return true;
+    if (zoom.scale <= 1 || !start.current) return false;
+    return Math.hypot(e.nativeEvent.pageX - start.current.x, e.nativeEvent.pageY - start.current.y) > 8;
+  };
+  const grant = (e: GestureResponderEvent) => {
+    gesture.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY, dist: spread(e), scale: zoom.scale, tx: zoom.tx, ty: zoom.ty, pinch: touches(e).length >= 2 };
+  };
+  const move = (e: GestureResponderEvent) => {
+    const g = gesture.current;
+    if (!g) return;
+    const d = spread(e);
+    if (d > 0) {
+      if (!g.pinch || !g.dist) {
+        gesture.current = { ...g, dist: d, scale: zoom.scale, pinch: true };
+        return;
+      }
+      setZoom(clampZoom({ scale: Math.max(1, Math.min(5, (g.scale * d) / g.dist)), tx: zoom.tx, ty: zoom.ty }));
+    } else if (!g.pinch) {
+      setZoom(clampZoom({ scale: zoom.scale, tx: g.tx + e.nativeEvent.pageX - g.x, ty: g.ty + e.nativeEvent.pageY - g.y }));
+    }
+  };
+  const release = () => {
+    gesture.current = null;
+    start.current = null;
+    if (zoom.scale < 1.05) setZoom({ scale: 1, tx: 0, ty: 0 });
+  };
 
   return (
-    <View style={[styles.box, { aspectRatio: aspect }]} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+    <View
+      style={[styles.box, { aspectRatio: aspect }]}
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+      onStartShouldSetResponderCapture={startCapture}
+      onMoveShouldSetResponderCapture={moveCapture}
+      onResponderGrant={grant}
+      onResponderMove={move}
+      onResponderRelease={release}
+      onResponderTerminate={release}
+      onResponderTerminationRequest={() => false}
+    >
       {width > 0 && (
-        <>
+        <View style={[StyleSheet.absoluteFill, { transform: [{ translateX: zoom.tx }, { translateY: zoom.ty }, { scale: zoom.scale }] }]}>
           <Image
             source={{ uri: photo.uri }}
             style={{ position: 'absolute', left: -crop.x * s, top: -crop.y * s, width: photo.width * s, height: photo.height * s }}
             resizeMode="cover"
           />
           {view.length > 0 && (
-            <Svg width={width} height={width / aspect} style={StyleSheet.absoluteFill}>
+            <Svg width={width} height={height} style={StyleSheet.absoluteFill}>
               <Defs>
                 <LinearGradient id="tx-body" x1="0" y1="0" x2="0" y2="1">
                   <Stop offset="0" stopColor="#FFFFFF" stopOpacity="0.2" />
@@ -134,6 +192,15 @@ export function SmileMap({ photo, map, status, shapeMix, texture, lengths, selec
                 );
               })}
             </Svg>
+          )}
+        </View>
+      )}
+      {width > 0 && (
+        <>
+          {zoom.scale > 1 && (
+            <Pressable onPress={() => setZoom({ scale: 1, tx: 0, ty: 0 })} style={styles.zoomBadge} hitSlop={8}>
+              <Text style={styles.zoomText}>{`${zoom.scale.toFixed(1)}x · tocar para 1x`}</Text>
+            </Pressable>
           )}
           {status !== 'ok' && (
             <View style={styles.badge}>
@@ -212,5 +279,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: 'rgba(31,34,43,0.85)',
   },
+  zoomBadge: { position: 'absolute', top: 8, right: 8, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, backgroundColor: 'rgba(31,34,43,0.75)' },
+  zoomText: { color: '#FFFFFF', fontFamily: fonts.medium, fontSize: 11 },
   badgeText: { color: '#FFFFFF', fontFamily: fonts.regular, fontSize: 13, textAlign: 'center', flexShrink: 1 },
 });

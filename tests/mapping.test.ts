@@ -3,6 +3,10 @@ import { buildDesignPrompt, TOOTH_SHAPES } from '@/lib/ai/prompt';
 import { getSystem } from '@/lib/color/shades';
 import {
   applyLength,
+  archTeeth,
+  clampArch,
+  DEFAULT_ARCH,
+  describeArch,
   bumpLength,
   commonLength,
   describeLengths,
@@ -37,8 +41,42 @@ describe('mapeamento dos dentes 15–25', () => {
   });
 
   it('foto espelhada troca os números de lado', () => {
-    const map: ToothMap = { teeth, pxPerMm: 10, source: 'boca' };
-    expect(mirrorLabels(map).teeth[0].fdi).toBe('25');
+    const map: ToothMap = { base: { midX: 500, gumY: 300, centralW: 80, heightRatio: 1.2, widthScale: {} }, pxPerMm: 10, source: 'boca', mirrored: false };
+    expect(archTeeth(map)[0].fdi).toBe('15');
+    expect(archTeeth(mirrorLabels(map))[0].fdi).toBe('25');
+  });
+});
+
+describe('arco: fechar/abrir, subir/descer e proporção áurea', () => {
+  const map: ToothMap = { base: { midX: 500, gumY: 300, centralW: 85, heightRatio: 1.2, widthScale: { '12': 1.2 } }, pxPerMm: 10, source: 'autofit', mirrored: false };
+  const get = (teeth: ReturnType<typeof archTeeth>, f: string) => teeth.find((t) => t.fdi === f)!;
+
+  it('fechar o arco estreita as larguras sem mudar a altura', () => {
+    const base = archTeeth(map);
+    const closed = archTeeth(map, { ...DEFAULT_ARCH, centralMm: 7.5 });
+    expect(get(closed, '11').w).toBeCloseTo((get(base, '11').w * 7.5) / 8.5);
+    expect(get(closed, '11').h).toBeCloseTo(get(base, '11').h);
+  });
+
+  it('descer o arco move todos os dentes para baixo em mm', () => {
+    const down = archTeeth(map, { ...DEFAULT_ARCH, dyMm: 1 });
+    expect(get(down, '13').y).toBeCloseTo(get(archTeeth(map), '13').y + 10);
+  });
+
+  it('proporção áurea: lateral = 0,618 do central e canino = 0,618 do lateral, ignorando a medida da foto', () => {
+    const g = archTeeth(map, { ...DEFAULT_ARCH, golden: true, centralMm: 9 });
+    expect(get(g, '12').w / get(g, '11').w).toBeCloseTo(0.618, 3);
+    expect(get(g, '13').w / get(g, '12').w).toBeCloseTo(0.618, 2);
+    expect(get(g, '22').w).toBeCloseTo(get(g, '12').w);
+  });
+
+  it('limites e descrição para a IA', () => {
+    expect(clampArch({ centralMm: 20, dyMm: -9, golden: false })).toEqual({ centralMm: 11, dyMm: -4, golden: false });
+    expect(describeArch(DEFAULT_ARCH)).toBe('');
+    const d = describeArch({ centralMm: 8, dyMm: 1, golden: true });
+    expect(d).toMatch(/GOLDEN PROPORTION/);
+    expect(d).toMatch(/8 mm wide/);
+    expect(d).toMatch(/1 mm lower/);
   });
 });
 
@@ -87,15 +125,16 @@ describe('comprimento em mm', () => {
 describe('delimitar a boca à mão', () => {
   it('contorno inicial no centro, cantos nas pontas e mapa dos dentes cabendo entre eles', async () => {
     const { centeredMouth, mouthBounds, mouthCrop } = await import('@/lib/smile/mouth');
-    const { mapFromMouth } = await import('@/lib/smile/mapping');
+    const { archTeeth: arch, mapFromMouth } = await import('@/lib/smile/mapping');
     const m = centeredMouth(4000, 3000);
     expect(m).toHaveLength(8);
     const b = mouthBounds(m, 4000, 3000);
     expect(b.centerX).toBeCloseTo(2000);
     expect(b.widthPx).toBeCloseTo(2560);
     const map = mapFromMouth(m, 4000, 3000);
-    const x0 = Math.min(...map.teeth.map((t) => t.x));
-    const x1 = Math.max(...map.teeth.map((t) => t.x + t.w));
+    const teeth = arch(map);
+    const x0 = Math.min(...teeth.map((t) => t.x));
+    const x1 = Math.max(...teeth.map((t) => t.x + t.w));
     expect(x0).toBeGreaterThan(2000 - 1300);
     expect(x1).toBeLessThan(2000 + 1300);
     const crop = mouthCrop(m, 4000, 3000);

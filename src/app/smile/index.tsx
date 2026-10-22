@@ -7,7 +7,7 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 import { AiConfig } from '@/components/AiConfig';
 import { BeforeAfter, type CompareMode } from '@/components/BeforeAfter';
@@ -33,7 +33,14 @@ import {
 import { getSystem } from '@/lib/color/shades';
 import { detectFace, fitTeethToPhoto } from '@/lib/face/detect';
 import {
+  applyLength,
+  ARCH_MOVE_STEP_MM,
+  ARCH_WIDTH_STEP_MM,
+  archTeeth,
   bumpLength,
+  clampArch,
+  DEFAULT_ARCH,
+  describeArch,
   commonLength,
   describeLengths,
   LENGTH_STEP_MM,
@@ -42,6 +49,7 @@ import {
   MAPPED_TEETH,
   mirrorLabels,
   plausibleFit,
+  type ArchEdit,
   type Fdi,
   type LengthEdit,
   type LengthEdits,
@@ -78,6 +86,7 @@ export default function SmileDesign() {
   const [map, setMap] = useState<ToothMap | null>(null);
   const [mapStatus, setMapStatus] = useState<MapStatus>('detecting');
   const [lengths, setLengths] = useState<LengthEdits>({});
+  const [arch, setArch] = useState<ArchEdit>(DEFAULT_ARCH);
   const [target, setTarget] = useState<Fdi | 'all'>('all');
   const [view, setView] = useState<'plan' | 'compare'>('plan');
   // contorno da boca (do detector ou marcado à mão) e o rascunho enquanto delimita
@@ -99,6 +108,7 @@ export default function SmileDesign() {
   const [createdAt, setCreatedAt] = useState<string | null>(null);
   const compareRef = useRef<View>(null);
 
+  const { width: windowW, height: windowH } = useWindowDimensions();
   const hasKey = settings.aiApiKey.trim().length > 0;
   const result = results[current];
   const aspect = photo ? photo.width / photo.height : 3 / 4;
@@ -128,6 +138,7 @@ export default function SmileDesign() {
     setMouthDraft(null);
     setMapStatus('detecting');
     setLengths({});
+    setArch(DEFAULT_ARCH);
     setTarget('all');
     try {
       if (!landmarker.current) throw new Error('sem detector');
@@ -252,7 +263,7 @@ export default function SmileDesign() {
     try {
       const r = await generateDesign({
         photoUri: photo.uri,
-        prompt: buildDesignPrompt({ ...ch, shadeLab, lengths: describeLengths(lengths) }),
+        prompt: buildDesignPrompt({ ...ch, shadeLab, lengths: [describeArch(arch), describeLengths(lengths)].filter(Boolean).join(' ') }),
         apiKey: settings.aiApiKey,
         model: settings.aiModel || DEFAULT_AI_MODEL,
       });
@@ -276,10 +287,18 @@ export default function SmileDesign() {
     setView('compare');
   }, [pending]);
 
+  // dentes na foto: encaixe original (recorte da vista) e com o arco + comprimentos (o que aparece)
+  const frameTeeth = map ? archTeeth(map) : [];
+  const planTeeth = map ? archTeeth(map, arch).map((t) => applyLength(t, lengths[t.fdi], map.pxPerMm)) : [];
+
   // ajustes de comprimento: todos os dentes ou o selecionado
   const targets: readonly Fdi[] = target === 'all' ? MAPPED_TEETH : [target];
   const bump = (which: keyof LengthEdit, sign: 1 | -1) => {
     setLengths((cur) => bumpLength(cur, targets, which, sign * LENGTH_STEP_MM));
+    setView('plan');
+  };
+  const changeArch = (next: Partial<ArchEdit>) => {
+    setArch((cur) => clampArch({ ...cur, ...next }));
     setView('plan');
   };
   const pick = (next: Partial<Choice>) => {
@@ -345,187 +364,243 @@ export default function SmileDesign() {
     );
   }
 
-  return (
-    <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: 48 }} keyboardShouldPersistTaps="handled" scrollEnabled={!dragging}>
-      {/* foto ou antes/depois */}
-      <FaceLandmarker ref={landmarker} />
-      {result && (
-        <View style={styles.chips}>
-          <Chip label="Planejamento" selected={view === 'plan'} onPress={() => setView('plan')} />
-          <Chip label="Antes e depois" selected={view === 'compare'} onPress={() => setView('compare')} />
-        </View>
-      )}
-      <View>
-        {result && view === 'compare' ? (
-          <BeforeAfter
-            ref={compareRef}
-            beforeUri={photo.uri}
-            afterUri={result.uri}
-            aspect={aspect}
-            mode={mode}
-            onDragStart={() => setDragging(true)}
-            onDragEnd={() => setDragging(false)}
-          />
-        ) : mouthDraft ? (
-          <MouthEditor photo={photo} mouth={mouthDraft} onChange={setMouthDraft} onDragStart={() => setDragging(true)} onDragEnd={() => setDragging(false)} />
-        ) : (
-          <SmileMap
-            photo={photo}
-            map={map}
-            status={mapStatus}
-            shapeMix={TOOTH_SHAPES.find((sh) => sh.id === choice.shape)?.mix ?? null}
-            texture={choice.texture}
-            lengths={lengths}
-            selected={target}
-            onSelect={(fdi) => setTarget(target === fdi ? 'all' : fdi)}
-          />
-        )}
-        {generating && !mouthDraft && <SmileGenerating photoUri={photo.uri} aspect={aspect} steps={genSteps} resultUri={pending?.uri} onDone={finishReveal} />}
-      </View>
-      {view === 'plan' &&
-        (mouthDraft ? (
-          <Card style={{ marginTop: spacing.md }}>
-            <SectionTitle>Delimitar a boca</SectionTitle>
-            <Muted>
-              Arraste os pontos até a borda dos lábios: C nos cantos da boca, S no lábio de cima e I no lábio de baixo. A vista
-              se aproxima a cada ponto solto. Depois toque em Pronto para eu encontrar os dentes.
-            </Muted>
-            <Button title="Pronto, encontrar os dentes" onPress={finishMouthEdit} style={{ marginTop: 12 }} />
-            <Button title="Cancelar" variant="ghost" onPress={() => setMouthDraft(null)} />
-          </Card>
-        ) : mapStatus === 'failed' ? (
-          <Card style={{ marginTop: spacing.md }}>
-            <Muted>
-              Não encontrei o sorriso automaticamente (acontece em fotos de perto, sem o rosto inteiro). Marque a borda dos
-              lábios e eu encontro os dentes.
-            </Muted>
-            <Button title="Delimitar a boca" onPress={startMouthEdit} style={{ marginTop: 12 }} />
-          </Card>
-        ) : mapStatus === 'ok' ? (
-          <Button title="Ajustar a boca" variant="ghost" onPress={startMouthEdit} />
-        ) : null)}
+  // foto inteira (antes e depois / gerando) limitada a ~42 % da altura, para sobrar espaço para as opções
+  const fullH = Math.min(windowH * 0.42, (windowW - spacing.md * 2) / aspect);
+  const fullBox = { width: fullH * aspect, height: fullH, alignSelf: 'center' as const };
 
-      {result && view === 'compare' && (
-        <Card style={{ marginTop: spacing.md }}>
+  return (
+    <View style={{ flex: 1 }}>
+      <FaceLandmarker ref={landmarker} />
+      {/* foto fixa no topo; as opções rolam embaixo */}
+      <View style={styles.fixed}>
+        {result && !generating && (
           <View style={styles.chips}>
-            <Chip label="Cortina" selected={mode === 'cortina'} onPress={() => setMode('cortina')} />
-            <Chip label="Transparência" selected={mode === 'transparencia'} onPress={() => setMode('transparencia')} />
+            <Chip label="Planejamento" selected={view === 'plan'} onPress={() => setView('plan')} />
+            <Chip label="Antes e depois" selected={view === 'compare'} onPress={() => setView('compare')} />
+          </View>
+        )}
+        <View style={generating || (result && view === 'compare') ? fullBox : undefined}>
+          {generating ? (
+            <View style={[styles.photoBox, StyleSheet.absoluteFill]}>
+              <Image source={{ uri: photo.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+            </View>
+          ) : result && view === 'compare' ? (
+            <BeforeAfter
+              ref={compareRef}
+              beforeUri={photo.uri}
+              afterUri={result.uri}
+              aspect={aspect}
+              mode={mode}
+              onDragStart={() => setDragging(true)}
+              onDragEnd={() => setDragging(false)}
+            />
+          ) : mouthDraft ? (
+            <MouthEditor photo={photo} mouth={mouthDraft} onChange={setMouthDraft} onDragStart={() => setDragging(true)} onDragEnd={() => setDragging(false)} />
+          ) : (
+            <SmileMap
+              photo={photo}
+              teeth={planTeeth}
+              frame={frameTeeth}
+              status={mapStatus}
+              shapeMix={TOOTH_SHAPES.find((sh) => sh.id === choice.shape)?.mix ?? null}
+              texture={choice.texture}
+              selected={target}
+              onSelect={(fdi) => setTarget(target === fdi ? 'all' : fdi)}
+            />
+          )}
+          {generating && <SmileGenerating photoUri={photo.uri} steps={genSteps} resultUri={pending?.uri} onDone={finishReveal} />}
+        </View>
+      </View>
+
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: spacing.md, paddingTop: 4, paddingBottom: 48 }}
+        keyboardShouldPersistTaps="handled"
+        scrollEnabled={!dragging}
+      >
+        {view === 'plan' &&
+          (mouthDraft ? (
+            <Card style={{ marginTop: spacing.md }}>
+              <SectionTitle>Delimitar a boca</SectionTitle>
+              <Muted>
+                Arraste os pontos até a borda dos lábios: C nos cantos da boca, S no lábio de cima e I no lábio de baixo. A vista
+                se aproxima a cada ponto solto. Depois toque em Pronto para eu encontrar os dentes.
+              </Muted>
+              <Button title="Pronto, encontrar os dentes" onPress={finishMouthEdit} style={{ marginTop: 12 }} />
+              <Button title="Cancelar" variant="ghost" onPress={() => setMouthDraft(null)} />
+            </Card>
+          ) : mapStatus === 'failed' ? (
+            <Card style={{ marginTop: spacing.md }}>
+              <Muted>
+                Não encontrei o sorriso automaticamente (acontece em fotos de perto, sem o rosto inteiro). Marque a borda dos
+                lábios e eu encontro os dentes.
+              </Muted>
+              <Button title="Delimitar a boca" onPress={startMouthEdit} style={{ marginTop: 12 }} />
+            </Card>
+          ) : mapStatus === 'ok' ? (
+            <Button title="Ajustar a boca" variant="ghost" onPress={startMouthEdit} />
+          ) : null)}
+
+        {result && view === 'compare' && (
+          <Card style={{ marginTop: spacing.md }}>
+            <View style={styles.chips}>
+              <Chip label="Cortina" selected={mode === 'cortina'} onPress={() => setMode('cortina')} />
+              <Chip label="Transparência" selected={mode === 'transparencia'} onPress={() => setMode('transparencia')} />
+            </View>
+            <Muted>
+              {mode === 'cortina'
+                ? 'Arraste na foto para passar a linha de um lado para o outro.'
+                : 'Arraste a barra para misturar o antes e o depois (útil para ver a gengiva numa plastia gengival).'}
+            </Muted>
+            {results.length > 1 && (
+              <>
+                <SectionTitle>Variações</SectionTitle>
+                <View style={styles.chips}>
+                  {results.map((r, i) => (
+                    <Chip key={r.uri} label={`${i + 1}: ${designSummary(r.choice)}`} selected={i === current} onPress={() => setCurrent(i)} />
+                  ))}
+                </View>
+              </>
+            )}
+            <Muted>{`${designSummary(result.choice)}${result.model ? ` · ${result.model}` : ''}${result.ms ? ` · ${Math.round(result.ms / 1000)} s` : ''}`}</Muted>
+            <View style={styles.row}>
+              <Button title="Compartilhar antes e depois" variant="secondary" onPress={() => share('compare')} />
+              <Button title="Só a simulação" variant="ghost" onPress={() => share('result')} />
+            </View>
+          </Card>
+        )}
+
+        <Card style={{ marginTop: result && view === 'compare' ? 0 : spacing.md }}>
+          <SectionTitle>Forma dos dentes</SectionTitle>
+          <View style={styles.chips}>
+            {TOOTH_SHAPES.map((s) => (
+              <Chip key={s.id} label={s.name} selected={choice.shape === s.id} onPress={() => pick({ shape: s.id })} />
+            ))}
           </View>
           <Muted>
-            {mode === 'cortina'
-              ? 'Arraste na foto para passar a linha de um lado para o outro.'
-              : 'Arraste a barra para misturar o antes e o depois (útil para ver a gengiva numa plastia gengival).'}
+            {choice.shape ? 'A silhueta aparece sobre os dentes 15 a 25 na foto.' : 'Toque numa forma para ver a silhueta dela sobre os dentes do paciente.'}
           </Muted>
-          {results.length > 1 && (
+
+          {map && (
             <>
-              <SectionTitle>Variações</SectionTitle>
+              <Text style={styles.subTitle}>Arco</Text>
               <View style={styles.chips}>
-                {results.map((r, i) => (
-                  <Chip key={r.uri} label={`${i + 1}: ${designSummary(r.choice)}`} selected={i === current} onPress={() => setCurrent(i)} />
-                ))}
+                <Chip label="Proporção natural" selected={!arch.golden} onPress={() => changeArch({ golden: false })} />
+                <Chip label="Proporção áurea" selected={arch.golden} onPress={() => changeArch({ golden: true })} />
               </View>
-            </>
-          )}
-          <Muted>{`${designSummary(result.choice)}${result.model ? ` · ${result.model}` : ''}${result.ms ? ` · ${Math.round(result.ms / 1000)} s` : ''}`}</Muted>
-          <View style={styles.row}>
-            <Button title="Compartilhar antes e depois" variant="secondary" onPress={() => share('compare')} />
-            <Button title="Só a simulação" variant="ghost" onPress={() => share('result')} />
-          </View>
-        </Card>
-      )}
-
-      <Card style={{ marginTop: result && view === 'compare' ? 0 : spacing.md }}>
-        <SectionTitle>Forma dos dentes</SectionTitle>
-        <View style={styles.chips}>
-          {TOOTH_SHAPES.map((s) => (
-            <Chip key={s.id} label={s.name} selected={choice.shape === s.id} onPress={() => pick({ shape: s.id })} />
-          ))}
-        </View>
-        <Muted>
-          {choice.shape ? 'A silhueta aparece sobre os dentes 15 a 25 na foto.' : 'Toque numa forma para ver a silhueta dela sobre os dentes do paciente.'}
-        </Muted>
-
-        {map && (
-          <>
-            <Text style={styles.subTitle}>Tamanho</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <Chip label="Todos" selected={target === 'all'} onPress={() => setTarget('all')} />
-              {MAPPED_TEETH.map((fdi) => (
-                <Chip key={fdi} label={fdi} selected={target === fdi} onPress={() => setTarget(fdi)} />
-              ))}
-            </ScrollView>
-            {(['incisal', 'cervical'] as const).map((which) => (
-              <View key={which} style={styles.stepRow}>
-                <Text style={styles.stepLabel}>{which === 'incisal' ? 'Incisal' : 'Cervical'}</Text>
-                <Pressable onPress={() => bump(which, -1)} style={styles.stepBtn} accessibilityRole="button" accessibilityLabel={`Encurtar pela ${which}`}>
+              <View style={styles.stepRow}>
+                <Text style={styles.stepLabel}>Largura</Text>
+                <Pressable onPress={() => changeArch({ centralMm: arch.centralMm - ARCH_WIDTH_STEP_MM })} style={styles.stepBtn} accessibilityRole="button" accessibilityLabel="Fechar o arco">
                   <Text style={styles.stepBtnText}>−</Text>
                 </Pressable>
-                <Text style={styles.stepValue}>{fmtMm(commonLength(lengths, targets, which))}</Text>
-                <Pressable onPress={() => bump(which, 1)} style={styles.stepBtn} accessibilityRole="button" accessibilityLabel={`Alongar pela ${which}`}>
+                <Text style={styles.stepValue}>{`central ${arch.centralMm.toLocaleString('pt-BR', { minimumFractionDigits: 1 })} mm`}</Text>
+                <Pressable onPress={() => changeArch({ centralMm: arch.centralMm + ARCH_WIDTH_STEP_MM })} style={styles.stepBtn} accessibilityRole="button" accessibilityLabel="Abrir o arco">
                   <Text style={styles.stepBtnText}>+</Text>
                 </Pressable>
               </View>
+              <View style={styles.stepRow}>
+                <Text style={styles.stepLabel}>Altura</Text>
+                <Pressable onPress={() => changeArch({ dyMm: arch.dyMm - ARCH_MOVE_STEP_MM })} style={styles.stepBtn} accessibilityRole="button" accessibilityLabel="Subir o arco">
+                  <Text style={styles.stepBtnText}>↑</Text>
+                </Pressable>
+                <Text style={styles.stepValue}>
+                  {arch.dyMm === 0 ? 'no lugar' : `${Math.abs(arch.dyMm).toLocaleString('pt-BR', { minimumFractionDigits: 1 })} mm ${arch.dyMm > 0 ? 'abaixo' : 'acima'}`}
+                </Text>
+                <Pressable onPress={() => changeArch({ dyMm: arch.dyMm + ARCH_MOVE_STEP_MM })} style={styles.stepBtn} accessibilityRole="button" accessibilityLabel="Descer o arco">
+                  <Text style={styles.stepBtnText}>↓</Text>
+                </Pressable>
+              </View>
+              <Muted>
+                {arch.golden
+                  ? 'Proporção áurea: central 1,618 : lateral 1 : canino 0,618, mantida ao fechar ou abrir o arco.'
+                  : '− fecha e + abre o arco (todas as larguras juntas); ↑ ↓ sobe e desce o arco inteiro.'}
+              </Muted>
+              {(arch.golden || arch.centralMm !== DEFAULT_ARCH.centralMm || arch.dyMm !== 0) && (
+                <Button title="Zerar arco" variant="ghost" onPress={() => changeArch(DEFAULT_ARCH)} />
+              )}
+
+              <Text style={styles.subTitle}>Tamanho</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <Chip label="Todos" selected={target === 'all'} onPress={() => setTarget('all')} />
+                {MAPPED_TEETH.map((fdi) => (
+                  <Chip key={fdi} label={fdi} selected={target === fdi} onPress={() => setTarget(fdi)} />
+                ))}
+              </ScrollView>
+              {(['incisal', 'cervical'] as const).map((which) => (
+                <View key={which} style={styles.stepRow}>
+                  <Text style={styles.stepLabel}>{which === 'incisal' ? 'Incisal' : 'Cervical'}</Text>
+                  <Pressable onPress={() => bump(which, -1)} style={styles.stepBtn} accessibilityRole="button" accessibilityLabel={`Encurtar pela ${which}`}>
+                    <Text style={styles.stepBtnText}>−</Text>
+                  </Pressable>
+                  <Text style={styles.stepValue}>{fmtMm(commonLength(lengths, targets, which))}</Text>
+                  <Pressable onPress={() => bump(which, 1)} style={styles.stepBtn} accessibilityRole="button" accessibilityLabel={`Alongar pela ${which}`}>
+                    <Text style={styles.stepBtnText}>+</Text>
+                  </Pressable>
+                </View>
+              ))}
+              <Muted>
+                {`${target === 'all' ? 'Todos os dentes' : `Dente ${target}`} · + alonga, − encurta (0,5 mm por toque). Toque num dente na foto para ajustar só ele.`}
+              </Muted>
+              {Object.keys(lengths).length > 0 && <Button title="Zerar tamanhos" variant="ghost" onPress={() => setLengths({})} />}
+            </>
+          )}
+
+          <SectionTitle>Textura</SectionTitle>
+          <View style={styles.chips}>
+            {TEXTURES.map((t) => (
+              <Chip key={t.id} label={t.name} selected={choice.texture === t.id} onPress={() => pick({ texture: t.id })} />
             ))}
-            <Muted>
-              {`${target === 'all' ? 'Todos os dentes' : `Dente ${target}`} · + alonga, − encurta (0,5 mm por toque). Toque num dente na foto para ajustar só ele.`}
-            </Muted>
-            {Object.keys(lengths).length > 0 && <Button title="Zerar tamanhos" variant="ghost" onPress={() => setLengths({})} />}
-          </>
+          </View>
+          {choice.texture && <Muted>Prévia da textura nos dentes 12, 11, 21 e 22.</Muted>}
+          <SectionTitle>{`Cor · ${system.name}`}</SectionTitle>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {shadeIds.map((id) => (
+              <Chip key={id} label={id} selected={shadeId === id} onPress={() => pick({ shadeId: id })} />
+            ))}
+          </ScrollView>
+          <SectionTitle>Gengiva</SectionTitle>
+          <View style={styles.chips}>
+            {GUM_OPTIONS.map((g) => (
+              <Chip key={g.id} label={g.name} selected={choice.gum === g.id} onPress={() => pick({ gum: g.id })} />
+            ))}
+          </View>
+          <Button
+            title={generating ? 'Gerando…' : results.length ? 'Gerar nova variação' : 'Gerar Smile Design com IA'}
+            onPress={generate}
+            loading={generating}
+            disabled={generating}
+            style={{ marginTop: spacing.md }}
+          />
+          <Muted>A foto é enviada ao Google para gerar a simulação. Cada geração custa alguns centavos dos créditos da sua conta.</Muted>
+        </Card>
+
+        {result && (
+          <Card>
+            <SectionTitle>{editingId ? 'Atualizar o caso' : 'Salvar no caso'}</SectionTitle>
+            <TextInput placeholder="Nome do paciente" value={patientName} onChangeText={setPatientName} style={styles.input} placeholderTextColor={colors.muted} />
+            <TextInput
+              placeholder="Observações"
+              value={notes}
+              onChangeText={setNotes}
+              style={[styles.input, { height: 70, textAlignVertical: 'top' }]}
+              multiline
+              placeholderTextColor={colors.muted}
+            />
+            <Button title={editingId ? 'Atualizar caso' : 'Salvar caso'} onPress={save} loading={saving} />
+          </Card>
         )}
 
-        <SectionTitle>Textura</SectionTitle>
-        <View style={styles.chips}>
-          {TEXTURES.map((t) => (
-            <Chip key={t.id} label={t.name} selected={choice.texture === t.id} onPress={() => pick({ texture: t.id })} />
-          ))}
-        </View>
-        {choice.texture && <Muted>Prévia da textura nos dentes 12, 11, 21 e 22.</Muted>}
-        <SectionTitle>{`Cor · ${system.name}`}</SectionTitle>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {shadeIds.map((id) => (
-            <Chip key={id} label={id} selected={shadeId === id} onPress={() => pick({ shadeId: id })} />
-          ))}
-        </ScrollView>
-        <SectionTitle>Gengiva</SectionTitle>
-        <View style={styles.chips}>
-          {GUM_OPTIONS.map((g) => (
-            <Chip key={g.id} label={g.name} selected={choice.gum === g.id} onPress={() => pick({ gum: g.id })} />
-          ))}
-        </View>
-        <Button
-          title={generating ? 'Gerando…' : results.length ? 'Gerar nova variação' : 'Gerar Smile Design com IA'}
-          onPress={generate}
-          loading={generating}
-          disabled={generating}
-          style={{ marginTop: spacing.md }}
-        />
-        <Muted>A foto é enviada ao Google para gerar a simulação. Cada geração custa alguns centavos dos créditos da sua conta.</Muted>
-      </Card>
-
-      {result && (
-        <Card>
-          <SectionTitle>{editingId ? 'Atualizar o caso' : 'Salvar no caso'}</SectionTitle>
-          <TextInput placeholder="Nome do paciente" value={patientName} onChangeText={setPatientName} style={styles.input} placeholderTextColor={colors.muted} />
-          <TextInput
-            placeholder="Observações"
-            value={notes}
-            onChangeText={setNotes}
-            style={[styles.input, { height: 70, textAlignVertical: 'top' }]}
-            multiline
-            placeholderTextColor={colors.muted}
-          />
-          <Button title={editingId ? 'Atualizar caso' : 'Salvar caso'} onPress={save} loading={saving} />
-        </Card>
-      )}
-
-      <Button title="Trocar foto" variant="ghost" onPress={() => setPhoto(null)} />
-      <Button title={configOpen ? 'Ocultar configuração da IA' : hasKey ? 'Configurar IA' : 'Configurar IA (falta a chave)'} variant="ghost" onPress={() => setConfigOpen(!configOpen)} />
-      {configOpen && <AiConfig settings={settings} onSaved={reloadSettings} />}
-    </ScrollView>
+        <Button title="Trocar foto" variant="ghost" onPress={() => setPhoto(null)} />
+        <Button title={configOpen ? 'Ocultar configuração da IA' : hasKey ? 'Configurar IA' : 'Configurar IA (falta a chave)'} variant="ghost" onPress={() => setConfigOpen(!configOpen)} />
+        {configOpen && <AiConfig settings={settings} onSaved={reloadSettings} />}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  photoBox: { backgroundColor: '#000', borderRadius: radius.md, overflow: 'hidden' },
+  fixed: { paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.sm, backgroundColor: colors.bg },
   subTitle: { fontFamily: fonts.medium, fontSize: 14, color: colors.text, marginTop: 14, marginBottom: 8 },
   stepRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 6 },
   stepLabel: { width: 72, color: colors.text, fontSize: 15 },

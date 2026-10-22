@@ -118,6 +118,14 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   cantos, S lábio superior, I lábio inferior; contorno inicial `centeredMouth`), vista que se aproxima da boca a
   cada ponto solto (`mouthCrop`); "Pronto" encaixa os dentes dentro do contorno (`mapInMouth`: autofit ou
   largura da boca, 15–25 ocupando 95 % entre as comissuras).
+  ARCO + ZOOM + FOTO FIXA (2026-10-22, pedido do Gustavo): `ToothMap` guarda o encaixe (`base`) e `archTeeth(map,
+  arch)` monta os dentes com `ArchEdit` — largura do central em mm (fecha/abre o arco só na largura, passos de
+  0,25 mm, 6,5–11), altura (sobe/desce o arco inteiro, 0,5 mm, ±4) e "Proporção áurea" (larguras vistas de frente
+  1 : 0,618 : 0,382, pré-molares 0,33/0,27; ignora as larguras medidas). `describeArch` vai na instrução da IA junto
+  com `describeLengths`. O recorte da vista usa o encaixe original (não pula ao ajustar). `SmileMap` tem pinça (até
+  5x) e, aproximado, arrasto com um dedo; selo "tocar para 1x". A tela agora é foto FIXA no topo (planejamento,
+  delimitar boca, antes e depois ou a animação de geração; foto inteira limitada a 42 % da altura) e as opções
+  rolam embaixo. `SmileGenerating` preenche a caixa do pai.
   Próximo passo possível: mandar também a imagem com as silhuetas como guia para a IA (testar quando houver crédito).
   REMOVIDOS nessa data: editor manual (contorno, boca, ajustar, face-bow na tela, biblioteca 2D de sorrisos,
   cenários, rascunho automático) e a tela separada "Sorriso por IA". Ficaram só bibliotecas usadas por outras
