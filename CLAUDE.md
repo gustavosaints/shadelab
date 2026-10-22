@@ -1,6 +1,8 @@
-# ShadeLab — contexto para o Claude
+# Cypris Smile (antigo ShadeLab) — contexto para o Claude
 
-App Expo (React Native) de tomada de cor dental e Smile Design. Dono: Gustavo (dentista), que não programa:
+App Expo (React Native) de tomada de cor dental e Smile Design. Nome público "Cypris Smile" desde 2026-10-22
+(escolha do Gustavo; evitamos "DSD" no nome por ser a marca do Digital Smile Design). No código, pasta, `slug`,
+`scheme` e `bundleIdentifier` continuam "shadelab" — trocar o bundle só antes do 1º build na loja, com cuidado. Dono: Gustavo (dentista), que não programa:
 explique em português simples, um comando por vez, e rode você mesmo o que for possível.
 
 ## Como rodar e verificar

@@ -118,7 +118,7 @@ table{border-collapse:collapse;margin-top:10px;width:100%} td,th{border:1px soli
 .row3{display:flex;gap:6px;margin-top:8px} .sw3{flex:1;text-align:center} .swb{height:26px;border-radius:6px;border:1px solid #ccc} .swl{font-size:11px;font-weight:600;margin-top:3px} .swv{font-size:9px;color:#6B7690}
 </style></head><body>
 <h1>Prescrição de cor</h1>
-<div class="muted">${esc(s.clinicName || 'ShadeLab')}${s.dentistName ? ' · ' + esc(s.dentistName) : ''} · ${new Date(c.createdAt).toLocaleString('pt-BR')}</div>
+<div class="muted">${esc(s.clinicName || 'Cypris Smile')}${s.dentistName ? ' · ' + esc(s.dentistName) : ''} · ${new Date(c.createdAt).toLocaleString('pt-BR')}</div>
 <div class="box">
 <b>Paciente:</b> ${esc(c.patientName)}<br/>
 <b>Dente:</b> ${esc(c.tooth) || '—'}<br/>

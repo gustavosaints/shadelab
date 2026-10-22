@@ -19,7 +19,7 @@ export default function RootLayout() {
           fullScreenGestureEnabled: false,
         }}
       >
-        <Stack.Screen name="index" options={{ title: 'ShadeLab' }} />
+        <Stack.Screen name="index" options={{ title: 'Cypris Smile' }} />
         <Stack.Screen name="shade/capture" options={{ title: 'Tirar cor', headerShown: false }} />
         <Stack.Screen name="shade/analyze" options={{ title: 'Análise de cor' }} />
         <Stack.Screen name="cases/index" options={{ title: 'Casos' }} />

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "ShadeLab",
+    "name": "Cypris Smile",
     "slug": "shadelab",
     "version": "0.1.0",
     "scheme": "shadelab",
@@ -17,8 +17,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.shadelab.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "O ShadeLab usa a câmera para fotografar o dente e a escala de cor.",
-        "NSPhotoLibraryUsageDescription": "O ShadeLab acessa suas fotos para analisar imagens já capturadas."
+        "NSCameraUsageDescription": "O Cypris Smile usa a câmera para fotografar o sorriso, o dente e a escala de cor.",
+        "NSPhotoLibraryUsageDescription": "O Cypris Smile acessa suas fotos para analisar imagens já capturadas."
       }
     },
     "android": {
@@ -45,13 +45,13 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "O ShadeLab usa a câmera para fotografar o dente e a escala de cor."
+          "cameraPermission": "O Cypris Smile usa a câmera para fotografar o sorriso, o dente e a escala de cor."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "O ShadeLab acessa suas fotos para analisar imagens já capturadas."
+          "photosPermission": "O Cypris Smile acessa suas fotos para analisar imagens já capturadas."
         }
       ],
       "expo-asset"
