@@ -59,47 +59,50 @@ export const VITA_CLASSICAL: ShadeSystem = {
 };
 
 /**
- * VITA 3D-Master (26 tabs): grupo de luminosidade 1–5, matiz L/M/R e croma.
- * Valores aproximados derivados da estrutura da escala; calibre a sua.
+ * VITA Toothguide 3D-Master (29 tabs: 0M1–0M3 de clareamento + 26), CIELAB MEDIDO nos tabs (terço médio) com
+ * SpectroShade Micro — média de 34 leituras em 3 lotes da escala, erro do aparelho ΔE00 ≈ 0,5: Dias, Pereira,
+ * Silveira, Mata, Marques et al., "Different Methods for Assessing Tooth Colour — In Vitro Study", Biomimetics
+ * 2023;8(5):384 (doi 10.3390/biomimetics8050384), Tabela 4. O mesmo estudo mediu a VITA Classical na mesma
+ * escala de L* que a do app (A1 L 76,5), então as duas escalas ficam comparáveis. Substituídos pelas medições da
+ * escala do Gustavo quando ele fotografar a dele (como foi feito com a Classical) ou pela calibração.
+ * Nome: grupo de luminosidade 0–5 (0 = clareado, 5 = mais escuro), matiz L (amarelado) / M / R (avermelhado) e croma.
  */
-function threeDMaster(): ShadeRef[] {
-  const lightness: Record<string, number> = { '1': 82, '2': 78, '3': 74, '4': 70, '5': 66 };
-  const chromaB: Record<string, number> = { '1': 11, '1.5': 14, '2': 17, '2.5': 20, '3': 23 };
-  const hueA: Record<string, number> = { L: 0.0, M: 1.5, R: 3.0 };
-
-  const layout: Record<string, string[]> = {
-    '1': ['M1', 'M2'],
-    '2': ['L1.5', 'L2.5', 'M1', 'M2', 'M3', 'R1.5', 'R2.5'],
-    '3': ['L1.5', 'L2.5', 'M1', 'M2', 'M3', 'R1.5', 'R2.5'],
-    '4': ['L1.5', 'L2.5', 'M1', 'M2', 'M3', 'R1.5', 'R2.5'],
-    '5': ['M1', 'M2', 'M3'],
-  };
-
-  const refs: ShadeRef[] = [];
-  for (const [group, tabs] of Object.entries(layout)) {
-    for (const t of tabs) {
-      const hue = t[0];
-      const chroma = t.slice(1);
-      const chromaAdj = (chromaB[chroma] - 17) * 0.15; // croma alto escurece um pouco
-      refs.push({
-        id: `${group}${t}`,
-        system: 'vita-3d-master',
-        group,
-        lab: {
-          L: lightness[group] - chromaAdj,
-          a: hueA[hue] + (chromaB[chroma] - 11) * 0.08,
-          b: chromaB[chroma],
-        },
-      });
-    }
-  }
-  return refs;
-}
+const VITA_3D_MASTER_LITERATURE: Record<string, Lab> = {
+  '0M1': { L: 81.1, a: -0.3, b: 6.7 },
+  '0M2': { L: 79.8, a: -0.5, b: 8.0 },
+  '0M3': { L: 79.2, a: -0.7, b: 9.4 },
+  '1M1': { L: 77.5, a: -0.3, b: 12.3 },
+  '1M2': { L: 77.2, a: -0.5, b: 16.8 },
+  '2L1.5': { L: 72.7, a: -0.5, b: 15.7 },
+  '2L2.5': { L: 72.3, a: -0.2, b: 22.4 },
+  '2M1': { L: 72.5, a: 0.2, b: 13.0 },
+  '2M2': { L: 71.8, a: 0.3, b: 17.0 },
+  '2M3': { L: 73.2, a: 0.3, b: 22.5 },
+  '2R1.5': { L: 72.2, a: 0.9, b: 15.1 },
+  '2R2.5': { L: 73.4, a: 0.8, b: 20.9 },
+  '3L1.5': { L: 67.0, a: 1.1, b: 18.3 },
+  '3L2.5': { L: 68.6, a: 1.3, b: 23.3 },
+  '3M1': { L: 68.1, a: 1.2, b: 14.2 },
+  '3M2': { L: 69.2, a: 1.7, b: 20.1 },
+  '3M3': { L: 68.5, a: 2.5, b: 26.0 },
+  '3R1.5': { L: 71.8, a: 1.0, b: 15.2 },
+  '3R2.5': { L: 70.0, a: 3.1, b: 25.2 },
+  '4L1.5': { L: 64.8, a: 2.2, b: 20.1 },
+  '4L2.5': { L: 65.6, a: 3.5, b: 27.8 },
+  '4M1': { L: 65.2, a: 1.9, b: 15.8 },
+  '4M2': { L: 65.3, a: 2.5, b: 20.7 },
+  '4M3': { L: 66.0, a: 3.5, b: 28.1 },
+  '4R1.5': { L: 65.0, a: 3.1, b: 19.6 },
+  '4R2.5': { L: 65.4, a: 3.8, b: 24.5 },
+  '5M1': { L: 60.1, a: 3.2, b: 18.3 },
+  '5M2': { L: 61.2, a: 4.6, b: 25.1 },
+  '5M3': { L: 62.0, a: 5.8, b: 32.2 },
+};
 
 export const VITA_3D_MASTER: ShadeSystem = {
   id: 'vita-3d-master',
   name: 'VITA 3D-Master',
-  shades: threeDMaster(),
+  shades: Object.entries(VITA_3D_MASTER_LITERATURE).map(([id, lab]) => ({ id, system: 'vita-3d-master', lab, group: id[0] })),
 };
 
 export const SHADE_SYSTEMS: Record<ShadeSystemId, ShadeSystem> = {

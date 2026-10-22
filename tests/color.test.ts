@@ -61,10 +61,17 @@ describe('escalas', () => {
     expect(ids).toHaveLength(16);
     expect(new Set(ids).size).toBe(16);
   });
-  it('VITA 3D-Master tem 26 tabs únicos', () => {
+  it('VITA 3D-Master tem 29 tabs únicos (0M1–0M3 de clareamento + 26)', () => {
     const ids = VITA_3D_MASTER.shades.map((s) => s.id);
-    expect(ids).toHaveLength(26);
-    expect(new Set(ids).size).toBe(26);
+    expect(ids).toHaveLength(29);
+    expect(new Set(ids).size).toBe(29);
+  });
+  it('VITA 3D-Master: cada grupo de luminosidade é mais escuro que o anterior', () => {
+    const meanL = (g: string) => {
+      const tabs = VITA_3D_MASTER.shades.filter((s) => s.group === g);
+      return tabs.reduce((sum, s) => sum + s.lab.L, 0) / tabs.length;
+    };
+    for (let g = 1; g <= 5; g++) expect(meanL(String(g))).toBeLessThan(meanL(String(g - 1)));
   });
 });
 

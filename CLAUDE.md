@@ -45,6 +45,10 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   em `assets/escala/vita-classical/` (resultados, caso salvo e PDF). A régua tinha um A2 repetido no lugar do B3
   (ele mandou ignorar): o B3 fica com o valor da literatura e sem foto. `ShadeRef.thirds`/`image`; a comparação usa
   os terços medidos quando a escala não está calibrada no aparelho. Testes carregam imagens via `tests/setup.mjs`.
+  VITA 3D-MASTER (2026-10-22): os valores sintéticos foram trocados pelos 29 tabs (0M1–0M3 + 26) MEDIDOS com
+  SpectroShade no estudo Dias et al., Biomimetics 2023;8(5):384 (mesma escala de L* da Classical do app). O
+  Gustavo vai fotografar a escala dele depois: repetir o fluxo de `scripts/escala/measure.mjs` (caixas à mão,
+  placa cinza, `--crops`) gerando um `vita3dMasterMeasured.ts` com terços e fotos.
   Tomada de cor (redesenho de 2026-10-21, pedido do Gustavo): o quadro do dente é um RETÂNGULO redimensionável
   (alça no canto inferior direito, `components/Marker.tsx`) que cobre a coroa inteira; `sampleThirds` lê colo /
   médio / incisal e `matchShadeProfile` compara o perfil com o tab inteiro (terços medidos na calibração —
