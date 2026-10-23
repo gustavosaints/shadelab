@@ -154,7 +154,7 @@ export function SmileGenerating({ photoUri, steps, resultUri, onDone }: Props) {
                     <Circle cx={7} cy={7} r={5.5} stroke={GLOW} strokeWidth={1.5} fill="none" strokeDasharray="9 40" strokeLinecap="round" />
                   </Svg>
                 </Animated.View>
-                <Text style={styles.kicker}>SMILE DESIGN · IA</Text>
+                <Text style={styles.kicker}>SMILE DESIGN</Text>
               </View>
               <Svg width={150} height={56} viewBox="0 0 150 56" style={{ marginTop: 10 }}>
                 {TEETH.map((t, i) => (

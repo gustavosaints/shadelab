@@ -55,8 +55,14 @@ export default function Home() {
   const calibrated = Object.keys(settings.calibrations[settings.shadeSystem] ?? {}).length;
 
   const tiles: Tile[] = [
-    { title: 'Tirar cor', subtitle: 'Fotografe o dente e compare com a escala, terço a terço', route: '/shade/capture', bg: pastel.blush, icon: 'cor' },
-    { title: 'Smile Design', subtitle: 'Forma, textura e cor: a IA gera o novo sorriso, com antes e depois', route: '/smile', bg: pastel.sage, icon: 'smile' },
+    {
+      title: 'Colorimetria Dental',
+      subtitle: 'Cor do dente pela foto, do colo à incisal: valor, croma e matiz comparados com a sua escala VITA, com PDF para o laboratório',
+      route: '/shade/capture',
+      bg: pastel.blush,
+      icon: 'cor',
+    },
+    { title: 'Smile Design', subtitle: 'Forma, tamanho, textura e cor planejados sobre o sorriso do paciente, com antes e depois', route: '/smile', bg: pastel.sage, icon: 'smile' },
     { title: 'Casos', subtitle: 'Histórico dos pacientes e envio ao laboratório', route: '/cases', bg: pastel.powder, icon: 'casos' },
     {
       title: 'Configurações',

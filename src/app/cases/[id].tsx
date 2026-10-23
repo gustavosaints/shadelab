@@ -85,7 +85,6 @@ function SmileDetail({ c }: { c: SmileCase }) {
         <SectionTitle>Simulação</SectionTitle>
         <Text style={styles.param}>Cor: {c.targetShade}</Text>
         {c.aiStyle && <Text style={styles.param}>{c.aiStyle}</Text>}
-        {c.ai?.model && <Text style={styles.param}>Modelo de IA: {c.ai.model}</Text>}
       </Card>
       {!!c.notes && (
         <Card>

@@ -54,7 +54,7 @@ function Root() {
         }}
       >
         <Stack.Screen name="index" options={{ title: 'Cypris Smile', headerShown: false }} />
-        <Stack.Screen name="shade/capture" options={{ title: 'Tirar cor', headerShown: false }} />
+        <Stack.Screen name="shade/capture" options={{ title: 'Colorimetria Dental', headerShown: false }} />
         <Stack.Screen name="shade/analyze" options={{ title: 'Análise de cor' }} />
         <Stack.Screen name="cases/index" options={{ title: 'Casos' }} />
         <Stack.Screen name="cases/[id]" options={{ title: 'Caso' }} />

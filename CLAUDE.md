@@ -85,6 +85,10 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   pontos, anel girando, faixa de luz varrendo e os terços acendendo; legenda em 3 passos. Fica ≥ 2 s (0,3 s com
   "Reduzir movimento"); quando o resultado chega o dente se pinta com a cor medida e mostra o tab, e fecha (~1,1 s;
   toque pula). Só na tomada de cor, não na calibração.
+- NOMES NA TELA (2026-10-23): "Tirar cor" virou "Colorimetria Dental" (início, câmera, aba "Colorimetria" nos
+  Casos). No Smile Design, os textos não falam em IA para o usuário (título, descrição, botão "Gerar Smile Design",
+  animação "SMILE DESIGN"; o modelo e o tempo da geração não aparecem mais no resultado nem no caso). Só ficou
+  "Configurar IA" (a chave) e o aviso de que a foto vai ao Google.
 - VALOR, CROMA E MATIZ (2026-10-23, "sempre leve em consideração"): `deltaE2000Parts` separa o ΔE00 em valor
   (ΔL'/SL), croma (ΔC'/SC) e matiz (ΔH'/SH); `lib/color/hcv.ts`: `compareHcv` (dente × tab, frases "dente mais
   claro/escuro, mais/menos saturado, mais amarelado/avermelhado", abaixo de 0,8 = igual), `hcvTieBreak` (empate no

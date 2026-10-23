@@ -439,10 +439,10 @@ export default function SmileDesign() {
         <FaceLandmarker ref={landmarker} />
         <ScrollView contentContainerStyle={{ padding: spacing.md }}>
           <Card>
-            <SectionTitle>Smile Design por IA</SectionTitle>
+            <SectionTitle>Smile Design</SectionTitle>
             <Muted>
-              Fotografe o sorriso de frente, escolha a forma, a textura e a cor dos dentes, e a IA gera a simulação sobre a
-              própria foto. Depois compare o antes e o depois.
+              Fotografe o sorriso de frente e planeje sobre os dentes do paciente: forma, tamanho, textura e cor. Depois
+              compare o antes e o depois.
             </Muted>
             <Button title="Fotografar com guia" onPress={() => router.push('/smile/capture')} style={{ marginTop: 12 }} />
             <Button title="Escolher da galeria" variant="secondary" onPress={pickFromGallery} style={{ marginTop: 8 }} />
@@ -559,7 +559,7 @@ export default function SmileDesign() {
                 </View>
               </>
             )}
-            <Muted>{`${designSummary(result.choice)}${result.model ? ` · ${result.model}` : ''}${result.ms ? ` · ${Math.round(result.ms / 1000)} s` : ''}`}</Muted>
+            <Muted>{designSummary(result.choice)}</Muted>
             <View style={styles.row}>
               <Button title="Compartilhar antes e depois" variant="secondary" onPress={() => share('compare')} />
               <Button title="Só a simulação" variant="ghost" onPress={() => share('result')} />
@@ -634,7 +634,7 @@ export default function SmileDesign() {
             ))}
           </View>
           <Button
-            title={generating ? 'Gerando…' : results.length ? 'Gerar nova variação' : 'Gerar Smile Design com IA'}
+            title={generating ? 'Gerando…' : results.length ? 'Gerar nova variação' : 'Gerar Smile Design'}
             onPress={generate}
             loading={generating}
             disabled={generating}

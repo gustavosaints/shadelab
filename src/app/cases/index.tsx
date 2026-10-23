@@ -73,7 +73,7 @@ export default function Cases() {
     const ok = await confirmDelete(
       n === 1 ? 'Excluir caso' : `Excluir ${n} casos`,
       allSelected
-        ? `Tem certeza que deseja excluir TODOS os ${n} casos de ${tab === 'shade' ? 'tomada de cor' : 'Smile Design'}? Essa ação não pode ser desfeita.`
+        ? `Tem certeza que deseja excluir TODOS os ${n} casos de ${tab === 'shade' ? 'colorimetria' : 'Smile Design'}? Essa ação não pode ser desfeita.`
         : `Tem certeza que deseja excluir ${n === 1 ? 'o caso selecionado' : `os ${n} casos selecionados`}? Essa ação não pode ser desfeita.`,
     );
     if (!ok) return;
@@ -134,9 +134,9 @@ export default function Cases() {
   const empty =
     tab === 'shade' ? (
       <View style={styles.empty}>
-        <Text style={styles.emptyTitle}>Nenhum caso de cor ainda</Text>
-        <Muted>Tire a cor de um dente e salve o caso para ele aparecer aqui.</Muted>
-        <Button title="Tirar cor" onPress={() => router.push('/shade/capture')} style={{ marginTop: 16 }} />
+        <Text style={styles.emptyTitle}>Nenhum caso de colorimetria ainda</Text>
+        <Muted>Faça a colorimetria de um dente e salve o caso para ele aparecer aqui.</Muted>
+        <Button title="Colorimetria Dental" onPress={() => router.push('/shade/capture')} style={{ marginTop: 16 }} />
       </View>
     ) : (
       <View style={styles.empty}>
@@ -163,7 +163,7 @@ export default function Cases() {
       <View style={styles.tabs}>
         {(
           [
-            ['shade', 'Tomada de cor', shadeCases.length],
+            ['shade', 'Colorimetria', shadeCases.length],
             ['smile', 'Smile Design', smileCases.length],
           ] as const
         ).map(([id, label, n]) => (

@@ -89,7 +89,7 @@ export default function Capture() {
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <Text style={styles.topBtn}>Fechar</Text>
         </Pressable>
-        <Text style={styles.topTitle}>{mode === 'calibrate' ? `Calibrar ${shade}` : mode === 'calibrate-gingiva' ? `Calibrar gengiva ${shade}` : 'Tirar cor'}</Text>
+        <Text style={styles.topTitle}>{mode === 'calibrate' ? `Calibrar ${shade}` : mode === 'calibrate-gingiva' ? `Calibrar gengiva ${shade}` : 'Colorimetria Dental'}</Text>
         <Pressable onPress={nextZoom} hitSlop={12}>
           <Text style={[styles.topBtn, { textAlign: 'right' }]}>{`${(1 + zoom * 4).toFixed(zoom ? 1 : 0)}x`}</Text>
         </Pressable>
