@@ -1,4 +1,6 @@
+import * as DocumentPicker from 'expo-document-picker';
 import { router } from 'expo-router';
+import * as Sharing from 'expo-sharing';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { Button } from '@/components/Button';
@@ -10,6 +12,7 @@ import { getSystem, SHADE_SYSTEMS, type ShadeSystemId } from '@/lib/color/shades
 import { changePassword } from '@/lib/auth';
 import { useAuth } from '@/lib/AuthContext';
 import { authenticateBiometric, biometricInfo, getBiometricPref, setBiometricPref, type BiometricInfo } from '@/lib/biometric';
+import { exportCases, importCases } from '@/lib/storage/backup';
 import { clearCalibration, clearGingivaCalibration, saveSettings } from '@/lib/storage/settings';
 import { useSettings } from '@/lib/useSettings';
 import { colors, radius, spacing } from '@/theme';
@@ -55,6 +58,41 @@ export default function Settings() {
     }
     await setBiometricPref(on ? 'on' : 'off');
     setBioOn(on);
+  };
+  // backup dos casos: levar de uma versão do app para outra (servidor da clínica → versão publicada → app instalado)
+  const [backupBusy, setBackupBusy] = useState<'export' | 'import' | null>(null);
+  const doExport = async () => {
+    setBackupBusy('export');
+    try {
+      const { uri, count } = await exportCases();
+      if (!count) {
+        Alert.alert('Nenhum caso', 'Não há casos salvos neste aparelho para exportar.');
+        return;
+      }
+      if (await Sharing.isAvailableAsync())
+        await Sharing.shareAsync(uri, { mimeType: 'application/json', UTI: 'public.json', dialogTitle: `Backup de ${count} casos` });
+      else Alert.alert('Backup gerado', uri);
+    } catch (e) {
+      Alert.alert('Não foi possível exportar', String((e as Error).message ?? e));
+    } finally {
+      setBackupBusy(null);
+    }
+  };
+  const doImport = async () => {
+    const res = await DocumentPicker.getDocumentAsync({ type: ['application/json', 'public.json', '*/*'], copyToCacheDirectory: true });
+    if (res.canceled || !res.assets[0]) return;
+    setBackupBusy('import');
+    try {
+      const { imported, skipped } = await importCases(res.assets[0].uri);
+      Alert.alert(
+        'Casos importados',
+        `${imported === 1 ? '1 caso importado' : `${imported} casos importados`}${skipped ? ` · ${skipped} já existiam e ficaram como estavam` : ''}.`,
+      );
+    } catch (e) {
+      Alert.alert('Não foi possível importar', String((e as Error).message ?? e));
+    } finally {
+      setBackupBusy(null);
+    }
   };
   const [clinic, setClinic] = useState<string | null>(null);
   const [dentist, setDentist] = useState<string | null>(null);
@@ -181,6 +219,16 @@ export default function Settings() {
           placeholderTextColor={colors.muted}
         />
         <Button title="Salvar" variant="secondary" onPress={saveIdentity} />
+      </Card>
+
+      <Card>
+        <SectionTitle>Backup dos casos</SectionTitle>
+        <Muted>
+          Leve os casos (com as fotos) para outra versão do app ou outro aparelho: exporte aqui, salve o arquivo no iCloud
+          Drive ou mande pelo WhatsApp, e use «Importar casos» do outro lado. Casos que já existem não são duplicados.
+        </Muted>
+        <Button title="Exportar casos" variant="secondary" onPress={doExport} loading={backupBusy === 'export'} disabled={!!backupBusy} style={{ marginTop: 10 }} />
+        <Button title="Importar casos" variant="ghost" onPress={doImport} loading={backupBusy === 'import'} disabled={!!backupBusy} />
       </Card>
 
       <Card>

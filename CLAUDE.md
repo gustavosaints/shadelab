@@ -200,6 +200,14 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
 - `tests/` vitest; `eas.json` perfis de build; `reference/anatomia/` (fora do git, ver README lá) cópia filtrada da
   biblioteca de dentes do exocad (139 bibliotecas legíveis) e `reference/renders/` prévias + folha de contato.
 
+## Backup dos casos (2026-10-23)
+
+Cada endereço do app no Expo Go (servidor da clínica, versão publicada) e o futuro app instalado têm armazenamento
+SEPARADO (o Gustavo achou que os casos tinham sido excluídos). Configurações › "Backup dos casos": `lib/storage/
+backup.ts#exportCases` grava um .json (formato em `backupFormat.ts`, fotos em base64, escrito caso a caso com
+append) e abre o compartilhar; `importCases` (via expo-document-picker) recria as fotos em `Paths.document/cases`
+e salva só os casos com id novo. Não leva login, chave da IA nem calibrações.
+
 ## Publicar para usar fora da rede (EAS Update no Expo Go, desde 2026-10-23)
 
 Projeto Expo `@gustavosaints/shadelab` (projectId 35123588-021a-48a9-a226-8f0861c35600), `runtimeVersion` policy
