@@ -170,8 +170,8 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   contagem). Na aba de cor: `components/SwipeRow.tsx` (responder do View, regras puras em `lib/swipe.ts`) — arrastar
   para a direita envia o PDF (`lib/report/shareShadeCase.ts`, o mesmo do detalhe), para a esquerda exclui com
   "Tem certeza…?"; "Selecionar" no cabeçalho (ou toque longo) marca casos, com "Selecionar todos" e "Excluir /
-  Excluir todos" (`deleteCases`). A aba de Smile Design ainda é só a lista (ele pediu os gestos só na de cor, "por
-  enquanto").
+  Excluir todos" (`deleteCases`). Desde 2026-10-23 a aba de Smile Design tem os mesmos gestos e
+  seleção (enviar = imagem da simulação, `lib/report/shareSmileCase.ts`).
 - `src/lib/storage/` AsyncStorage: `settings.ts` e `cases.ts` (`ShadeCase` | `SmileCase`, fotos copiadas para
   `Paths.document/cases`).
 - `src/components/` `Marker` (quadro de amostra), `BeforeAfter`, `AiConfig`, `FaceLandmarker` (MediaPipe invisível), etc.

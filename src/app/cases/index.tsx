@@ -5,15 +5,16 @@ import { Button } from '@/components/Button';
 import { Muted } from '@/components/Card';
 import { SwipeRow } from '@/components/SwipeRow';
 import { shareShadeCasePdf } from '@/lib/report/shareShadeCase';
-import { deleteCases, isSmileCase, listCases, type AnyCase, type ShadeCase, type SmileCase } from '@/lib/storage/cases';
+import { shareSmileCaseImage } from '@/lib/report/shareSmileCase';
+import { deleteCases, isSmileCase, listCases, type AnyCase, type ShadeCase } from '@/lib/storage/cases';
 import { colors, fonts, pastel, radius, spacing } from '@/theme';
 
 type Tab = 'shade' | 'smile';
 
 /**
- * Casos separados em duas abas (pedido do Gustavo, 2026-10-22): tomada de cor e Smile Design. Na tomada de cor:
- * arrastar para a direita envia o PDF, para a esquerda exclui (com confirmação), e o modo "Selecionar" permite
- * marcar vários (ou todos) e excluir de uma vez.
+ * Casos separados em duas abas (pedido do Gustavo, 2026-10-22): tomada de cor e Smile Design. Nas duas: arrastar
+ * para a direita envia (PDF da cor / imagem da simulação), para a esquerda exclui (com confirmação), e o modo
+ * "Selecionar" permite marcar vários (ou todos) e excluir de uma vez.
  */
 export default function Cases() {
   const [cases, setCases] = useState<AnyCase[]>([]);
@@ -29,7 +30,8 @@ export default function Cases() {
 
   const shadeCases = cases.filter((c): c is ShadeCase => !isSmileCase(c));
   const smileCases = cases.filter(isSmileCase);
-  const canSelect = tab === 'shade' && shadeCases.length > 0;
+  const current: AnyCase[] = tab === 'shade' ? shadeCases : smileCases;
+  const canSelect = current.length > 0;
 
   const switchTab = (t: Tab) => {
     setTab(t);
@@ -47,7 +49,7 @@ export default function Cases() {
       else next.add(id);
       return next;
     });
-  const allSelected = shadeCases.length > 0 && selected.size === shadeCases.length;
+  const allSelected = current.length > 0 && selected.size === current.length;
 
   const confirmDelete = (title: string, message: string) =>
     new Promise<boolean>((resolve) =>
@@ -57,7 +59,7 @@ export default function Cases() {
       ], { cancelable: true, onDismiss: () => resolve(false) }),
     );
 
-  const deleteOne = async (c: ShadeCase) => {
+  const deleteOne = async (c: AnyCase) => {
     const ok = await confirmDelete('Excluir caso', `Tem certeza que deseja excluir o caso de ${c.patientName}? Essa ação não pode ser desfeita.`);
     if (ok) {
       await deleteCases([c.id]);
@@ -71,7 +73,7 @@ export default function Cases() {
     const ok = await confirmDelete(
       n === 1 ? 'Excluir caso' : `Excluir ${n} casos`,
       allSelected
-        ? `Tem certeza que deseja excluir TODOS os ${n} casos de tomada de cor? Essa ação não pode ser desfeita.`
+        ? `Tem certeza que deseja excluir TODOS os ${n} casos de ${tab === 'shade' ? 'tomada de cor' : 'Smile Design'}? Essa ação não pode ser desfeita.`
         : `Tem certeza que deseja excluir ${n === 1 ? 'o caso selecionado' : `os ${n} casos selecionados`}? Essa ação não pode ser desfeita.`,
     );
     if (!ok) return;
@@ -82,12 +84,14 @@ export default function Cases() {
 
   const open = (id: string) => router.push({ pathname: '/cases/[id]', params: { id } });
 
-  const shadeRow = (item: ShadeCase) => {
+  // mesma linha nas duas abas: arrastar (enviar / excluir), toque longo seleciona
+  const caseRow = (item: AnyCase) => {
     const checked = selected.has(item.id);
+    const smile = isSmileCase(item);
     return (
       <SwipeRow
         enabled={!selecting}
-        onSend={() => shareShadeCasePdf(item)}
+        onSend={() => (smile ? shareSmileCaseImage(item) : shareShadeCasePdf(item))}
         onDelete={() => deleteOne(item)}
         onSwipeStart={() => setSwiping(true)}
         onSwipeEnd={() => setSwiping(false)}
@@ -102,37 +106,30 @@ export default function Cases() {
           style={({ pressed }) => [styles.row, checked && styles.rowChecked, { opacity: pressed ? 0.85 : 1 }]}
           accessibilityRole={selecting ? 'checkbox' : 'button'}
           accessibilityState={selecting ? { checked } : undefined}
-          accessibilityHint={selecting ? undefined : 'Arraste para a direita para enviar o PDF, para a esquerda para excluir'}
+          accessibilityHint={selecting ? undefined : `Arraste para a direita para enviar ${smile ? 'a imagem' : 'o PDF'}, para a esquerda para excluir`}
         >
           {selecting && (
             <View style={[styles.check, checked && styles.checkOn]}>
               {checked && <Text style={styles.checkMark}>✓</Text>}
             </View>
           )}
-          <View style={[styles.swatch, { backgroundColor: item.toothHex }]} />
+          {smile ? (
+            <Image source={{ uri: item.renderedUri ?? item.photoUri }} style={styles.swatch} />
+          ) : (
+            <View style={[styles.swatch, { backgroundColor: item.toothHex }]} />
+          )}
           <View style={{ flex: 1 }}>
             <Text style={styles.name}>{item.patientName}</Text>
             <Muted>
-              {item.tooth ? `Dente ${item.tooth} · ` : ''}
+              {smile ? 'Smile Design · ' : item.tooth ? `Dente ${item.tooth} · ` : ''}
               {new Date(item.createdAt).toLocaleDateString('pt-BR')}
             </Muted>
           </View>
-          <Text style={styles.shade}>{item.matches[0]?.shadeId ?? '—'}</Text>
+          <Text style={styles.shade}>{smile ? item.targetShade : (item.matches[0]?.shadeId ?? '—')}</Text>
         </Pressable>
       </SwipeRow>
     );
   };
-
-  const smileRow = (item: SmileCase) => (
-    <Pressable onPress={() => open(item.id)} style={({ pressed }) => [styles.row, styles.rowSpaced, { opacity: pressed ? 0.85 : 1 }]}>
-      <Image source={{ uri: item.renderedUri ?? item.photoUri }} style={styles.swatch} />
-      <View style={{ flex: 1 }}>
-        <Text style={styles.name}>{item.patientName}</Text>
-        <Muted>Smile Design · {new Date(item.createdAt).toLocaleDateString('pt-BR')}</Muted>
-      </View>
-      <Text style={styles.shade}>{item.targetShade}</Text>
-    </Pressable>
-  );
 
   const empty =
     tab === 'shade' ? (
@@ -176,31 +173,24 @@ export default function Cases() {
         ))}
       </View>
 
-      {tab === 'shade' ? (
-        <FlatList
-          data={shadeCases}
-          keyExtractor={(c) => c.id}
-          scrollEnabled={!swiping}
-          contentContainerStyle={{ padding: spacing.md, paddingTop: 4, flexGrow: 1 }}
-          ListHeaderComponent={
-            shadeCases.length > 0 && !selecting ? <Text style={styles.hint}>Arraste para a direita para enviar o PDF, para a esquerda para excluir.</Text> : null
-          }
-          ListEmptyComponent={empty}
-          renderItem={({ item }) => shadeRow(item)}
-        />
-      ) : (
-        <FlatList
-          data={smileCases}
-          keyExtractor={(c) => c.id}
-          contentContainerStyle={{ padding: spacing.md, paddingTop: 4, flexGrow: 1 }}
-          ListEmptyComponent={empty}
-          renderItem={({ item }) => smileRow(item)}
-        />
-      )}
+      <FlatList
+        key={tab}
+        data={current}
+        keyExtractor={(c) => c.id}
+        scrollEnabled={!swiping}
+        contentContainerStyle={{ padding: spacing.md, paddingTop: 4, flexGrow: 1 }}
+        ListHeaderComponent={
+          current.length > 0 && !selecting ? (
+            <Text style={styles.hint}>{`Arraste para a direita para enviar ${tab === 'shade' ? 'o PDF' : 'a imagem'}, para a esquerda para excluir.`}</Text>
+          ) : null
+        }
+        ListEmptyComponent={empty}
+        renderItem={({ item }) => caseRow(item)}
+      />
 
       {selecting && (
         <View style={styles.selectBar}>
-          <Pressable onPress={() => setSelected(allSelected ? new Set() : new Set(shadeCases.map((c) => c.id)))} hitSlop={8} accessibilityRole="button">
+          <Pressable onPress={() => setSelected(allSelected ? new Set() : new Set(current.map((c) => c.id)))} hitSlop={8} accessibilityRole="button">
             <Text style={styles.selectAll}>{allSelected ? 'Desmarcar todos' : 'Selecionar todos'}</Text>
           </Pressable>
           <Text style={styles.selectCount}>{selected.size === 1 ? '1 selecionado' : `${selected.size} selecionados`}</Text>
@@ -237,7 +227,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: spacing.md,
   },
-  rowSpaced: { marginBottom: 10 },
   rowChecked: { borderColor: colors.primary, backgroundColor: '#FBF4F2' },
   check: { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
   checkOn: { backgroundColor: colors.primary, borderColor: colors.primary },
