@@ -19,8 +19,10 @@ type Props = {
  * Antes e depois sobre a mesma foto.
  * - Cortina: o DEPOIS ocupa a imagem e o ANTES aparece à esquerda da linha; arrastar em qualquer ponto da
  *   foto passa a linha de um lado para o outro.
- * - Transparência: o DEPOIS por cima do ANTES com opacidade ajustável na barra abaixo da foto (bom para
- *   ver o que mudou na gengiva, por exemplo numa plastia gengival).
+ * - Transparência: o DEPOIS por cima do ANTES com opacidade ajustável (bom para ver o que mudou na gengiva, por
+ *   exemplo numa plastia gengival). A barra fica DENTRO da foto, embaixo: com a foto fixa no topo da tela, o que
+ *   fica fora do quadro aparece mas não recebe toque no iPhone (era a barra "estática"). Tocar na barra leva a
+ *   transparência para o ponto tocado; arrastar em qualquer lugar da foto ajusta para a esquerda/direita.
  * O `ref` aponta para a área da foto (para capturar a imagem e compartilhar).
  */
 export const BeforeAfter = forwardRef<View, Props>(function BeforeAfter({ beforeUri, afterUri, aspect, mode, onDragStart, onDragEnd }, ref) {
@@ -28,37 +30,38 @@ export const BeforeAfter = forwardRef<View, Props>(function BeforeAfter({ before
   const [split, setSplit] = useState(0.5);
   const [opacity, setOpacity] = useState(1);
   const drag = useRef({ x: 0, value: 0 });
-  const [trackW, setTrackW] = useState(0);
 
   const clamp = (v: number) => Math.min(1, Math.max(0, v));
 
-  // ----- cortina: arrasto relativo na foto inteira -----
-  const curtainGrant = (e: GestureResponderEvent) => {
-    onDragStart?.();
-    // toque direto: a linha vai para o dedo; depois acompanha o arrasto
-    const v = width ? clamp(e.nativeEvent.locationX / width) : split;
-    setSplit(v);
-    drag.current = { x: e.nativeEvent.pageX, value: v };
-  };
-  const curtainMove = (e: GestureResponderEvent) => {
-    if (!width) return;
-    setSplit(clamp(drag.current.value + (e.nativeEvent.pageX - drag.current.x) / width));
-  };
-
-  // ----- transparência: barra abaixo da foto -----
-  const barGrant = (e: GestureResponderEvent) => {
-    onDragStart?.();
-    const v = trackW ? clamp(e.nativeEvent.locationX / trackW) : opacity;
-    setOpacity(v);
-    drag.current = { x: e.nativeEvent.pageX, value: v };
-  };
-  const barMove = (e: GestureResponderEvent) => {
-    if (!trackW) return;
-    setOpacity(clamp(drag.current.value + (e.nativeEvent.pageX - drag.current.x) / trackW));
-  };
-
-  const end = () => onDragEnd?.();
   const H = width / aspect;
+  // barra da transparência (dentro da foto, embaixo)
+  const BAR_PAD = 44;
+  const trackW = Math.max(1, width - BAR_PAD * 2);
+  const nearBar = (y: number) => y > H - 56;
+
+  // ----- arrasto na foto: cortina move a linha; transparência muda a opacidade -----
+  const grant = (e: GestureResponderEvent) => {
+    onDragStart?.();
+    const { locationX, locationY, pageX } = e.nativeEvent;
+    if (mode === 'cortina') {
+      // toque direto: a linha vai para o dedo; depois acompanha o arrasto
+      const v = width ? clamp(locationX / width) : split;
+      setSplit(v);
+      drag.current = { x: pageX, value: v };
+    } else {
+      // na barra: vai para o ponto tocado; no resto da foto: só ajusta pelo arrasto
+      const v = nearBar(locationY) ? clamp((locationX - BAR_PAD) / trackW) : opacity;
+      setOpacity(v);
+      drag.current = { x: pageX, value: v };
+    }
+  };
+  const move = (e: GestureResponderEvent) => {
+    if (!width) return;
+    const dx = e.nativeEvent.pageX - drag.current.x;
+    if (mode === 'cortina') setSplit(clamp(drag.current.value + dx / width));
+    else setOpacity(clamp(drag.current.value + dx / trackW));
+  };
+  const end = () => onDragEnd?.();
 
   return (
     <View>
@@ -67,11 +70,11 @@ export const BeforeAfter = forwardRef<View, Props>(function BeforeAfter({ before
         collapsable={false}
         style={[styles.frame, { aspectRatio: aspect }]}
         onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
-        onStartShouldSetResponder={() => mode === 'cortina'}
-        onMoveShouldSetResponder={() => mode === 'cortina'}
+        onStartShouldSetResponder={() => true}
+        onMoveShouldSetResponder={() => true}
         onResponderTerminationRequest={() => false}
-        onResponderGrant={curtainGrant}
-        onResponderMove={curtainMove}
+        onResponderGrant={grant}
+        onResponderMove={move}
         onResponderRelease={end}
         onResponderTerminate={end}
       >
@@ -91,6 +94,17 @@ export const BeforeAfter = forwardRef<View, Props>(function BeforeAfter({ before
             <>
               <Image source={{ uri: beforeUri }} style={styles.full} resizeMode="cover" />
               <Image source={{ uri: afterUri }} style={[styles.full, { opacity }]} resizeMode="cover" />
+              <View style={styles.barWrap}>
+                <Text style={styles.barLabel}>Antes</Text>
+                <View style={styles.track}>
+                  <View style={[styles.fill, { width: opacity * trackW }]} />
+                  <View style={[styles.thumb, { left: opacity * trackW - 12 }]} />
+                </View>
+                <Text style={styles.barLabel}>Depois</Text>
+              </View>
+              <View style={styles.pctTag}>
+                <Text style={styles.tagText}>{`${Math.round(opacity * 100)}% DEPOIS`}</Text>
+              </View>
             </>
           )}
           <View style={[styles.tag, { left: 8 }]}>
@@ -102,28 +116,6 @@ export const BeforeAfter = forwardRef<View, Props>(function BeforeAfter({ before
         </View>
       </View>
 
-      {mode === 'transparencia' && (
-        <View style={styles.barRow}>
-          <Text style={styles.barLabel}>Antes</Text>
-          <View
-            style={styles.track}
-            onLayout={(e) => setTrackW(e.nativeEvent.layout.width)}
-            onStartShouldSetResponder={() => true}
-            onMoveShouldSetResponder={() => true}
-            onResponderTerminationRequest={() => false}
-            onResponderGrant={barGrant}
-            onResponderMove={barMove}
-            onResponderRelease={end}
-            onResponderTerminate={end}
-            hitSlop={{ top: 14, bottom: 14 }}
-          >
-            <View pointerEvents="none" style={[styles.fill, { width: opacity * trackW }]} />
-            <View pointerEvents="none" style={[styles.thumb, { left: opacity * trackW - 12 }]} />
-          </View>
-          <Text style={styles.barLabel}>Depois</Text>
-        </View>
-      )}
-      {mode === 'transparencia' && <Text style={styles.pct}>{`${Math.round(opacity * 100)}% do depois`}</Text>}
     </View>
   );
 });
@@ -147,9 +139,19 @@ const styles = StyleSheet.create({
   knobText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   tag: { position: 'absolute', top: 8, backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   tagText: { color: '#fff', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
-  barRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14, paddingHorizontal: 4 },
-  barLabel: { color: colors.muted, fontSize: 12, fontWeight: '600' },
-  track: { flex: 1, height: 8, borderRadius: 4, backgroundColor: colors.border, justifyContent: 'center' },
+  barWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 10,
+    height: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  barLabel: { width: 40, textAlign: 'center', color: '#fff', fontSize: 10, fontWeight: '700', textShadowColor: 'rgba(0,0,0,0.6)', textShadowRadius: 3 },
+  track: { flex: 1, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.45)', justifyContent: 'center' },
+  pctTag: { position: 'absolute', bottom: 50, alignSelf: 'center', backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   fill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 4, backgroundColor: colors.primary },
   thumb: {
     position: 'absolute',
@@ -161,5 +163,4 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     top: -8,
   },
-  pct: { color: colors.muted, fontSize: 12, textAlign: 'center', marginTop: 6 },
 });

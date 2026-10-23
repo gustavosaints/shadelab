@@ -547,7 +547,7 @@ export default function SmileDesign() {
             <Muted>
               {mode === 'cortina'
                 ? 'Arraste na foto para passar a linha de um lado para o outro.'
-                : 'Arraste a barra para misturar o antes e o depois (útil para ver a gengiva numa plastia gengival).'}
+                : 'Arraste na foto (ou toque na barra embaixo dela) para misturar o antes e o depois — útil para ver a gengiva numa plastia gengival.'}
             </Muted>
             {results.length > 1 && (
               <>
