@@ -99,7 +99,8 @@ describe('matchShade', () => {
       calibration: { A1: { L: 1, a: 1, b: 1 } },
     });
     expect(r.calibrated).toBe(false);
-    expect(r.matches[0].shade.id).toBe('A2');
+    // o resultado é o mesmo de sem calibração nenhuma
+    expect(r.matches[0].shade.id).toBe(matchShade({ L: 74.5, a: 1.8, b: 17.5 }, 'vita-classical').matches[0].shade.id);
   });
 });
 
@@ -170,5 +171,35 @@ describe('matchGingiva', () => {
     const r = matchGingiva({ L: 56, a: 20, b: 5 }, calib);
     expect(r.calibrated).toBe(true);
     expect(r.matches[0].shade.id).toBe('G3');
+  });
+});
+
+describe('valor, croma e matiz', () => {
+  it('separa a diferença nas três dimensões, com sinal dente − tab', async () => {
+    const { compareHcv, hcvOf } = await import('@/lib/color/hcv');
+    const tab = { L: 72, a: 1, b: 18 };
+    const lighter = compareHcv({ L: 76, a: 1, b: 18 }, tab);
+    expect(lighter.value).toBeGreaterThan(0.8);
+    expect(lighter.text.value).toMatch(/mais claro/);
+    expect(lighter.text.chroma).toBe('igual ao tab');
+    const yellower = compareHcv({ L: 72, a: -1.5, b: 18 }, tab); // ângulo maior = mais amarelado
+    expect(yellower.text.hue).toMatch(/mais amarelado/);
+    const satur = compareHcv({ L: 72, a: 1.3, b: 24 }, tab);
+    expect(satur.text.chroma).toMatch(/mais saturado/);
+    expect(hcvOf({ L: 70, a: 0, b: 20 }).hue).toBeCloseTo(90);
+  });
+
+  it('empate no total: ganha o tab de valor mais próximo', async () => {
+    const { hcvTieBreak } = await import('@/lib/color/hcv');
+    const tooth = { L: 74, a: 1, b: 17 };
+    const sameValue = { L: 74, a: 2.5, b: 19.5 }; // difere em croma
+    const otherValue = { L: 75.6, a: 1, b: 17 }; // difere em valor
+    expect(hcvTieBreak(tooth, sameValue, otherValue)).toBeLessThan(0);
+  });
+
+  it('3D-Master: o nome do tab vira valor, matiz e croma', async () => {
+    const { describe3dMaster } = await import('@/lib/color/hcv');
+    expect(describe3dMaster('3R1.5')).toMatch(/valor 3.*matiz R.*croma 1,5/);
+    expect(describe3dMaster('A2')).toBeNull();
   });
 });

@@ -85,6 +85,12 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   pontos, anel girando, faixa de luz varrendo e os terços acendendo; legenda em 3 passos. Fica ≥ 2 s (0,3 s com
   "Reduzir movimento"); quando o resultado chega o dente se pinta com a cor medida e mostra o tab, e fecha (~1,1 s;
   toque pula). Só na tomada de cor, não na calibração.
+- VALOR, CROMA E MATIZ (2026-10-23, "sempre leve em consideração"): `deltaE2000Parts` separa o ΔE00 em valor
+  (ΔL'/SL), croma (ΔC'/SC) e matiz (ΔH'/SH); `lib/color/hcv.ts`: `compareHcv` (dente × tab, frases "dente mais
+  claro/escuro, mais/menos saturado, mais amarelado/avermelhado", abaixo de 0,8 = igual), `hcvTieBreak` (empate no
+  total abaixo do perceptível: ganha o valor mais próximo, depois croma, depois matiz — ordem clássica e da
+  3D-Master) e `describe3dMaster` (nome do tab → valor/matiz/croma). Aparece no resultado da análise (cada tab), na
+  cor medida (Valor · Croma · Matiz°), no detalhe do caso e numa tabela do PDF.
 - `src/lib/image/` leitura de pixels (expo-image-manipulator + jpeg-js) e média robusta (descarta 15% extremos).
 - SMILE DESIGN POR IA (redesenho de 2026-10-22, pedido do Gustavo: "retirar toda a parte manual de colocar os
   dentes"). `src/app/smile/index.tsx`: foto (câmera guiada `smile/capture.tsx` → `pendingPhoto.ts`, ou galeria) →

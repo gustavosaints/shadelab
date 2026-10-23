@@ -3,10 +3,21 @@ import type { Lab } from './convert';
 const deg2rad = (d: number) => (d * Math.PI) / 180;
 const rad2deg = (r: number) => (r * 180) / Math.PI;
 
+/** Parcelas do CIEDE2000 já divididas pelos pesos (SL, SC, SH): valor, croma e matiz, com sinal (2 − 1). */
+export type DeltaE2000Parts = { dE: number; dL: number; dC: number; dH: number };
+
 /**
  * CIEDE2000 (Sharma, Wu & Dalal, 2005). kL = kC = kH = 1.
  */
 export function deltaE2000(lab1: Lab, lab2: Lab): number {
+  return deltaE2000Parts(lab1, lab2).dE;
+}
+
+/**
+ * CIEDE2000 separado nas três dimensões da cor dental: valor (ΔL'/SL), croma (ΔC'/SC) e matiz (ΔH'/SH), na mesma
+ * escala do ΔE00 (cada parcela pode ser comparada com o limiar de perceptibilidade 0,8). Sinal = cor 2 − cor 1.
+ */
+export function deltaE2000Parts(lab1: Lab, lab2: Lab): DeltaE2000Parts {
   const { L: L1, a: a1, b: b1 } = lab1;
   const { L: L2, a: a2, b: b2 } = lab2;
 
@@ -67,7 +78,7 @@ export function deltaE2000(lab1: Lab, lab2: Lab): number {
   const tL = dLp / SL;
   const tC = dCp / SC;
   const tH = dHp / SH;
-  return Math.sqrt(tL * tL + tC * tC + tH * tH + RT * tC * tH);
+  return { dE: Math.sqrt(tL * tL + tC * tC + tH * tH + RT * tC * tH), dL: tL, dC: tC, dH: tH };
 }
 
 /** CIE76 (distância euclidiana), útil como referência rápida. */

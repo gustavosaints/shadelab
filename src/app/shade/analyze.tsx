@@ -24,6 +24,7 @@ import { ShadeScan } from '@/components/ShadeScan';
 import { correctedLab, type ReferenceSpec } from '@/lib/color/calibrate';
 import { labToHex, roundLab, type Lab } from '@/lib/color/convert';
 import { matchGingiva, type GingivaMatch } from '@/lib/color/gingiva';
+import { hcvOf } from '@/lib/color/hcv';
 import { detectFace } from '@/lib/face/detect';
 import { mouthBounds } from '@/lib/smile/mouth';
 import { matchShadeProfile, type MatchResult, type ThirdsProfile } from '@/lib/color/match';
@@ -415,6 +416,7 @@ export default function Analyze() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.measuredTitle}>{calibratingGingiva ? 'Leitura do quadro' : 'Cor medida (terço médio)'}</Text>
                   <Text style={styles.labText}>L*a*b* {fmtLab(result.match.measured)}</Text>
+                  {!calibratingGingiva && <Text style={styles.labText}>{fmtHcv(result.match.measured)}</Text>}
                   <Muted>
                     {refLabel}
                     {result.match.calibrated ? ' · escala calibrada' : ' · valores padrão da escala'}
@@ -452,7 +454,7 @@ export default function Analyze() {
                 <>
                   <SectionTitle>{`Resultado · ${system?.name ?? ''}`}</SectionTitle>
                   {result.match.matches.map((m, i) => (
-                    <ShadeRow key={m.shade.id} rank={i + 1} shadeId={m.shade.id} lab={m.shade.lab} deltaE={m.deltaE} image={m.shade.image} />
+                    <ShadeRow key={m.shade.id} rank={i + 1} shadeId={m.shade.id} lab={m.shade.lab} deltaE={m.deltaE} image={m.shade.image} hcv={m.hcv} />
                   ))}
                   <Muted>
                     {result.match.confidence >= 0.5
@@ -510,6 +512,12 @@ export default function Analyze() {
 
 function fmtLab(l: Lab) {
   return `${l.L.toFixed(1)}  ${l.a.toFixed(1)}  ${l.b.toFixed(1)}`;
+}
+
+/** Valor (L*), croma (C*) e matiz (h°) da cor medida. */
+function fmtHcv(l: Lab) {
+  const h = hcvOf(l);
+  return `Valor ${h.value.toFixed(0)} · Croma ${h.chroma.toFixed(1)} · Matiz ${h.hue.toFixed(0)}°`;
 }
 
 const styles = StyleSheet.create({

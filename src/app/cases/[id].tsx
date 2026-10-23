@@ -7,6 +7,7 @@ import { Button } from '@/components/Button';
 import { Card, Muted, SectionTitle } from '@/components/Card';
 import { Chip } from '@/components/Chip';
 import { ShadeRow } from '@/components/ShadeRow';
+import { compareHcv } from '@/lib/color/hcv';
 import { findShade, getSystem } from '@/lib/color/shades';
 import { deleteCase, getCase, isSmileCase, type AnyCase, type ShadeCase, type SmileCase } from '@/lib/storage/cases';
 import { findGingiva } from '@/lib/color/gingiva';
@@ -146,6 +147,10 @@ function ShadeDetail({ c }: { c: ShadeCase }) {
             rank={i + 1}
             shadeId={m.shadeId}
             lab={findShade(c.shadeSystem, m.shadeId)?.lab ?? c.toothLab}
+            hcv={(() => {
+              const ref = findShade(c.shadeSystem, m.shadeId);
+              return ref ? compareHcv(c.thirds?.middle ?? c.toothLab, ref.lab) : undefined;
+            })()}
             deltaE={m.deltaE}
             image={findShade(c.shadeSystem, m.shadeId)?.image}
           />

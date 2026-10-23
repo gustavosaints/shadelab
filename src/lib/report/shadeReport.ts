@@ -1,6 +1,7 @@
 import { Asset } from 'expo-asset';
 import { labToHex, type Lab } from '@/lib/color/convert';
 import { findGingiva, GINGIVA_SYSTEM } from '@/lib/color/gingiva';
+import { compareHcv, describe3dMaster, hcvOf } from '@/lib/color/hcv';
 import { tabProfile, type ThirdsProfile } from '@/lib/color/match';
 import { findShade, getSystem } from '@/lib/color/shades';
 import { cropToBase64, expandRect, fileToDataUrl } from '@/lib/image/crop';
@@ -84,6 +85,23 @@ export async function buildShadeReportHtml(c: ShadeCase, s: Settings): Promise<s
   const bestProfile = bestRef ? tabProfile(calibLab ?? bestRef.lab, s.calibrationThirds[c.shadeSystem]?.[best!.shadeId]) : undefined;
   const toothProfile: ThirdsProfile = c.thirds ?? { cervical: c.toothLab, middle: c.toothLab, incisal: c.toothLab };
 
+  // valor, croma e matiz: dente (terço médio) × tab mais próximo
+  let hcvBlock = '';
+  if (bestProfile) {
+    const toothMid = toothProfile.middle;
+    const t = hcvOf(toothMid);
+    const b = hcvOf(bestProfile.middle);
+    const d = compareHcv(toothMid, bestProfile.middle);
+    const master = best ? describe3dMaster(best.shadeId) : null;
+    const n = (v: number, dec = 1) => v.toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+    hcvBlock = `<table><tr><th>Terço médio</th><th>Dente</th><th>Tab ${esc(best!.shadeId)}</th><th>Comparação</th></tr>
+<tr><td><b>Valor</b> (L*)</td><td>${n(t.value)}</td><td>${n(b.value)}</td><td>${d.text.value}</td></tr>
+<tr><td><b>Croma</b> (C*)</td><td>${n(t.chroma)}</td><td>${n(b.chroma)}</td><td>${d.text.chroma}</td></tr>
+<tr><td><b>Matiz</b> (h°)</td><td>${n(t.hue, 0)}°</td><td>${n(b.hue, 0)}°</td><td>${d.text.hue}</td></tr></table>${
+      master ? `<div class="muted" style="margin-top:4px">${esc(best!.shadeId)}: ${esc(master)}</div>` : ''
+    }`;
+  }
+
   let toothBlock = '';
   if (c.toothRect && best && bestProfile) {
     const [mouth, tab] = await Promise.all([
@@ -141,9 +159,10 @@ table{border-collapse:collapse;margin-top:10px;width:100%} td,th{border:1px soli
 <b>Cor sugerida: ${best ? esc(best.shadeId) : '—'}</b>${alt ? ` <span class="muted">· alternativa mais próxima: ${esc(alt.shadeId)}</span>` : ''}
 ${toothBlock}
 <table><tr><th>Resultado</th><th>Tab</th><th>ΔE00</th></tr>${rows}</table>
+${hcvBlock}
 ${gumBlock}
 </div>
 ${c.notes ? `<div class="box"><b>Observações</b><br/>${esc(c.notes).replace(/\n/g, '<br/>')}</div>` : ''}
-<p class="muted">Medição por câmera corrigida por referência, dente lido do colo à borda incisal e comparado com o tab inteiro. Confirme visualmente com a escala antes da cimentação.</p>
+<p class="muted">Medição por câmera, dente lido do colo à borda incisal e comparado com o tab inteiro em valor, croma e matiz (CIEDE2000; abaixo de 0,8 a diferença não é perceptível). Confirme visualmente com a escala antes da cimentação.</p>
 </body></html>`;
 }

@@ -1,11 +1,14 @@
 import type { Lab } from './convert';
-import { classifyDeltaE, deltaE2000, type MatchQuality } from './deltaE';
+import { classifyDeltaE, deltaE2000, PERCEPTIBILITY_THRESHOLD, type MatchQuality } from './deltaE';
+import { compareHcv, hcvTieBreak, type HcvDiff } from './hcv';
 import { getSystem, type ShadeRef, type ShadeSystemId } from './shades';
 
 export type ShadeMatch = {
   shade: ShadeRef;
   deltaE: number;
   quality: MatchQuality;
+  /** Dente × tab em valor, croma e matiz (terço médio). */
+  hcv?: HcvDiff;
 };
 
 export type MatchResult = {
@@ -88,10 +91,15 @@ function rank(measured: Lab, system: ShadeSystemId, options: Options, distance: 
     return { shade: { ...shade, lab: refLab }, deltaE: dE, quality: classifyDeltaE(dE) };
   });
   all.sort((a, b) => a.deltaE - b.deltaE);
+  // empate no total (diferença abaixo do perceptível): valor decide, depois croma, depois matiz
+  if (all[1] && all[1].deltaE - all[0].deltaE < PERCEPTIBILITY_THRESHOLD && hcvTieBreak(measured, all[0].shade.lab, all[1].shade.lab) > 0) {
+    [all[0], all[1]] = [all[1], all[0]];
+  }
+  for (const m of all.slice(0, topN)) m.hcv = compareHcv(measured, m.shade.lab);
 
   const best = all[0];
   const second = all[1];
-  const gap = second ? second.deltaE - best.deltaE : 1;
+  const gap = second ? Math.abs(second.deltaE - best.deltaE) : 1;
   const confidence = Math.max(0, Math.min(1, gap / 2));
 
   return { system, measured, matches: all.slice(0, topN), confidence, calibrated: useCalibration };
