@@ -92,6 +92,8 @@ export default function SmileDesign() {
   const [mapStatus, setMapStatus] = useState<MapStatus>('detecting');
   const [lengths, setLengths] = useState<LengthEdits>({});
   const [arch, setArch] = useState<ArchEdit>(DEFAULT_ARCH);
+  // alças do arco: simétrico (as duas metades juntas) ou cada hemiarco (11–15 / 21–25) separado
+  const [linked, setLinked] = useState(true);
   // arrasto das alças do arco na foto: arco no começo do arrasto e o texto mostrado enquanto arrasta
   const dragFrom = useRef<ArchEdit | null>(null);
   const [dragHint, setDragHint] = useState<string | null>(null);
@@ -302,7 +304,7 @@ export default function SmileDesign() {
     try {
       const r = await generateDesign({
         photoUri: photo.uri,
-        prompt: buildDesignPrompt({ ...ch, shadeLab, lengths: [describeArch(arch), describeLengths(lengths)].filter(Boolean).join(' ') }),
+        prompt: buildDesignPrompt({ ...ch, shadeLab, lengths: [describeArch(arch, map?.mirrored), describeLengths(lengths)].filter(Boolean).join(' ') }),
         apiKey: settings.aiApiKey,
         model: settings.aiModel || DEFAULT_AI_MODEL,
       });
@@ -340,12 +342,18 @@ export default function SmileDesign() {
     setView('plan');
   };
   const fmt1 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-  const archHint = (h: ArchHandle, a: ArchEdit) =>
-    h === 'move'
-      ? `linha média ${fmt1(a.dxMm)} mm · altura ${fmt1(a.dyMm)} mm`
-      : h.startsWith('width')
-        ? `central ${fmt1(a.centralMm)} mm`
-        : `${a.open >= 0 ? 'abertura' : 'fechamento'} ${Math.round(Math.abs(a.open) * 100)} % · curva ${fmt1(a.curveMm)} mm`;
+  // nome do hemiarco de cada lado da foto (foto espelhada troca)
+  const hemiName = (side: 'L' | 'R') => ((side === 'L') !== !!map?.mirrored ? '11–15' : '21–25');
+  const archHint = (h: ArchHandle, a: ArchEdit) => {
+    if (h === 'move') return `linha média ${fmt1(a.dxMm)} mm · altura ${fmt1(a.dyMm)} mm`;
+    const side = h.endsWith('L') ? 'L' : 'R';
+    const hemi = side === 'L' ? a.left : a.right;
+    if (h.startsWith('width'))
+      return linked ? `central ${fmt1(a.centralMm)} mm` : `${hemiName(side)} · largura ${hemi.widthPct >= 0 ? '+' : '−'}${Math.round(Math.abs(hemi.widthPct) * 100)} %`;
+    const open = linked ? a.open : a.open + hemi.open;
+    const curve = linked ? a.curveMm : a.curveMm + hemi.curveMm;
+    return `${linked ? '' : `${hemiName(side)} · `}${open >= 0 ? 'abertura' : 'fechamento'} ${Math.round(Math.abs(open) * 100)} % · curva ${fmt1(curve)} mm`;
+  };
   // alças do dente selecionado: arrasto direto na silhueta (mm = px da foto ÷ px/mm)
   const toothFrom = useRef<LengthEdits | null>(null);
   const onToothDrag = (fdi: Fdi, part: ToothPart, dx: number, dy: number, phase: 'start' | 'move' | 'end') => {
@@ -378,7 +386,7 @@ export default function SmileDesign() {
     if (!map || !dragFrom.current) return;
     const xs = planTeeth.map((t) => t.x);
     const archW = Math.max(...planTeeth.map((t) => t.x + t.w)) - Math.min(...xs);
-    const next = dragArch(dragFrom.current, h, dx, dy, map.pxPerMm, archW);
+    const next = dragArch(dragFrom.current, h, dx, dy, map.pxPerMm, archW, linked);
     setArch(next);
     if (phase === 'end') {
       dragFrom.current = null;
@@ -581,10 +589,15 @@ export default function SmileDesign() {
           {map && (
             <>
               <Text style={styles.subTitle}>Arco</Text>
+              <View style={styles.chips}>
+                <Chip label="Simétrico" selected={linked} onPress={() => setLinked(true)} />
+                <Chip label="Hemiarcos separados (11–15 / 21–25)" selected={!linked} onPress={() => setLinked(false)} />
+              </View>
               {/* os botões Proporção natural/áurea saíram a pedido do Gustavo ("não faz sentido"); o arco segue as larguras naturais */}
               <Muted>
-                Ajuste direto na foto: arraste os dentes (ou o ✥ em cima) para mover o conjunto inteiro · colchetes ciano nas pontas: para os lados
-                abre ou fecha o arco, para cima ou para baixo muda a curva do sorriso · barras brancas embaixo, nas pontas: largura dos dentes.
+                {`Ajuste direto na foto: arraste os dentes (ou o ✥ em cima) para mover o conjunto inteiro · colchetes ciano nas pontas: para os lados abre ou fecha o arco, para cima ou para baixo muda a curva do sorriso · barras brancas embaixo, nas pontas: largura dos dentes.${
+                  linked ? '' : ` Hemiarcos separados: cada colchete e cada barra mexe só no seu lado (${hemiName('L')} à esquerda da foto, ${hemiName('R')} à direita).`
+                }`}
               </Muted>
               {!isDefaultArch(arch) && <Button title="Zerar arco" variant="ghost" onPress={() => changeArch(DEFAULT_ARCH)} />}
 

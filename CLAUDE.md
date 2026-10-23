@@ -164,6 +164,10 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   detector), e ele já está carregado. Na varredura, o limiar dos dentes ficou relativo à PELE (no máx. pele + 8):
   com parede branca ao fundo, dentes amarelados/sombreados ficavam de fora. `centeredMouth` agora começa abaixo do
   meio (60 %) e `mouthCrop` nunca passa do tamanho da foto (sem faixas pretas no editor).
+  HEMIARCOS (2026-10-23): chips "Simétrico" / "Hemiarcos separados (11–15 / 21–25)". `ArchEdit.left/right`
+  (lado DA FOTO; foto espelhada troca os números) somam largura, abertura e curva só daquela metade; `dragArch(...,
+  linked)` aplica nos dois ou só no lado da alça; a linha média não anda (o espaço central não depende da largura).
+  `describeArch(arch, mirrored)` nomeia o hemiarco para a IA.
   DENTE A DENTE NA SILHUETA (2026-10-22): tocar num dente mostra barrinhas rosé (`toothHandles` em SmileMap):
   em cima = cervical, embaixo = incisal, lados = largura daquele dente (`LengthEdit.width`, mm; `archTeeth(map, arch,
   edits)` soma a largura no layout e os vizinhos se acomodam). Arrasto livre em 0,1 mm (`setToothEdit`), botões

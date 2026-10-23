@@ -8,6 +8,7 @@ import {
   DEFAULT_ARCH,
   describeArch,
   dragArch,
+  isDefaultArch,
   bumpLength,
   commonLength,
   describeLengths,
@@ -164,6 +165,45 @@ describe('delimitar a boca à mão', () => {
     expect(crop.w).toBeLessThanOrEqual(4000);
     expect(crop.x).toBeGreaterThanOrEqual(0);
     expect(crop.w / crop.h).toBeLessThanOrEqual(2.01);
+  });
+});
+
+describe('hemiarcos 11–15 e 21–25 separados', () => {
+  const map: ToothMap = { base: { midX: 500, gumY: 300, centralW: 85, heightRatio: 1.2, widthScale: {} }, pxPerMm: 10, source: 'boca', mirrored: false };
+  const get = (teeth: ReturnType<typeof archTeeth>, f: string) => teeth.find((t) => t.fdi === f)!;
+
+  it('alça da esquerda sem simetria mexe só no 11–15', () => {
+    const a = dragArch(DEFAULT_ARCH, 'distalL', -75, -20, 10, 600, false); // para fora e para cima
+    expect(a.open).toBe(0);
+    expect(a.left.open).toBeCloseTo(0.5);
+    expect(a.left.curveMm).toBeCloseTo(2);
+    expect(a.right).toEqual(DEFAULT_ARCH.right);
+    const base = archTeeth(map);
+    const t = archTeeth(map, a);
+    expect(get(t, '15').w).toBeGreaterThan(get(base, '15').w);
+    expect(get(t, '25').w).toBeCloseTo(get(base, '25').w);
+    expect(get(t, '15').y).toBeLessThan(get(base, '15').y);
+    expect(get(t, '25').y).toBeCloseTo(get(base, '25').y);
+  });
+
+  it('largura de um hemiarco não mexe no outro nem na linha média', () => {
+    const a = dragArch(DEFAULT_ARCH, 'widthR', 30, 0, 10, 600, false);
+    const base = archTeeth(map);
+    const t = archTeeth(map, a);
+    expect(get(t, '21').w).toBeGreaterThan(get(base, '21').w);
+    expect(get(t, '11').w).toBeCloseTo(get(base, '11').w);
+    expect(get(t, '21').x).toBeCloseTo(get(base, '21').x);
+  });
+
+  it('simétrico continua mexendo nos dois; descrição nomeia o hemiarco', () => {
+    const sym = dragArch(DEFAULT_ARCH, 'distalR', 75, 0, 10, 600, true);
+    expect(sym.open).toBeCloseTo(0.5);
+    expect(sym.left).toEqual(DEFAULT_ARCH.left);
+    const one = dragArch(DEFAULT_ARCH, 'distalL', -75, 0, 10, 600, false);
+    expect(describeArch(one)).toMatch(/hemi-arch 11–15 \(left side of the image\) only: more open/);
+    expect(describeArch(one, true)).toMatch(/hemi-arch 21–25/);
+    expect(isDefaultArch(one)).toBe(false);
+    expect(isDefaultArch(DEFAULT_ARCH)).toBe(true);
   });
 });
 

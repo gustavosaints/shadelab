@@ -51,9 +51,23 @@ export type ToothMap = { base: MapBase; pxPerMm: number; source: 'autofit' | 'bo
  * Ajuste do arco inteiro: largura do central (mm, escala todas as larguras), deslocamento (mm; dx + = para a
  * direita da foto, dy + = desce), abertura (−1 fechado … 1 aberto: largura aparente de caninos e pré-molares, o
  * corredor bucal), curva (mm que os pré-molares sobem; + = sorriso mais convexo) e proporção áurea.
+ * HEMIARCOS (pedido do Gustavo, 2026-10-23): `left`/`right` = ajuste extra de cada metade do arco (lado esquerdo /
+ * direito DA FOTO; com foto normal, esquerdo = 11–15): largura (fração), abertura e curva, somados aos valores
+ * simétricos.
  */
-export type ArchEdit = { centralMm: number; dxMm: number; dyMm: number; open: number; curveMm: number; golden: boolean };
-export const DEFAULT_ARCH: ArchEdit = { centralMm: 8.5, dxMm: 0, dyMm: 0, open: 0, curveMm: 0, golden: false };
+export type HemiArch = { widthPct: number; open: number; curveMm: number };
+export type ArchEdit = {
+  centralMm: number;
+  dxMm: number;
+  dyMm: number;
+  open: number;
+  curveMm: number;
+  golden: boolean;
+  left: HemiArch;
+  right: HemiArch;
+};
+const NO_HEMI: HemiArch = { widthPct: 0, open: 0, curveMm: 0 };
+export const DEFAULT_ARCH: ArchEdit = { centralMm: 8.5, dxMm: 0, dyMm: 0, open: 0, curveMm: 0, golden: false, left: NO_HEMI, right: NO_HEMI };
 /** Quanto cada dente responde à abertura (largura) e à curva (subida), do central ao 2º pré-molar. */
 const OPEN_W: Record<MapKind, number> = { central: 0, lateral: 0.08, canine: 0.25, premolar1: 0.38, premolar2: 0.5 };
 const CURVE_Y: Record<MapKind, number> = { central: 0, lateral: 0.12, canine: 0.35, premolar1: 0.65, premolar2: 1 };
@@ -76,18 +90,22 @@ export function layoutMapped(
   centralW: number,
   heightRatio: number,
   widthScale: Partial<Record<Fdi, number>> = {},
-  widthFactor = 1,
+  widthFactor: number | readonly [number, number] = 1,
   golden = false,
-  open = 0,
-  curvePx = 0,
+  openBySide: number | readonly [number, number] = 0,
+  curveBySide: number | readonly [number, number] = 0,
   extraW: Partial<Record<Fdi, number>> = {},
 ): MappedTooth[] {
+  // valores por lado da foto: [esquerdo, direito] (um número = igual nos dois)
+  const pick = (v: number | readonly [number, number], dir: -1 | 1) => (typeof v === 'number' ? v : v[dir < 0 ? 0 : 1]);
   const ch = centralW * heightRatio;
-  const cw = centralW * widthFactor;
-  const gap = cw * GAP;
   const teeth: MappedTooth[] = [];
   for (const dir of [-1, 1] as const) {
     const side: Side = dir < 0 ? 'right' : 'left';
+    const cw = centralW * pick(widthFactor, dir);
+    const open = pick(openBySide, dir);
+    const curvePx = pick(curveBySide, dir);
+    const gap = centralW * GAP; // igual nos dois lados: a linha média não anda quando só um hemiarco muda
     let edge = midX + (dir * gap) / 2;
     ORDER.forEach((kind, k) => {
       const fdi = `${dir < 0 ? 1 : 2}${k + 1}` as Fdi;
@@ -151,10 +169,10 @@ export function archTeeth(map: ToothMap, arch: ArchEdit = DEFAULT_ARCH, edits: L
     b.centralW,
     b.heightRatio,
     b.widthScale,
-    arch.centralMm / CENTRAL_WIDTH_MM,
+    [(arch.centralMm / CENTRAL_WIDTH_MM) * (1 + arch.left.widthPct), (arch.centralMm / CENTRAL_WIDTH_MM) * (1 + arch.right.widthPct)],
     arch.golden,
-    arch.open,
-    arch.curveMm * k,
+    [arch.open + arch.left.open, arch.open + arch.right.open],
+    [(arch.curveMm + arch.left.curveMm) * k, (arch.curveMm + arch.right.curveMm) * k],
     extraW,
   );
   if (!map.mirrored) return teeth;
@@ -170,35 +188,57 @@ export function clampArch(a: ArchEdit): ArchEdit {
     dyMm: c(a.dyMm, -6, 6),
     open: c(a.open, -1, 1),
     curveMm: c(a.curveMm, -3, 4),
+    left: clampHemi(a.left),
+    right: clampHemi(a.right),
   };
 }
 
+function clampHemi(h: HemiArch): HemiArch {
+  const c = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+  return { widthPct: c(h.widthPct, -0.25, 0.25), open: c(h.open, -1, 1), curveMm: c(h.curveMm, -3, 3) };
+}
+
+const isNoHemi = (h: HemiArch) => h.widthPct === 0 && h.open === 0 && h.curveMm === 0;
+
 export function isDefaultArch(a: ArchEdit): boolean {
-  return (Object.keys(DEFAULT_ARCH) as (keyof ArchEdit)[]).every((k) => a[k] === DEFAULT_ARCH[k]);
+  const flat = (['centralMm', 'dxMm', 'dyMm', 'open', 'curveMm', 'golden'] as const).every((k) => a[k] === DEFAULT_ARCH[k]);
+  return flat && isNoHemi(a.left) && isNoHemi(a.right);
 }
 
 export type ArchHandle = 'move' | 'widthL' | 'widthR' | 'distalL' | 'distalR';
 
 /**
  * Arrasto de uma alça do arco na foto: `dx`/`dy` = deslocamento total desde o toque (px da foto), `from` = arco no
- * começo do arrasto, `archW` = largura do arco (px). L/R = alça à esquerda/direita da foto (simétricas).
+ * começo do arrasto, `archW` = largura do arco (px). L/R = alça à esquerda/direita da foto. `linked` = simétrico
+ * (as duas metades juntas); sem ele, a alça mexe só no hemiarco do seu lado.
  */
-export function dragArch(from: ArchEdit, handle: ArchHandle, dx: number, dy: number, pxPerMm: number, archW: number): ArchEdit {
+export function dragArch(from: ArchEdit, handle: ArchHandle, dx: number, dy: number, pxPerMm: number, archW: number, linked = true): ArchEdit {
   const out = handle.endsWith('L') ? -dx : dx; // para fora do arco = positivo
+  const sideKey = handle.endsWith('L') ? 'left' : 'right';
+  const W = Math.max(1, archW);
   switch (handle) {
     case 'move':
       return clampArch({ ...from, dxMm: from.dxMm + dx / pxPerMm, dyMm: from.dyMm + dy / pxPerMm });
     case 'widthL':
-    case 'widthR':
-      return clampArch({ ...from, centralMm: from.centralMm * (1 + (2 * out) / Math.max(1, archW)) });
-    default:
+    case 'widthR': {
+      if (linked) return clampArch({ ...from, centralMm: from.centralMm * (1 + (2 * out) / W) });
+      // só a metade: a mudança de largura conta sobre a meia largura do arco
+      const h = from[sideKey];
+      return clampArch({ ...from, [sideKey]: { ...h, widthPct: (1 + h.widthPct) * (1 + (2 * out) / W) - 1 } });
+    }
+    default: {
       // alça distal: para fora abre o arco (1/4 da largura do arco = do neutro ao máximo); para cima aumenta a curva
-      return clampArch({ ...from, open: from.open + out / Math.max(1, archW * 0.25), curveMm: from.curveMm - dy / pxPerMm });
+      const dOpen = out / (W * 0.25);
+      const dCurve = -dy / pxPerMm;
+      if (linked) return clampArch({ ...from, open: from.open + dOpen, curveMm: from.curveMm + dCurve });
+      const h = from[sideKey];
+      return clampArch({ ...from, [sideKey]: { ...h, open: h.open + dOpen, curveMm: h.curveMm + dCurve } });
+    }
   }
 }
 
-/** Descreve o arco planejado para a IA (vazio quando não mudou nada). */
-export function describeArch(a: ArchEdit): string {
+/** Descreve o arco planejado para a IA (vazio quando não mudou nada). `mirrored` = foto espelhada (selfie). */
+export function describeArch(a: ArchEdit, mirrored = false): string {
   const parts: string[] = [];
   if (a.golden)
     parts.push('use the GOLDEN PROPORTION for the visible tooth widths seen from the front: central incisor 1.618, lateral incisor 1, canine 0.618');
@@ -216,6 +256,20 @@ export function describeArch(a: ArchEdit): string {
     );
   if (Math.abs(a.curveMm) >= 0.25)
     parts.push(`${a.curveMm > 0 ? 'a more convex' : 'a flatter'} smile curve (premolars about ${mm(a.curveMm)} ${a.curveMm > 0 ? 'higher' : 'lower'} relative to the central incisors)`);
+  // hemiarcos ajustados separadamente
+  for (const [key, imgSide] of [
+    ['left', 'left'],
+    ['right', 'right'],
+  ] as const) {
+    const h = a[key];
+    if (isNoHemi(h)) continue;
+    const fdi = (imgSide === 'left') !== mirrored ? '11–15' : '21–25';
+    const hp: string[] = [];
+    if (Math.abs(h.widthPct) >= 0.02) hp.push(`teeth about ${Math.round(Math.abs(h.widthPct) * 100)}% ${h.widthPct > 0 ? 'wider' : 'narrower'}`);
+    if (Math.abs(h.open) >= 0.1) hp.push(h.open > 0 ? 'more open (broader premolars, smaller buccal corridor)' : 'more closed (narrower premolars, wider buccal corridor)');
+    if (Math.abs(h.curveMm) >= 0.25) hp.push(`posterior teeth about ${mm(h.curveMm)} ${h.curveMm > 0 ? 'higher' : 'lower'}`);
+    if (hp.length) parts.push(`hemi-arch ${fdi} (${imgSide} side of the image) only: ${hp.join(', ')}`);
+  }
   return parts.length ? `Arch plan: ${parts.join('; ')}.` : '';
 }
 
