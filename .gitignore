@@ -42,3 +42,4 @@ yarn-error.*
 
 # anatomias de referência (biblioteca do exocad, proprietária e grande): fora do git
 reference/
+expo-go-qr.svg

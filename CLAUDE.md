@@ -200,6 +200,19 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
 - `tests/` vitest; `eas.json` perfis de build; `reference/anatomia/` (fora do git, ver README lá) cópia filtrada da
   biblioteca de dentes do exocad (139 bibliotecas legíveis) e `reference/renders/` prévias + folha de contato.
 
+## Publicar para usar fora da rede (EAS Update no Expo Go, desde 2026-10-23)
+
+Projeto Expo `@gustavosaints/shadelab` (projectId 35123588-021a-48a9-a226-8f0861c35600), `runtimeVersion` policy
+`sdkVersion` (= `exposdk:57.0.0`, o que o Expo Go aceita), branch e canal `preview`. O Gustavo abre pelo link/QR
+fixo `exp://u.expo.dev/35123588-021a-48a9-a226-8f0861c35600?runtime-version=exposdk%3A57.0.0&channel-name=preview`
+(`expo-go-qr.svg` na raiz, fora do git). Para publicar uma versão nova (no Windows o `eas update` direto falha com
+"C:\Program não é reconhecido" no Git Bash; usar PowerShell, exportar antes e pular o git):
+
+```powershell
+npx expo export --platform ios --output-dir dist
+$env:EAS_NO_VCS = '1'; npx eas-cli@latest update --branch preview --platform ios --environment preview --message "..." --skip-bundler --input-dir dist --non-interactive
+```
+
 ## Decisões técnicas
 
 - Expo SDK 57, sem módulos fora do Expo Go: tudo roda via QR code sem build nativo.

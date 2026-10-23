@@ -24,8 +24,11 @@
     "android": {
       "package": "com.shadelab.app",
       "permissions": [
-        "CAMERA",
-        "READ_MEDIA_IMAGES"
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#FAF7F5",
@@ -64,6 +67,19 @@
           "faceIDPermission": "O Cypris Smile usa o Face ID para você entrar sem digitar a senha."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "35123588-021a-48a9-a226-8f0861c35600"
+      }
+    },
+    "owner": "gustavosaints",
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/35123588-021a-48a9-a226-8f0861c35600"
+    }
   }
 }
