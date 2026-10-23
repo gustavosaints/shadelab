@@ -5,6 +5,11 @@
  */
 import { File, Paths } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { decode, encode } from 'jpeg-js';
+import type { RGB } from '@/lib/color/convert';
+import { base64ToBytes, bytesToBase64 } from '@/lib/image/base64';
+import { paintGuide } from '@/lib/smile/guideImage';
+import type { MappedTooth } from '@/lib/smile/mapping';
 
 export { buildDesignPrompt, describeShade, designSummary, GUM_OPTIONS, TEXTURES, TOOTH_SHAPES } from './prompt';
 export type { DesignOptions, GumId, TextureId, ToothShapeId } from './prompt';
@@ -39,13 +44,24 @@ export async function listModels(apiKey: string): Promise<ModelInfo[]> {
     .sort((a, b) => Number(b.image) - Number(a.image) || a.name.localeCompare(b.name));
 }
 
-/** Reduz a foto e devolve JPEG em base64. */
-async function photoToBase64(uri: string, maxSide: number): Promise<string> {
+/** Reduz a foto e devolve JPEG em base64 (e a largura final). */
+async function photoToBase64(uri: string, maxSide: number): Promise<{ data: string; width: number }> {
   const ctx = ImageManipulator.manipulate(uri);
   const ref = await ctx.resize({ width: maxSide }).renderAsync();
   const out = await ref.saveAsync({ format: SaveFormat.JPEG, compress: 0.92, base64: true });
   if (!out.base64) throw new Error('Não foi possível ler a foto.');
-  return out.base64;
+  return { data: out.base64, width: out.width };
+}
+
+/** Planejamento desenhado sobre a foto: dentes (px da foto original), forma e cor-alvo. */
+export type DesignGuide = { teeth: MappedTooth[]; photoWidth: number; shapeMix: number; color: RGB };
+
+/** Desenha o planejamento sobre a foto já reduzida e devolve o JPEG em base64. */
+function guideToBase64(photoB64: string, guide: DesignGuide): string {
+  const img = decode(base64ToBytes(photoB64), { useTArray: true, formatAsRGBA: true, colorTransform: true });
+  paintGuide({ data: img.data, width: img.width, height: img.height }, guide.teeth, guide.shapeMix, guide.color, img.width / guide.photoWidth);
+  const jpg = encode({ data: img.data, width: img.width, height: img.height }, 88);
+  return bytesToBase64(new Uint8Array(jpg.data));
 }
 
 type GeminiResponse = {
@@ -56,13 +72,31 @@ type GeminiResponse = {
 
 export type GenerateResult = { uri: string; prompt: string; model: string; ms: number };
 
-/** Gera a simulação a partir da foto e da instrução já montada (ver `buildDesignPrompt`). */
-export async function generateDesign(o: { photoUri: string; prompt: string; apiKey: string; model?: string; maxSide?: number }): Promise<GenerateResult> {
+/**
+ * Gera a simulação a partir da foto e da instrução já montada (ver `buildDesignPrompt`). Com `guide`, manda também
+ * a foto com o planejamento desenhado (imagem 2), para a IA seguir forma, tamanho, posição e cor dos dentes.
+ */
+export async function generateDesign(o: {
+  photoUri: string;
+  prompt: string;
+  apiKey: string;
+  model?: string;
+  maxSide?: number;
+  guide?: DesignGuide;
+}): Promise<GenerateResult> {
   if (!o.apiKey.trim()) throw new Error('Informe a chave da API do Google em "Configurar IA", no fim da tela.');
   const model = o.model?.trim() || DEFAULT_AI_MODEL;
   const started = Date.now();
-  const data = await photoToBase64(o.photoUri, o.maxSide ?? 1536);
-  const uri = await callImageModel(model, o.apiKey, [{ text: o.prompt }, { inlineData: { mimeType: 'image/jpeg', data } }]);
+  const photo = await photoToBase64(o.photoUri, o.maxSide ?? 1536);
+  const parts: Part[] = [{ text: o.prompt }, { inlineData: { mimeType: 'image/jpeg', data: photo.data } }];
+  if (o.guide?.teeth.length) {
+    try {
+      parts.push({ inlineData: { mimeType: 'image/jpeg', data: guideToBase64(photo.data, o.guide) } });
+    } catch {
+      // sem guia (falha ao desenhar): segue só com a foto e o texto
+    }
+  }
+  const uri = await callImageModel(model, o.apiKey, parts);
   return { uri, prompt: o.prompt, model, ms: Date.now() - started };
 }
 

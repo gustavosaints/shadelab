@@ -172,7 +172,12 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   em cima = cervical, embaixo = incisal, lados = largura daquele dente (`LengthEdit.width`, mm; `archTeeth(map, arch,
   edits)` soma a largura no layout e os vizinhos se acomodam). Arrasto livre em 0,1 mm (`setToothEdit`), botões
   de 0,5 mm na seção Tamanho (Incisal, Cervical, Largura). Tudo vai na instrução da IA (`describeLengths`).
-  Próximo passo possível: mandar também a imagem com as silhuetas como guia para a IA (testar quando houver crédito).
+  IMAGEM-GUIA (2026-10-23, 1º teste com crédito: "a mudança quase não existiu"): `generateDesign` agora manda
+  2 imagens — a foto e a MESMA foto com o planejamento desenhado (`lib/smile/guideImage.ts#paintGuide`: cada dente
+  de `planTeeth` preenchido na cor-alvo, degradê colo→incisal, contorno escuro fino; feito em JS com jpeg-js) — e a
+  instrução (`buildDesignPrompt`, `withGuide`) pede uma transformação CLARAMENTE VISÍVEL (facetas/coroas novas),
+  ocupando exatamente as formas da imagem 2, sem copiar o preenchimento nem os contornos. Custo por geração
+  medido: ~R$ 0,21 no Nano Banana 2 Lite (US$ 0,034/imagem).
   REMOVIDOS nessa data: editor manual (contorno, boca, ajustar, face-bow na tela, biblioteca 2D de sorrisos,
   cenários, rascunho automático) e a tela separada "Sorriso por IA". Ficaram só bibliotecas usadas por outras
   partes ou por testes: `lib/smile/teeth.ts` (tipos de `SmileParams`), `mouth.ts` (a análise de cor usa a boca

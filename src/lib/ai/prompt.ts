@@ -73,6 +73,8 @@ export type DesignOptions = {
   shadeLab: Lab;
   /** Ajustes de comprimento já descritos (`describeLengths`), quando houver. */
   lengths?: string;
+  /** Vai junto a imagem 2 com o planejamento desenhado (`paintGuide`). */
+  withGuide?: boolean;
 };
 
 /** Monta a instrução do Smile Design (uma linha, em inglês, que é como o modelo responde melhor). */
@@ -81,14 +83,20 @@ export function buildDesignPrompt(o: DesignOptions): string {
   const texture = TEXTURES.find((t) => t.id === o.texture) ?? TEXTURES[1];
   const gum = GUM_OPTIONS.find((g) => g.id === o.gum) ?? GUM_OPTIONS[0];
   return [
-    'Dental smile design simulation on this patient photo.',
-    'Replace ONLY the visible upper teeth with a new, aesthetically planned smile: well-aligned teeth in a harmonious arch that follows the curve of the lower lip, dominant central incisors, correct width proportions (centrals > laterals > canines), dental midline aligned with the face, no gaps, even incisal edges with natural embrasures.',
+    'Cosmetic dentistry smile makeover simulation on this patient photo (image 1).',
+    "Remove the patient's current visible upper teeth and replace ALL of them with brand-new, ideal ceramic veneers/crowns. This must be a CLEARLY VISIBLE transformation, like a real before-and-after of a full smile makeover, not a subtle retouch: change the shape, size, alignment and color of the upper teeth as specified below, even if the original teeth look very different.",
+    ...(o.withGuide
+      ? [
+          "Image 2 is the dentist's planning mock-up on the same photo: each flat colored shape with a thin dark outline is one new upper tooth. The new teeth must occupy EXACTLY those shapes (same outline, width, length, position and smile curve) and have that color. Turn the mock-up into photorealistic teeth; do NOT copy the flat fill or the outlines into the result.",
+        ]
+      : []),
+    'Smile goals: well-aligned teeth in a harmonious arch that follows the curve of the lower lip, dominant central incisors, correct width proportions (centrals > laterals > canines), dental midline aligned with the face, no gaps, even incisal edges with natural embrasures.',
     `Tooth shape: ${shape.prompt}.`,
     `Surface texture: ${texture.prompt}.`,
-    `Tooth shade: ${describeShade(o.shadeId, o.shadeLab)}. Slightly more saturated near the gums, slightly translucent at the incisal edges.`,
+    `Tooth shade: ${describeShade(o.shadeId, o.shadeLab)}. Use this shade even if it is much lighter or different from the current teeth. Slightly more saturated near the gums, slightly translucent at the incisal edges.`,
     gum.prompt,
     ...(o.lengths ? [o.lengths] : []),
-    'Keep absolutely everything else identical to the original: face, skin, beard, lips and lip line, lower teeth, tongue, lighting, shadows, background, framing, camera angle and resolution.',
+    'Keep everything that is not an upper tooth identical to image 1: face, skin, beard, lips and lip line, lower teeth, tongue, lighting, shadows, background, framing, camera angle and resolution.',
     'The new teeth must sit naturally under the upper lip with realistic reflections matching the scene light. Photorealistic. No text, no watermark, no other changes.',
   ].join(' ');
 }

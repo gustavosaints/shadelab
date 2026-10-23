@@ -21,7 +21,8 @@ describe('Smile Design por IA: instrução para o modelo', () => {
           expect(p).toContain(texture.prompt);
           expect(p).toContain(gum.prompt);
           expect(p).toContain('VITA B1');
-          expect(p).toContain('Keep absolutely everything else identical');
+          expect(p).toContain('Keep everything that is not an upper tooth identical');
+          expect(p).toMatch(/CLEARLY VISIBLE/);
           expect(p).not.toMatch(/\n/);
         }
   });
@@ -34,5 +35,36 @@ describe('Smile Design por IA: instrução para o modelo', () => {
 
   it('resumo em português para o caso', () => {
     expect(designSummary({ shape: 'triangular', texture: 'caracterizada', gum: 'plastia', shadeId: 'A1' })).toBe('Triangular · textura caracterizada · A1 · plastia gengival');
+  });
+});
+
+describe('imagem-guia do planejamento', () => {
+  it('a instrução fala da imagem 2 só quando ela vai junto', async () => {
+    const { buildDesignPrompt } = await import('@/lib/ai/prompt');
+    const b1 = getSystem('vita-classical').shades.find((s) => s.id === 'B1')!;
+    const base = { shape: 'quadrado' as const, texture: 'natural' as const, gum: 'manter' as const, shadeId: 'B1', shadeLab: b1.lab };
+    expect(buildDesignPrompt({ ...base, withGuide: true })).toMatch(/Image 2 is the dentist's planning mock-up/);
+    expect(buildDesignPrompt(base)).not.toMatch(/Image 2/);
+  });
+
+  it('pinta os dentes planejados na cor-alvo e não mexe fora deles', async () => {
+    const { paintGuide } = await import('@/lib/smile/guideImage');
+    const { layoutMapped } = await import('@/lib/smile/mapping');
+    const W = 200;
+    const H = 120;
+    const data = new Uint8Array(W * H * 4).fill(0);
+    const teeth = layoutMapped(100, 30, 20, 1.2);
+    paintGuide({ data, width: W, height: H }, teeth, 0.5, { r: 240, g: 230, b: 210 });
+    const at = (x: number, y: number) => Array.from(data.slice((y * W + x) * 4, (y * W + x) * 4 + 3));
+    const c11 = teeth.find((t) => t.fdi === '11')!;
+    const mid = at(Math.round(c11.x + c11.w / 2), Math.round(c11.y + c11.h / 2));
+    expect(mid[0]).toBeGreaterThan(180); // preenchido na cor-alvo (sobre o preto)
+    expect(at(2, 2)).toEqual([0, 0, 0]); // fora dos dentes, intacto
+  });
+
+  it('base64 ida e volta', async () => {
+    const { base64ToBytes, bytesToBase64 } = await import('@/lib/image/base64');
+    const bytes = new Uint8Array([0, 1, 2, 250, 251, 252, 253]);
+    expect(Array.from(base64ToBytes(bytesToBase64(bytes)))).toEqual(Array.from(bytes));
   });
 });

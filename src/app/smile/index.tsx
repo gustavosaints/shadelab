@@ -32,6 +32,7 @@ import {
   type TextureId,
   type ToothShapeId,
 } from '@/lib/ai/smileGen';
+import { labToRgb } from '@/lib/color/convert';
 import { getSystem } from '@/lib/color/shades';
 import { detectFace, fitTeethToPhoto, scanMouthInPhoto } from '@/lib/face/detect';
 import {
@@ -304,9 +305,18 @@ export default function SmileDesign() {
     try {
       const r = await generateDesign({
         photoUri: photo.uri,
-        prompt: buildDesignPrompt({ ...ch, shadeLab, lengths: [describeArch(arch, map?.mirrored), describeLengths(lengths)].filter(Boolean).join(' ') }),
+        prompt: buildDesignPrompt({
+          ...ch,
+          shadeLab,
+          lengths: [describeArch(arch, map?.mirrored), describeLengths(lengths)].filter(Boolean).join(' '),
+          withGuide: planTeeth.length > 0,
+        }),
         apiKey: settings.aiApiKey,
         model: settings.aiModel || DEFAULT_AI_MODEL,
+        // o planejamento desenhado sobre a foto vai junto (imagem 2): forma, tamanho, posição e cor dos dentes
+        guide: planTeeth.length
+          ? { teeth: planTeeth, photoWidth: photo.width, shapeMix: TOOTH_SHAPES.find((sh) => sh.id === ch.shape)?.mix ?? 0.5, color: labToRgb(shadeLab) }
+          : undefined,
       });
       // a animação revela a imagem e chama `finishReveal`
       setPending({ uri: r.uri, choice: ch, model: r.model, ms: r.ms });
