@@ -207,6 +207,9 @@ SEPARADO (o Gustavo achou que os casos tinham sido excluídos). Configurações 
 backup.ts#exportCases` grava um .json (formato em `backupFormat.ts`, fotos em base64, escrito caso a caso com
 append) e abre o compartilhar; `importCases` (via expo-document-picker) recria as fotos em `Paths.document/cases`
 e salva só os casos com id novo. Não leva login, chave da IA nem calibrações.
+ATENÇÃO: no Expo Go a pasta de dados vem do `extra.eas.projectId` (sem ele, pasta anônima). Ligar o projeto à conta
+Expo em 2026-10-23 "sumiu" com os casos; foram recuperados tirando o projectId por um momento, exportando e
+importando. Não remover/trocar o projectId sem combinar com o Gustavo.
 
 ## Publicar para usar fora da rede (EAS Update no Expo Go, desde 2026-10-23)
 
