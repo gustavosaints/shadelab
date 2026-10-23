@@ -23,6 +23,7 @@ describe('Smile Design por IA: instrução para o modelo', () => {
           expect(p).toContain('VITA B1');
           expect(p).toContain('Keep everything that is not an upper tooth identical');
           expect(p).toMatch(/CLEARLY VISIBLE/);
+          expect(p).toMatch(/CLOSE ALL DIASTEMAS/);
           expect(p).not.toMatch(/\n/);
         }
   });

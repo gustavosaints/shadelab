@@ -176,7 +176,10 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   2 imagens — a foto e a MESMA foto com o planejamento desenhado (`lib/smile/guideImage.ts#paintGuide`: cada dente
   de `planTeeth` preenchido na cor-alvo, degradê colo→incisal, contorno escuro fino; feito em JS com jpeg-js) — e a
   instrução (`buildDesignPrompt`, `withGuide`) pede uma transformação CLARAMENTE VISÍVEL (facetas/coroas novas),
-  ocupando exatamente as formas da imagem 2, sem copiar o preenchimento nem os contornos. Custo por geração
+  ocupando exatamente as formas da imagem 2, sem copiar o preenchimento nem os contornos. Depois do 2º teste
+  (diastemas ficaram, 21 torto): `ALIGNMENT` sempre na instrução (fechar todos os diastemas, dentes retos, 11/21
+  simétricos, não manter espaço/rotação original) e o guia desenha os dentes encostados (+4 % de largura) com linha
+  discreta na própria cor (a linha escura era lida como espaço). Custo por geração
   medido: ~R$ 0,21 no Nano Banana 2 Lite (US$ 0,034/imagem).
   REMOVIDOS nessa data: editor manual (contorno, boca, ajustar, face-bow na tela, biblioteca 2D de sorrisos,
   cenários, rascunho automático) e a tela separada "Sorriso por IA". Ficaram só bibliotecas usadas por outras

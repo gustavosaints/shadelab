@@ -77,6 +77,13 @@ export type DesignOptions = {
   withGuide?: boolean;
 };
 
+/**
+ * Alinhamento e diastemas (pedido do Gustavo, 2026-10-23: no 1º resultado os diastemas ficaram e o 21 saiu
+ * torto). Vale sempre: o planejamento é de dentes alinhados e em contato.
+ */
+export const ALIGNMENT =
+  'CLOSE ALL DIASTEMAS and spaces between the upper teeth: every tooth in tight contact with its neighbours, no dark gaps between teeth (only the natural small incisal embrasures). All upper teeth perfectly straight and aligned: no rotated, tilted, crooked, crowded or overlapping teeth. The central incisors (11 and 21) must be upright, symmetric mirror images of each other with parallel long axes, meeting exactly at the dental midline. Do NOT keep any of the original spacing, rotation or misalignment.';
+
 /** Monta a instrução do Smile Design (uma linha, em inglês, que é como o modelo responde melhor). */
 export function buildDesignPrompt(o: DesignOptions): string {
   const shape = TOOTH_SHAPES.find((s) => s.id === o.shape) ?? TOOTH_SHAPES[0];
@@ -87,10 +94,11 @@ export function buildDesignPrompt(o: DesignOptions): string {
     "Remove the patient's current visible upper teeth and replace ALL of them with brand-new, ideal ceramic veneers/crowns. This must be a CLEARLY VISIBLE transformation, like a real before-and-after of a full smile makeover, not a subtle retouch: change the shape, size, alignment and color of the upper teeth as specified below, even if the original teeth look very different.",
     ...(o.withGuide
       ? [
-          "Image 2 is the dentist's planning mock-up on the same photo: each flat colored shape with a thin dark outline is one new upper tooth. The new teeth must occupy EXACTLY those shapes (same outline, width, length, position and smile curve) and have that color. Turn the mock-up into photorealistic teeth; do NOT copy the flat fill or the outlines into the result.",
+          "Image 2 is the dentist's planning mock-up on the same photo: each flat colored shape is one new upper tooth (the faint lines only separate neighbouring teeth, which TOUCH each other). The new teeth must occupy EXACTLY those shapes (same outline, width, length, position and smile curve) and have that color. Turn the mock-up into photorealistic teeth; do NOT copy the flat fill or the lines into the result.",
         ]
       : []),
-    'Smile goals: well-aligned teeth in a harmonious arch that follows the curve of the lower lip, dominant central incisors, correct width proportions (centrals > laterals > canines), dental midline aligned with the face, no gaps, even incisal edges with natural embrasures.',
+    'Smile goals: well-aligned teeth in a harmonious arch that follows the curve of the lower lip, dominant central incisors, correct width proportions (centrals > laterals > canines), dental midline aligned with the face, even incisal edges with natural embrasures.',
+    ALIGNMENT,
     `Tooth shape: ${shape.prompt}.`,
     `Surface texture: ${texture.prompt}.`,
     `Tooth shade: ${describeShade(o.shadeId, o.shadeLab)}. Use this shade even if it is much lighter or different from the current teeth. Slightly more saturated near the gums, slightly translucent at the incisal edges.`,

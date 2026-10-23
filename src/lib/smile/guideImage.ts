@@ -1,7 +1,7 @@
 /**
  * Imagem-guia do planejamento para a IA (2026-10-23: o Gustavo achou que a geração "quase não mudou" os dentes —
  * só com texto o modelo mexe pouco). Sobre a mesma foto, desenha cada dente planejado (forma escolhida, já com
- * arco, larguras e comprimentos) preenchido na cor-alvo da escala, com um contorno fino. A IA recebe a foto
+ * arco, larguras e comprimentos) preenchido na cor-alvo da escala, com uma linha discreta entre eles. A IA recebe a foto
  * original + esta imagem e transforma o rascunho em dentes fotorrealistas. Parte pura (RGBA em memória).
  */
 import type { RGB } from '@/lib/color/convert';
@@ -28,13 +28,16 @@ function inside(x: number, y: number, poly: { x: number; y: number }[]): boolean
 /**
  * Pinta os dentes planejados na imagem (altera `img.data`). `scale` converte px da foto original para px desta
  * imagem (ex.: foto reduzida para 1536 px). Preenchimento na cor-alvo com leve degradê (colo um pouco mais escuro,
- * incisal um pouco mais clara) e contorno escuro fino entre os dentes.
+ * incisal um pouco mais clara) e linha DISCRETA (a própria cor, um pouco mais escura) entre os dentes: uma linha
+ * escura e grossa era lida pela IA como espaço, e os diastemas ficavam (2026-10-23). Os dentes são alargados
+ * para encostar nos vizinhos (o layout deixa um espaço mínimo entre eles).
  */
 export function paintGuide(img: Rgba, teeth: MappedTooth[], shapeMix: number, color: RGB, scale = 1, fillAlpha = 0.88): void {
   const { width: W, height: H, data } = img;
   const edge = Math.max(1, Math.round(W / 700));
   for (const t0 of teeth) {
-    const t = { ...t0, x: t0.x * scale, y: t0.y * scale, w: t0.w * scale, h: t0.h * scale };
+    const grow = t0.w * 0.04; // fecha o espaço mínimo do layout: dentes em contato
+    const t = { ...t0, x: (t0.x - grow / 2) * scale, y: t0.y * scale, w: (t0.w + grow) * scale, h: t0.h * scale };
     const poly = toothPolygon(t, shapeMix);
     const x0 = Math.max(0, Math.floor(Math.min(...poly.map((p) => p.x))));
     const x1 = Math.min(W - 1, Math.ceil(Math.max(...poly.map((p) => p.x))));
@@ -49,8 +52,9 @@ export function paintGuide(img: Rgba, teeth: MappedTooth[], shapeMix: number, co
         const border =
           !inside(x + 0.5 - edge, y + 0.5, poly) || !inside(x + 0.5 + edge, y + 0.5, poly) || !inside(x + 0.5, y + 0.5 - edge, poly) || !inside(x + 0.5, y + 0.5 + edge, poly);
         const i = (y * W + x) * 4;
-        const tgt = border ? [70, 60, 60] : [color.r * shade, color.g * shade, color.b * shade];
-        const a = border ? 0.9 : fillAlpha;
+        const tone = border ? shade * 0.72 : shade;
+        const tgt = [color.r * tone, color.g * tone, color.b * tone];
+        const a = border ? 0.95 : fillAlpha;
         for (let k = 0; k < 3; k++) data[i + k] = Math.max(0, Math.min(255, Math.round(data[i + k] * (1 - a) + tgt[k] * a)));
       }
     }
