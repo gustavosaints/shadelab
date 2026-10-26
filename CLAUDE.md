@@ -181,6 +181,15 @@ Antes de dar uma tarefa por concluída: testes, typecheck e lint limpos.
   simétricos, não manter espaço/rotação original) e o guia desenha os dentes encostados (+4 % de largura) com linha
   discreta na própria cor (a linha escura era lida como espaço). Custo por geração
   medido: ~R$ 0,21 no Nano Banana 2 Lite (US$ 0,034/imagem).
+  SORRISO BAIXO (2026-10-26, enceramento do Gustavo com pouca exposição dentária saiu com dentes gigantes): três
+  mudanças. (1) `paintGuide(..., clip)` só pinta dentro da abertura dos lábios (`mouthPolygon` em mouth.ts amostra o
+  contorno suave; `DesignGuide.mouth`), e a instrução com guia diz que o resto do dente fica escondido atrás do
+  lábio e que os lábios não se movem. (2) `anchorToLip` (mapping.ts): se o encaixe automático achou o "colo"
+  encostado no lábio superior (< 0,3 da largura do central) com altura vista < 1,2, a silhueta é ancorada pela
+  INCISAL e a coroa inteira (1,2) sobe por trás do lábio; sorriso alto não muda. (3) Com guia, o prompt NÃO pede
+  mais "transformação CLARAMENTE VISÍVEL" nem "centrais dominantes": tamanho, comprimento e posição vêm SÓ da
+  imagem 2 (sem guia, o texto antigo continua). Na tela, `SmileMap` recorta as silhuetas pela boca
+  (`clip-mouth`) e mostra a parte atrás dos lábios tracejada e tênue, igual ao que a IA recebe.
   REMOVIDOS nessa data: editor manual (contorno, boca, ajustar, face-bow na tela, biblioteca 2D de sorrisos,
   cenários, rascunho automático) e a tela separada "Sorriso por IA". Ficaram só bibliotecas usadas por outras
   partes ou por testes: `lib/smile/teeth.ts` (tipos de `SmileParams`), `mouth.ts` (a análise de cor usa a boca
