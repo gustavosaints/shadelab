@@ -91,13 +91,20 @@ export function buildDesignPrompt(o: DesignOptions): string {
   const gum = GUM_OPTIONS.find((g) => g.id === o.gum) ?? GUM_OPTIONS[0];
   return [
     'Cosmetic dentistry smile makeover simulation on this patient photo (image 1).',
-    "Remove the patient's current visible upper teeth and replace ALL of them with brand-new, ideal ceramic veneers/crowns. This must be a CLEARLY VISIBLE transformation, like a real before-and-after of a full smile makeover, not a subtle retouch: change the shape, size, alignment and color of the upper teeth as specified below, even if the original teeth look very different.",
+    // Com a imagem-guia, o tamanho vem dela: a instrução "transformação claramente visível" (2026-10-23, quando o
+    // resultado era tímido) fazia dentes gigantes num sorriso baixo (2026-10-26).
     ...(o.withGuide
       ? [
+          "Remove the patient's current visible upper teeth and replace ALL of them with brand-new, ideal ceramic veneers/crowns that follow the dentist's planning mock-up in image 2: change the shape, alignment, texture and color of the upper teeth as specified below, but take their size, length and position ONLY from the mock-up.",
           "Image 2 is the dentist's planning mock-up on the same photo: each flat colored shape is one new upper tooth (the faint lines only separate neighbouring teeth, which TOUCH each other). The new teeth must occupy EXACTLY those shapes (same outline, width, length, position and smile curve) and have that color. Turn the mock-up into photorealistic teeth; do NOT copy the flat fill or the lines into the result.",
+          'The mock-up shows only the part of each tooth visible through the lip opening; the rest of each tooth stays HIDDEN behind the lips, exactly as in image 1. Do NOT lift, open, stretch or move the lips, do NOT show more tooth or gum than the mock-up shows, and do NOT make any tooth larger, longer or more prominent than its shape in image 2.',
         ]
-      : []),
-    'Smile goals: well-aligned teeth in a harmonious arch that follows the curve of the lower lip, dominant central incisors, correct width proportions (centrals > laterals > canines), dental midline aligned with the face, even incisal edges with natural embrasures.',
+      : [
+          "Remove the patient's current visible upper teeth and replace ALL of them with brand-new, ideal ceramic veneers/crowns. This must be a CLEARLY VISIBLE transformation, like a real before-and-after of a full smile makeover, not a subtle retouch: change the shape, size, alignment and color of the upper teeth as specified below, even if the original teeth look very different.",
+        ]),
+    o.withGuide
+      ? 'Smile goals: well-aligned teeth in a harmonious arch, correct width proportions (centrals > laterals > canines), dental midline aligned with the face, even incisal edges with natural embrasures; sizes and positions as in image 2.'
+      : 'Smile goals: well-aligned teeth in a harmonious arch that follows the curve of the lower lip, dominant central incisors, correct width proportions (centrals > laterals > canines), dental midline aligned with the face, even incisal edges with natural embrasures.',
     ALIGNMENT,
     `Tooth shape: ${shape.prompt}.`,
     `Surface texture: ${texture.prompt}.`,

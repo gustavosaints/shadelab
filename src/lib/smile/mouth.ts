@@ -58,6 +58,34 @@ export function mouthPath(mouth: MouthPoint[], width: number, height: number, te
   return parts.join(' ');
 }
 
+/**
+ * Contorno suave da boca como polígono em px (os mesmos segmentos de `mouthPath`, amostrados), para recortar
+ * pixels pela abertura dos lábios (imagem-guia da IA). `perSegment` pontos por trecho entre dois pontos de controle.
+ */
+export function mouthPolygon(mouth: MouthPoint[], width: number, height: number, perSegment = 8, tension = 0.5): MouthPoint[] {
+  const pts = mouth.map((p) => ({ x: p.x * width, y: p.y * height }));
+  const n = pts.length;
+  if (n < 3) return pts;
+  const out: MouthPoint[] = [];
+  for (let i = 0; i < n; i++) {
+    const p0 = pts[(i - 1 + n) % n];
+    const p1 = pts[i];
+    const p2 = pts[(i + 1) % n];
+    const p3 = pts[(i + 2) % n];
+    const c1 = { x: p1.x + ((p2.x - p0.x) * tension) / 3, y: p1.y + ((p2.y - p0.y) * tension) / 3 };
+    const c2 = { x: p2.x - ((p3.x - p1.x) * tension) / 3, y: p2.y - ((p3.y - p1.y) * tension) / 3 };
+    for (let k = 0; k < perSegment; k++) {
+      const t = k / perSegment;
+      const u = 1 - t;
+      out.push({
+        x: u * u * u * p1.x + 3 * u * u * t * c1.x + 3 * u * t * t * c2.x + t * t * t * p2.x,
+        y: u * u * u * p1.y + 3 * u * u * t * c1.y + 3 * u * t * t * c2.y + t * t * t * p2.y,
+      });
+    }
+  }
+  return out;
+}
+
 /** Índices das comissuras: a direita do paciente é o ponto 0; a esquerda, o de maior x. */
 export function mouthCorners(mouth: MouthPoint[]): { r: number; l: number } {
   let l = 0;

@@ -31,10 +31,14 @@ function inside(x: number, y: number, poly: { x: number; y: number }[]): boolean
  * incisal um pouco mais clara) e linha DISCRETA (a própria cor, um pouco mais escura) entre os dentes: uma linha
  * escura e grossa era lida pela IA como espaço, e os diastemas ficavam (2026-10-23). Os dentes são alargados
  * para encostar nos vizinhos (o layout deixa um espaço mínimo entre eles).
+ *
+ * `clip` (polígono em px DESTA imagem, normalmente a abertura dos lábios): só pinta dentro dele. Sem o recorte,
+ * num sorriso baixo a coroa inteira era desenhada por cima do lábio e a IA fazia dentes gigantes (2026-10-26).
  */
-export function paintGuide(img: Rgba, teeth: MappedTooth[], shapeMix: number, color: RGB, scale = 1, fillAlpha = 0.88): void {
+export function paintGuide(img: Rgba, teeth: MappedTooth[], shapeMix: number, color: RGB, scale = 1, fillAlpha = 0.88, clip?: { x: number; y: number }[]): void {
   const { width: W, height: H, data } = img;
   const edge = Math.max(1, Math.round(W / 700));
+  const clipPoly = clip && clip.length >= 3 ? clip : null;
   for (const t0 of teeth) {
     const grow = t0.w * 0.04; // fecha o espaço mínimo do layout: dentes em contato
     const t = { ...t0, x: (t0.x - grow / 2) * scale, y: t0.y * scale, w: (t0.w + grow) * scale, h: t0.h * scale };
@@ -48,6 +52,7 @@ export function paintGuide(img: Rgba, teeth: MappedTooth[], shapeMix: number, co
       const shade = 0.93 + 0.12 * fy; // colo mais escuro → incisal mais clara
       for (let x = x0; x <= x1; x++) {
         if (!inside(x + 0.5, y + 0.5, poly)) continue;
+        if (clipPoly && !inside(x + 0.5, y + 0.5, clipPoly)) continue; // atrás do lábio: fica a foto
         // perto da borda do polígono vira contorno
         const border =
           !inside(x + 0.5 - edge, y + 0.5, poly) || !inside(x + 0.5 + edge, y + 0.5, poly) || !inside(x + 0.5, y + 0.5 - edge, poly) || !inside(x + 0.5, y + 0.5 + edge, poly);

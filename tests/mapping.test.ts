@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { buildDesignPrompt, TOOTH_SHAPES } from '@/lib/ai/prompt';
 import { getSystem } from '@/lib/color/shades';
+import { DEFAULT_SMILE_PARAMS } from '@/lib/smile/teeth';
 import {
+  anchorToLip,
   applyLength,
   archTeeth,
   clampArch,
@@ -100,6 +102,41 @@ describe('arco: fechar/abrir, subir/descer e proporção áurea', () => {
     expect(get(op, '15').w).toBeGreaterThan(get(base, '15').w);
     expect(get(op, '11').w).toBeCloseTo(get(base, '11').w);
     expect(get(op, '15').y).toBeLessThan(get(base, '15').y);
+  });
+});
+
+describe('sorriso baixo: ancorar pela incisal', () => {
+  const W = 1000;
+  const H = 800;
+  // boca com lábio superior em y = 400 (fração 0,5) e inferior em 0,6
+  const mouth = [
+    { x: 0.3, y: 0.55 },
+    { x: 0.4, y: 0.5 },
+    { x: 0.5, y: 0.5 },
+    { x: 0.6, y: 0.5 },
+    { x: 0.7, y: 0.55 },
+    { x: 0.6, y: 0.6 },
+    { x: 0.5, y: 0.6 },
+    { x: 0.4, y: 0.6 },
+  ];
+  const base = { ...DEFAULT_SMILE_PARAMS, midlineX: 0.5, centralWidth: 0.08 }; // central = 80 px
+
+  it('colo encostado no lábio e pouca altura vista: a incisal fica onde está e a coroa sobe por trás do lábio', () => {
+    const p = anchorToLip({ ...base, gumY: 0.505, heightRatio: 0.8 }, mouth, W, H); // 4 px abaixo do lábio, 64 px vistos
+    const incisalBefore = 0.505 * H + 80 * 0.8;
+    expect(p.heightRatio).toBe(1.2);
+    expect(p.gumY * H + 80 * p.heightRatio).toBeCloseTo(incisalBefore, 6);
+    expect(p.gumY * H).toBeLessThan(0.5 * H); // colo agora acima do lábio
+  });
+
+  it('sorriso alto (gengiva à mostra, colo bem abaixo do lábio): nada muda', () => {
+    const p = { ...base, gumY: 0.55, heightRatio: 0.9 }; // 40 px abaixo do lábio
+    expect(anchorToLip(p, mouth, W, H)).toEqual(p);
+  });
+
+  it('coroa inteira já visível: nada muda', () => {
+    const p = { ...base, gumY: 0.505, heightRatio: 1.3 };
+    expect(anchorToLip(p, mouth, W, H)).toEqual(p);
   });
 });
 

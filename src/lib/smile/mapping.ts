@@ -280,6 +280,27 @@ export function plausibleFit(p: SmileParams, mouth: MouthPoint[], imgW: number, 
   return ratio > 0.09 && ratio < 0.22;
 }
 
+/** Proporção altura/largura de uma coroa inteira de central (usada quando a gengiva está escondida). */
+export const FULL_CROWN_RATIO = 1.2;
+
+/**
+ * Sorriso baixo (2026-10-26, enceramento do Gustavo com pouca exposição dentária): o encaixe automático toma o
+ * topo dos dentes VISÍVEIS como colo, mas quando o lábio superior cobre a gengiva esse topo é o lábio, e a coroa
+ * inteira era desenhada do lábio para baixo — dentes gigantes. Aqui, se o "colo" encontrado está encostado no lábio
+ * e a altura vista é menor que uma coroa inteira, a silhueta é ancorada pela borda INCISAL (que é real) e a coroa
+ * sobe por trás do lábio, onde a imagem-guia é recortada. Em sorriso alto (gengiva à mostra) nada muda.
+ */
+export function anchorToLip(p: SmileParams, mouth: MouthPoint[], imgW: number, imgH: number): SmileParams {
+  const b = mouthBounds(mouth, imgW, imgH);
+  const cw = p.centralWidth * imgW;
+  const gumPx = p.gumY * imgH;
+  const visibleRatio = p.heightRatio;
+  const atLip = gumPx - b.upperMidY < 0.3 * cw; // colo encontrado a menos de ~2,5 mm abaixo do lábio
+  if (!atLip || visibleRatio >= FULL_CROWN_RATIO) return p;
+  const incisalPx = gumPx + cw * visibleRatio;
+  return { ...p, heightRatio: FULL_CROWN_RATIO, gumY: (incisalPx - cw * FULL_CROWN_RATIO) / imgH };
+}
+
 /** Aplica os ajustes de comprimento (mm) a um dente. */
 export function applyLength(t: MappedTooth, e: LengthEdit | undefined, pxPerMm: number): MappedTooth {
   if (!e) return t;

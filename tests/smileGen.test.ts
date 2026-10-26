@@ -48,6 +48,41 @@ describe('imagem-guia do planejamento', () => {
     expect(buildDesignPrompt(base)).not.toMatch(/Image 2/);
   });
 
+  it('com o guia, o tamanho vem dele: sem "transformação claramente visível" e sem mexer nos lábios', async () => {
+    const { buildDesignPrompt } = await import('@/lib/ai/prompt');
+    const b1 = getSystem('vita-classical').shades.find((s) => s.id === 'B1')!;
+    const base = { shape: 'quadrado' as const, texture: 'natural' as const, gum: 'manter' as const, shadeId: 'B1', shadeLab: b1.lab };
+    const p = buildDesignPrompt({ ...base, withGuide: true });
+    expect(p).not.toMatch(/CLEARLY VISIBLE/);
+    expect(p).not.toMatch(/dominant central incisors/);
+    expect(p).toMatch(/HIDDEN behind the lips/);
+    expect(p).toMatch(/Do NOT lift, open, stretch or move the lips/);
+    expect(p).toMatch(/CLOSE ALL DIASTEMAS/);
+    expect(p).not.toMatch(/\n/);
+  });
+
+  it('recorta o desenho pela abertura dos lábios: atrás do lábio a foto fica intacta', async () => {
+    const { paintGuide } = await import('@/lib/smile/guideImage');
+    const { layoutMapped } = await import('@/lib/smile/mapping');
+    const W = 200;
+    const H = 120;
+    const data = new Uint8Array(W * H * 4).fill(0);
+    const teeth = layoutMapped(100, 30, 20, 1.2); // colo em y = 30, incisal em y = 54
+    // "boca" = retângulo que só mostra a metade de baixo dos dentes (lábio superior em y = 42)
+    const clip = [
+      { x: 0, y: 42 },
+      { x: W, y: 42 },
+      { x: W, y: H },
+      { x: 0, y: H },
+    ];
+    paintGuide({ data, width: W, height: H }, teeth, 0.5, { r: 240, g: 230, b: 210 }, 1, 0.88, clip);
+    const at = (x: number, y: number) => Array.from(data.slice((y * W + x) * 4, (y * W + x) * 4 + 3));
+    const c11 = teeth.find((t) => t.fdi === '11')!;
+    const cx = Math.round(c11.x + c11.w / 2);
+    expect(at(cx, 48)[0]).toBeGreaterThan(180); // dentro da boca: pintado
+    expect(at(cx, 36)).toEqual([0, 0, 0]); // atrás do lábio: intacto
+  });
+
   it('pinta os dentes planejados na cor-alvo e não mexe fora deles', async () => {
     const { paintGuide } = await import('@/lib/smile/guideImage');
     const { layoutMapped } = await import('@/lib/smile/mapping');

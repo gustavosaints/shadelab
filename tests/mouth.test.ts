@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addMouthPoint, ANTERIORS_TO_MOUTH, defaultMouth, fitToMouth, mouthBounds, mouthCorners, mouthPath, removeMouthPoint } from '@/lib/smile/mouth';
+import { addMouthPoint, ANTERIORS_TO_MOUTH, defaultMouth, fitToMouth, mouthBounds, mouthCorners, mouthPath, mouthPolygon, removeMouthPoint } from '@/lib/smile/mouth';
 import { DEFAULT_SMILE_PARAMS, layoutTeeth } from '@/lib/smile/teeth';
 
 const W = 1000;
@@ -65,5 +65,24 @@ describe('mouth', () => {
     const a13 = after.find((t) => t.fdi === '13')!;
     expect(a23.x + a23.w - a13.x).toBeCloseTo(b.widthPx * ANTERIORS_TO_MOUTH, 3);
     expect(p.gumY * H).toBeLessThan(b.upperMidY);
+  });
+
+  it('polígono amostrado do contorno: passa pelos pontos de controle e fica dentro da caixa deles', () => {
+    const m = defaultMouth(teeth, W, H);
+    const poly = mouthPolygon(m, W, H, 8);
+    expect(poly.length).toBe(m.length * 8);
+    for (let i = 0; i < m.length; i++) {
+      expect(poly[i * 8].x).toBeCloseTo(m[i].x * W, 6);
+      expect(poly[i * 8].y).toBeCloseTo(m[i].y * H, 6);
+    }
+    const xs = m.map((p) => p.x * W);
+    const ys = m.map((p) => p.y * H);
+    const pad = 0.1 * (Math.max(...xs) - Math.min(...xs));
+    for (const p of poly) {
+      expect(p.x).toBeGreaterThan(Math.min(...xs) - pad);
+      expect(p.x).toBeLessThan(Math.max(...xs) + pad);
+      expect(p.y).toBeGreaterThan(Math.min(...ys) - pad);
+      expect(p.y).toBeLessThan(Math.max(...ys) + pad);
+    }
   });
 });

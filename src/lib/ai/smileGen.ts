@@ -10,6 +10,8 @@ import type { RGB } from '@/lib/color/convert';
 import { base64ToBytes, bytesToBase64 } from '@/lib/image/base64';
 import { paintGuide } from '@/lib/smile/guideImage';
 import type { MappedTooth } from '@/lib/smile/mapping';
+import { mouthPolygon } from '@/lib/smile/mouth';
+import type { MouthPoint } from '@/lib/smile/teeth';
 
 export { buildDesignPrompt, describeShade, designSummary, GUM_OPTIONS, TEXTURES, TOOTH_SHAPES } from './prompt';
 export type { DesignOptions, GumId, TextureId, ToothShapeId } from './prompt';
@@ -53,13 +55,17 @@ async function photoToBase64(uri: string, maxSide: number): Promise<{ data: stri
   return { data: out.base64, width: out.width };
 }
 
-/** Planejamento desenhado sobre a foto: dentes (px da foto original), forma e cor-alvo. */
-export type DesignGuide = { teeth: MappedTooth[]; photoWidth: number; shapeMix: number; color: RGB };
+/**
+ * Planejamento desenhado sobre a foto: dentes (px da foto original), forma e cor-alvo. `mouth` (frações da foto)
+ * recorta o desenho pela abertura dos lábios: o que fica atrás do lábio não é pintado.
+ */
+export type DesignGuide = { teeth: MappedTooth[]; photoWidth: number; shapeMix: number; color: RGB; mouth?: MouthPoint[] };
 
 /** Desenha o planejamento sobre a foto já reduzida e devolve o JPEG em base64. */
 function guideToBase64(photoB64: string, guide: DesignGuide): string {
   const img = decode(base64ToBytes(photoB64), { useTArray: true, formatAsRGBA: true, colorTransform: true });
-  paintGuide({ data: img.data, width: img.width, height: img.height }, guide.teeth, guide.shapeMix, guide.color, img.width / guide.photoWidth);
+  const clip = guide.mouth && guide.mouth.length >= 3 ? mouthPolygon(guide.mouth, img.width, img.height) : undefined;
+  paintGuide({ data: img.data, width: img.width, height: img.height }, guide.teeth, guide.shapeMix, guide.color, img.width / guide.photoWidth, 0.88, clip);
   const jpg = encode({ data: img.data, width: img.width, height: img.height }, 88);
   return bytesToBase64(new Uint8Array(jpg.data));
 }

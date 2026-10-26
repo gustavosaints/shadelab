@@ -36,6 +36,7 @@ import { labToRgb } from '@/lib/color/convert';
 import { getSystem } from '@/lib/color/shades';
 import { detectFace, fitTeethToPhoto, scanMouthInPhoto } from '@/lib/face/detect';
 import {
+  anchorToLip,
   applyLength,
   archTeeth,
   bumpLength,
@@ -135,7 +136,8 @@ export default function SmileDesign() {
     let tm: ToothMap | null = null;
     try {
       const fit = await fitTeethToPhoto(p, m, midX, DEFAULT_SMILE_PARAMS);
-      if (fit && fit.fit.confidence >= 0.4 && plausibleFit(fit.params, m, p.width, p.height)) tm = mapFromParams(fit.params, p.width, p.height);
+      // sorriso baixo (gengiva escondida): ancora pela incisal, a coroa sobe por trás do lábio
+      if (fit && fit.fit.confidence >= 0.4 && plausibleFit(fit.params, m, p.width, p.height)) tm = mapFromParams(anchorToLip(fit.params, m, p.width, p.height), p.width, p.height);
     } catch {
       tm = null;
     }
@@ -313,9 +315,10 @@ export default function SmileDesign() {
         }),
         apiKey: settings.aiApiKey,
         model: settings.aiModel || DEFAULT_AI_MODEL,
-        // o planejamento desenhado sobre a foto vai junto (imagem 2): forma, tamanho, posição e cor dos dentes
+        // o planejamento desenhado sobre a foto vai junto (imagem 2): forma, tamanho, posição e cor dos dentes,
+        // recortado pela boca (o que fica atrás do lábio não é desenhado)
         guide: planTeeth.length
-          ? { teeth: planTeeth, photoWidth: photo.width, shapeMix: TOOTH_SHAPES.find((sh) => sh.id === ch.shape)?.mix ?? 0.5, color: labToRgb(shadeLab) }
+          ? { teeth: planTeeth, photoWidth: photo.width, shapeMix: TOOTH_SHAPES.find((sh) => sh.id === ch.shape)?.mix ?? 0.5, color: labToRgb(shadeLab), mouth: mouth ?? undefined }
           : undefined,
       });
       // a animação revela a imagem e chama `finishReveal`

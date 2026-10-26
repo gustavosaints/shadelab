@@ -59,6 +59,15 @@ export function SmileMap({ photo, height, teeth, status, shapeMix, texture, sele
   const toView = (t: MappedTooth): MappedTooth => ({ ...t, x: (t.x - crop.x) * s, y: (t.y - crop.y) * s, w: t.w * s, h: t.h * s });
   const view = teeth.map(toView);
   const textureMix = shapeMix ?? 0.5;
+  // contorno da boca em px da vista (recorta as silhuetas: o que fica atrás dos lábios aparece tênue)
+  const mouthD =
+    mouth && mouth.length >= 3 && width > 0
+      ? mouthPath(
+          mouth.map((p) => ({ x: ((p.x * photo.width - crop.x) * s) / width, y: ((p.y * photo.height - crop.y) * s) / height })),
+          width,
+          height,
+        )
+      : null;
 
   // ----- zoom: pinça com dois dedos; com zoom, um dedo arrasta (toques curtos continuam escolhendo o dente) -----
   const touches = (e: GestureResponderEvent) => e.nativeEvent.touches ?? [];
@@ -166,6 +175,11 @@ export function SmileMap({ photo, height, teeth, status, shapeMix, texture, sele
                         <Path d={silhouette(t, textureMix)} />
                       </ClipPath>
                     ))}
+                {mouthD && (
+                  <ClipPath id="clip-mouth">
+                    <Path d={mouthD} />
+                  </ClipPath>
+                )}
               </Defs>
 
               {/* prévia da textura nos incisivos */}
@@ -178,21 +192,31 @@ export function SmileMap({ photo, height, teeth, status, shapeMix, texture, sele
                     </G>
                   ))}
 
-              {/* silhuetas da forma */}
-              {shapeMix !== null &&
-                view.map((t) => {
-                  const on = selected === 'all' || selected === t.fdi;
-                  return (
-                    <Path
-                      key={`sil-${t.fdi}`}
-                      d={silhouette(t, shapeMix)}
-                      fill={texture ? 'none' : 'rgba(255,255,255,0.10)'}
-                      stroke={selected === t.fdi ? GLOW : '#FFFFFF'}
-                      strokeOpacity={on ? 0.95 : 0.55}
-                      strokeWidth={(selected === t.fdi ? 2.2 : 1.4) / z}
-                    />
-                  );
-                })}
+              {/* silhuetas da forma: a parte atrás dos lábios fica bem tênue (a IA só recebe o que está na abertura) */}
+              {shapeMix !== null && mouthD && (
+                <G opacity={0.22}>
+                  {view.map((t) => (
+                    <Path key={`sil-hidden-${t.fdi}`} d={silhouette(t, shapeMix)} fill="none" stroke="#FFFFFF" strokeWidth={1.2 / z} strokeDasharray={`${3 / z} ${3 / z}`} />
+                  ))}
+                </G>
+              )}
+              {shapeMix !== null && (
+                <G clipPath={mouthD ? 'url(#clip-mouth)' : undefined}>
+                  {view.map((t) => {
+                    const on = selected === 'all' || selected === t.fdi;
+                    return (
+                      <Path
+                        key={`sil-${t.fdi}`}
+                        d={silhouette(t, shapeMix)}
+                        fill={texture ? 'none' : 'rgba(255,255,255,0.10)'}
+                        stroke={selected === t.fdi ? GLOW : '#FFFFFF'}
+                        strokeOpacity={on ? 0.95 : 0.55}
+                        strokeWidth={(selected === t.fdi ? 2.2 : 1.4) / z}
+                      />
+                    );
+                  })}
+                </G>
+              )}
 
               {/* números (mapeamento) e área de toque de cada dente */}
               {view.map((t) => {
